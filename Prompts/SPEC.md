@@ -67,12 +67,9 @@ Recipes describe how packages are:
 
 ### Constraints
 Recipes are **pure and declarative**:
-- No filesystem I/O
-- No network I/O
-- No process execution
-- No global state mutation
-
-All external data (e.g. downloaded manifests) is supplied by `pi`.
+- No direct filesystem or network I/O.
+- **Discovery Pattern**: To find versions, a recipe returns a `DiscoveryRequest` (URLs, regex, etc.). The `pi` host executes the I/O and passes the resulting data back into a secondary "parser" function within the recipe.
+- No process execution or global state mutation.
 
 ### Structure
 - One recipe file may define multiple packages or an entire ecosystem
