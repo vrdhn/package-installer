@@ -1,0 +1,69 @@
+def discover(version_query, context):
+    return {
+        "url": "https://go.dev/dl/?mode=json&include=all",
+        "method": "GET"
+    }
+
+def parse(data, version_query, context):
+    releases = json.decode(data)
+    pkgs = []
+
+    for release in releases:
+        # release["version"] is like "go1.21.6"
+        version_str = release["version"]
+        if version_str.startswith("go"):
+            version_str = version_str[2:]
+        
+        if version_query != "latest" and version_query != "" and not version_str.startswith(version_query):
+            continue
+
+        for file in release["files"]:
+            if file.get("kind") != "archive":
+                continue
+
+            # Map OS
+            go_os = file["os"]
+            os_type = "unknown"
+            if go_os == "linux":
+                os_type = "linux"
+            elif go_os == "darwin":
+                os_type = "darwin"
+            elif go_os == "windows":
+                os_type = "windows"
+            
+            if os_type != context.os:
+                continue
+
+            # Map Arch
+            go_arch = file["arch"]
+            arch_type = "unknown"
+            if go_arch == "amd64":
+                arch_type = "x64"
+            elif go_arch == "arm64":
+                arch_type = "arm64"
+            
+            if arch_type != context.arch:
+                continue
+
+            filename = file["filename"]
+            
+            # Check extensions
+            supported = False
+            for allowed in context.extensions:
+                if filename.endswith(allowed):
+                    supported = True
+                    break
+            
+            if not supported:
+                continue
+
+            pkgs.append({
+                "name": "golang",
+                "version": version_str,
+                "os": os_type,
+                "arch": arch_type,
+                "url": "https://go.dev/dl/" + filename,
+                "filename": filename
+            })
+
+    return pkgs

@@ -25,17 +25,17 @@ func NewStarlarkRecipe(name, source string, printFunc func(string)) (*StarlarkRe
 	sr := &StarlarkRecipe{
 		Name:   name,
 		Source: source,
-						thread: &starlark.Thread{
-							Name: name,
-							Print: func(thread *starlark.Thread, msg string) {
-								if printFunc != nil {
-									printFunc(msg)
-								} else {
-									fmt.Printf("[%s] %s\n", thread.Name, msg)
-								}
-							},
-						},
+		thread: &starlark.Thread{
+			Name: name,
+			Print: func(thread *starlark.Thread, msg string) {
+				if printFunc != nil {
+					printFunc(msg)
+				} else {
+					fmt.Printf("[%s] %s\n", thread.Name, msg)
 				}
+			},
+		},
+	}
 
 	// Define built-ins
 	builtins := starlark.StringDict{
