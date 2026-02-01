@@ -9,6 +9,7 @@ import (
 func TestConsoleDisplay(t *testing.T) {
 	buf := &bytes.Buffer{}
 	d := NewWriterDisplay(buf)
+	d.SetVerbose(true)
 
 	task := d.StartTask("TestTask")
 

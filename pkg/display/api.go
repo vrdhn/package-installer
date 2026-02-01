@@ -18,6 +18,10 @@ type Task interface {
 type Display interface {
 	// StartTask creates and returns a new tracked Task.
 	StartTask(name string) Task
+	// Log adds a direct log message to the display.
+	Log(msg string)
+	// SetVerbose enables or disables verbose logging.
+	SetVerbose(v bool)
 	// Close cleans up any resources and ensures final output is rendered.
 	Close()
 }

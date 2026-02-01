@@ -6,23 +6,38 @@ import (
 	"os"
 
 	"pi/pkg/cli"
+	"pi/pkg/display"
 	"pi/pkg/repository"
 )
 
 func main() {
+	disp := display.NewConsole()
+	defer disp.Close()
+
+	// Simple global flag check before engine parsing to enable early logs
+	for _, arg := range os.Args {
+		if arg == "--verbose" || arg == "-v" {
+			disp.SetVerbose(true)
+			break
+		}
+	}
+
 	engine, err := cli.NewEngine(cli.DefaultDSL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing CLI definition: %v\n", err)
 		os.Exit(1)
 	}
 
-	repo, err := repository.NewManager()
+	repo, err := repository.NewManager(disp)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing repository: %v\n", err)
 		os.Exit(1)
 	}
 
-	handler := &cli.DefaultHandler{Repo: repo}
+	handler := &cli.DefaultHandler{
+		Repo: repo,
+		Disp: disp,
+	}
 
 	// Register the same handler for all paths, it internally switches
 	registerAll(engine, engine.Commands, handler)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"pi/pkg/display"
 	"strings"
 
 	"pi/pkg/recipe"
@@ -11,11 +12,13 @@ import (
 
 type Manager struct {
 	recipes map[string]string
+	disp    display.Display
 }
 
-func NewManager() (*Manager, error) {
+func NewManager(disp display.Display) (*Manager, error) {
 	m := &Manager{
 		recipes: make(map[string]string),
+		disp:    disp,
 	}
 
 	err := fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
@@ -23,11 +26,12 @@ func NewManager() (*Manager, error) {
 			return err
 		}
 		if !d.IsDir() && strings.HasSuffix(path, ".star") {
+			name := strings.TrimSuffix(filepath.Base(path), ".star")
+			m.disp.Log(fmt.Sprintf("Loading builtin recipe: %s", name))
 			content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
 			if err != nil {
 				return err
 			}
-			name := strings.TrimSuffix(filepath.Base(path), ".star")
 			m.recipes[name] = string(content)
 		}
 		return nil

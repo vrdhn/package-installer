@@ -27,6 +27,7 @@ type consoleDisplay struct {
 	out         io.Writer
 	activeTasks []*consoleTask
 	lastLines   int
+	verbose     bool
 }
 
 // NewConsole creates a new Display that outputs to stdout.
@@ -34,6 +35,16 @@ func NewConsole() Display {
 	return &consoleDisplay{
 		out: os.Stdout,
 	}
+}
+
+func (d *consoleDisplay) SetVerbose(v bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.verbose = v
+}
+
+func (d *consoleDisplay) Log(msg string) {
+	d.log(msg)
 }
 
 // NewWriterDisplay creates a new Display that outputs to the given writer.
@@ -67,6 +78,10 @@ func (d *consoleDisplay) Close() {
 func (d *consoleDisplay) log(msg string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	if !d.verbose {
+		return
+	}
 
 	d.clearLines()
 	fmt.Fprintln(d.out, msg)

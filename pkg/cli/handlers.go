@@ -15,9 +15,14 @@ import (
 
 type DefaultHandler struct {
 	Repo *repository.Manager
+	Disp display.Display
 }
 
 func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
+	if v, ok := inv.Global["verbose"].(bool); ok {
+		h.Disp.SetVerbose(v)
+	}
+
 	path := getCmdPath(inv.Command)
 	switch path {
 	case "install":
@@ -56,22 +61,19 @@ func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) error 
 		return fmt.Errorf("error initializing config: %v", err)
 	}
 
-	disp := display.NewConsole()
-	defer disp.Close()
-
 	// Find recipe
 	src, err := h.Repo.GetRecipe(name)
 	if err != nil {
 		return fmt.Errorf("error loading recipe: %v", err)
 	}
 
-	recipeObj, err := recipe.NewStarlarkRecipe(name, src)
+	task := h.Disp.StartTask(name)
+	defer task.Done()
+
+	recipeObj, err := recipe.NewStarlarkRecipe(name, src, task.Log)
 	if err != nil {
 		return fmt.Errorf("error initializing recipe: %v", err)
 	}
-
-	task := disp.StartTask(name)
-	defer task.Done()
 
 	// Resolve
 	pkgDef, err := resolver.Resolve(ctx, cfg, recipeObj, version, task)
