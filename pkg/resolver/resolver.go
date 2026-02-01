@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"pi/pkg/archive"
 	"pi/pkg/cache"
 	"pi/pkg/config"
 	"pi/pkg/display"
@@ -26,14 +27,15 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, version s
 	_ = url
 	_ = method
 
-	pkgs, err := r.Parse(data, version)
+	pkgs, err := r.Parse(cfg, data, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse discovery data: %w", err)
 	}
 
-	// Filter by OS/Arch and Version
+	// Filter by OS/Arch and Version and Extension
 	targetOS := cfg.OS
 	targetArch := cfg.Arch
+	allowedExts := archive.Extensions(targetOS)
 
 	var bestMatch *recipe.PackageDefinition
 
@@ -45,6 +47,18 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, version s
 
 		// Basic filtering
 		if version != "latest" && version != "" && !strings.HasPrefix(p.Version, version) {
+			continue
+		}
+
+		// Extension filtering
+		supported := false
+		for _, ext := range allowedExts {
+			if strings.HasSuffix(p.Filename, ext) {
+				supported = true
+				break
+			}
+		}
+		if !supported {
 			continue
 		}
 
@@ -62,7 +76,7 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, version s
 }
 
 func fetchDiscoveryData(ctx context.Context, cfg *config.Config, r recipe.Recipe, versionQuery string, task display.Task) (string, string, []byte, error) {
-	url, method, err := r.Discover(versionQuery)
+	url, method, err := r.Discover(cfg, versionQuery)
 	if err != nil {
 		return "", "", nil, err
 	}

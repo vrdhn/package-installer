@@ -1,10 +1,10 @@
-def discover(version_query):
+def discover(version_query, context):
     return {
         "url": "https://nodejs.org/dist/index.json",
         "method": "GET"
     }
 
-def parse(data, version_query):
+def parse(data, version_query, context):
     versions = json.decode(data)
     pkgs = []
     
@@ -19,6 +19,8 @@ def parse(data, version_query):
                 continue
             
             os_type, arch_type = info
+            
+            # We assume nodejs.org has fixed extensions for these
             ext = ".tar.gz"
             if os_type == "windows":
                 ext = ".zip"
@@ -26,6 +28,15 @@ def parse(data, version_query):
             filename = "node-v{}-{}{}".format(version, file, ext)
             url = "https://nodejs.org/dist/v{}/{}".format(version, filename)
             
+            # Final check against supported extensions for current OS
+            supported = False
+            for allowed in context.extensions:
+                if filename.endswith(allowed):
+                    supported = True
+                    break
+            if not supported:
+                continue
+
             pkgs.append({
                 "name": "nodejs",
                 "version": version,

@@ -3,6 +3,7 @@ package recipe
 import (
 	"encoding/json"
 	"fmt"
+	"pi/pkg/archive"
 	"pi/pkg/config"
 
 	"go.starlark.net/starlark"
@@ -79,13 +80,25 @@ func toStarlark(v any) starlark.Value {
 	}
 }
 
-func (sr *StarlarkRecipe) Discover(versionQuery string) (string, string, error) {
+func (sr *StarlarkRecipe) Discover(cfg *config.Config, versionQuery string) (string, string, error) {
 	discover, ok := sr.globals["discover"]
 	if !ok {
 		return "", "", fmt.Errorf("discover function not found in recipe %s", sr.Name)
 	}
 
-	res, err := starlark.Call(sr.thread, discover, starlark.Tuple{starlark.String(versionQuery)}, nil)
+	exts := archive.Extensions(cfg.OS)
+	starlarkExts := starlark.NewList(nil)
+	for _, ext := range exts {
+		starlarkExts.Append(starlark.String(ext))
+	}
+
+	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
+		"os":         starlark.String(cfg.OS),
+		"arch":       starlark.String(cfg.Arch),
+		"extensions": starlarkExts,
+	})
+
+	res, err := starlark.Call(sr.thread, discover, starlark.Tuple{starlark.String(versionQuery), ctx}, nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -109,13 +122,25 @@ func (sr *StarlarkRecipe) Discover(versionQuery string) (string, string, error) 
 	return urlVal.(starlark.String).GoString(), method, nil
 }
 
-func (sr *StarlarkRecipe) Parse(data []byte, versionQuery string) ([]PackageDefinition, error) {
+func (sr *StarlarkRecipe) Parse(cfg *config.Config, data []byte, versionQuery string) ([]PackageDefinition, error) {
 	parse, ok := sr.globals["parse"]
 	if !ok {
 		return nil, fmt.Errorf("parse function not found in recipe %s", sr.Name)
 	}
 
-	res, err := starlark.Call(sr.thread, parse, starlark.Tuple{starlark.String(string(data)), starlark.String(versionQuery)}, nil)
+	exts := archive.Extensions(cfg.OS)
+	starlarkExts := starlark.NewList(nil)
+	for _, ext := range exts {
+		starlarkExts.Append(starlark.String(ext))
+	}
+
+	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
+		"os":         starlark.String(cfg.OS),
+		"arch":       starlark.String(cfg.Arch),
+		"extensions": starlarkExts,
+	})
+
+	res, err := starlark.Call(sr.thread, parse, starlark.Tuple{starlark.String(string(data)), starlark.String(versionQuery), ctx}, nil)
 	if err != nil {
 		return nil, err
 	}

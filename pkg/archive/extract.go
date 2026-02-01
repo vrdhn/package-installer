@@ -8,19 +8,33 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"pi/pkg/config"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
 )
 
-// SupportedExtensions returns a list of file extensions that the archive module can extract.
+// Extensions returns a list of file extensions that the archive module can extract
+// for the given operating system.
+func Extensions(os config.OSType) []string {
+	switch os {
+	case config.OSWindows:
+		return []string{".zip"}
+	case config.OSDarwin:
+		return []string{".tar.gz", ".tar.zst", ".zip", ".tgz", ".tar"}
+	default: // Linux and others
+		return []string{".tar.gz", ".tar.zst", ".tgz", ".tar"}
+	}
+}
+
+// SupportedExtensions returns a list of all file extensions that the archive module can extract.
 func SupportedExtensions() []string {
 	return []string{".zip", ".tar", ".tar.gz", ".tgz", ".tar.zst"}
 }
 
-// IsSupported returns true if the filename has a supported archive extension.
-func IsSupported(filename string) bool {
-	for _, ext := range SupportedExtensions() {
+// IsSupported returns true if the filename has a supported archive extension for the given OS.
+func IsSupported(os config.OSType, filename string) bool {
+	for _, ext := range Extensions(os) {
 		if strings.HasSuffix(filename, ext) {
 			return true
 		}
