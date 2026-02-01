@@ -13,10 +13,10 @@ import (
 
 type mockTask struct{}
 
-func (m *mockTask) Log(msg string)                      {}
-func (m *mockTask) SetStage(name string, target string) {}
+func (m *mockTask) Log(msg string)                       {}
+func (m *mockTask) SetStage(name string, target string)  {}
 func (m *mockTask) Progress(percent int, message string) {}
-func (m *mockTask) Done()                               {}
+func (m *mockTask) Done()                                {}
 
 func TestResolve(t *testing.T) {
 	cfg, _ := config.Init()

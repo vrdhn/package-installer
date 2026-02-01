@@ -2,98 +2,46 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
-	"strings"
 
-	"pi/pkg/config"
-	"pi/pkg/display"
-	"pi/pkg/installer"
-	"pi/pkg/recipe"
-	"pi/pkg/resolver"
+	"pi/pkg/cli"
 )
 
+//go:embed pkg/cli/cli.def
+var cliDSL string
+
 func main() {
-	if len(os.Args) < 2 {
-		usage()
-		return
-	}
-
-	command := os.Args[1]
-	switch command {
-	case "install":
-		if len(os.Args) < 3 {
-			fmt.Println("Error: package name required. E.g. nodejs@latest")
-			os.Exit(1)
-		}
-		runInstall(os.Args[2])
-	case "help":
-		usage()
-	default:
-		fmt.Printf("Unknown command: %s\n", command)
-		usage()
-		os.Exit(1)
-	}
-}
-
-func usage() {
-	fmt.Println("pi - Universal Package Installer")
-	fmt.Println("\nUsage:")
-	fmt.Println("  pi install <package>[@version]")
-	fmt.Println("  pi help")
-}
-
-func runInstall(pkgQuery string) {
-	parts := strings.Split(pkgQuery, "@")
-	name := parts[0]
-	version := "latest"
-	if len(parts) > 1 {
-		version = parts[1]
-	}
-
-	cfg, err := config.Init()
+	engine, err := cli.NewEngine(cliDSL)
 	if err != nil {
-		fmt.Printf("Error initializing config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error parsing CLI definition: %v\n", err)
 		os.Exit(1)
 	}
 
-	disp := display.NewConsole()
-	defer disp.Close()
+	handler := &cli.DefaultHandler{}
+
+	// Register the same handler for all paths, it internally switches
+	registerAll(engine, engine.Commands, handler)
 
 	ctx := context.Background()
-
-	// Find recipe
-	var r *recipe.Recipe
-	switch name {
-	case "nodejs":
-		r = recipe.GetNodejsRecipe()
-	case "java":
-		r = recipe.GetJavaRecipe()
-	default:
-		fmt.Printf("Error: unknown package ecosystem: %s\n", name)
-		return
+	if err := engine.Run(ctx, os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
+}
 
-	task := disp.StartTask(name)
-	defer task.Done()
-
-	// Resolve
-	pkgDef, err := resolver.Resolve(ctx, cfg, r, version, task)
-	if err != nil {
-		task.Log(fmt.Sprintf("Resolution failed: %v", err))
-		return
+func registerAll(e *cli.Engine, cmds []*cli.Command, h cli.Handler) {
+	for _, c := range cmds {
+		path := getCmdPath(c)
+		e.Register(path, h)
+		registerAll(e, c.Subs, h)
 	}
+}
 
-	// Plan
-	plan, err := installer.NewPlan(cfg, *pkgDef)
-	if err != nil {
-		task.Log(fmt.Sprintf("Planning failed: %v", err))
-		return
+func getCmdPath(c *cli.Command) string {
+	if c.Parent == nil {
+		return c.Name
 	}
-
-	// Install
-	if err := installer.Install(ctx, plan, task); err != nil {
-		task.Log(fmt.Sprintf("Installation failed: %v", err))
-		return
-	}
+	return getCmdPath(c.Parent) + "/" + c.Name
 }

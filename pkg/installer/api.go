@@ -3,11 +3,11 @@ package installer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/recipe"
-	"os"
-	"path/filepath"
 )
 
 // Plan contains all information needed to perform an installation.

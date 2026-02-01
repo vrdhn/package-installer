@@ -1,0 +1,42 @@
+# Global flags
+flag verbose bool "Enable verbose output" v
+flag config string "Path to config file" c
+
+# Commands
+cmd install "Install a package"
+    arg package string "Package name and version (e.g., nodejs@20)"
+    flag force bool "Force reinstallation" f
+    example "pi install nodejs@20"
+    example "pi i nodejs@latest"
+
+cmd sync "Sync all packages in pi.cave.json"
+    example "pi sync"
+
+cmd init "Initialize a new workspace"
+    example "pi init"
+
+cmd enter "Enter the sandbox shell"
+    example "pi enter"
+
+cmd remote "Manage remote repositories"
+    cmd list "List all remote repositories"
+        example "pi remote list"
+        example "pi list"
+    
+    cmd add "Add a new remote repository"
+        arg name string "Name of the repository"
+        arg url string "URL of the repository"
+        example "pi remote add official https://github.com/google/pi-recipes"
+
+# Help Topics
+topic cave "The Cave (Sandbox)"
+    text """
+    A 'Cave' is an isolated environment powered by Linux bubblewrap.
+    It ensures that your project has exactly the tools it needs, isolated from the host.
+    """
+
+topic recipes "Package Recipes"
+    text """
+    Recipes describe how packages are discovered, resolved, and installed.
+    They are currently implemented as Go functions but will move to Starlark.
+    """

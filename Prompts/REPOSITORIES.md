@@ -4,7 +4,7 @@
 
 ## Repository Model
 
-A "Repository" is a collection of recipes and discovery logic.
+A "Repository" is a collection of recipes apwdnd discovery logic.
 
 ### Types of Repositories
 1.  **Local**: A directory on the host machine.
@@ -33,7 +33,7 @@ A stable recipe defines *how* to find a package.
 
 Recipes must cover two distinct stages of an ecosystem's lifecycle:
 
-1.  **Bootstrapping the Manager**: 
+1.  **Bootstrapping the Manager**:
     - Installing the tools that manage other things (e.g., `rustup`, `ghcup`, `opam`).
     - These are often "singletons" within a Cave.
 2.  **Individual Packages**:

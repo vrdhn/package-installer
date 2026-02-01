@@ -17,8 +17,8 @@ const (
 type ArchType string
 
 const (
-	ArchX64   ArchType = "x64"
-	ArchArm64 ArchType = "arm64"
+	ArchX64     ArchType = "x64"
+	ArchArm64   ArchType = "arm64"
 	ArchUnknown ArchType = "unknown"
 )
 

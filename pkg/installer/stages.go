@@ -3,11 +3,11 @@ package installer
 import (
 	"context"
 	"fmt"
+	"os"
 	"pi/pkg/archive"
 	"pi/pkg/cache"
 	"pi/pkg/display"
 	"pi/pkg/downloader"
-	"os"
 )
 
 // DownloadStage downloads the package if it's not already in cache.
