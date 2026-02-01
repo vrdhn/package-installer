@@ -27,7 +27,6 @@ type Command struct {
 	Subs     []*Command
 	Parent   *Command
 	Examples []string
-	Level    int // Internal use for parsing indentation
 }
 
 type Topic struct {

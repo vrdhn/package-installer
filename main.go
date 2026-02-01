@@ -6,12 +6,11 @@ import (
 	"os"
 
 	"pi/pkg/cli"
-	"pi/pkg/embed"
 	"pi/pkg/repository"
 )
 
 func main() {
-	engine, err := cli.NewEngine(embed.CLIDef)
+	engine, err := cli.NewEngine(cli.DefaultDSL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing CLI definition: %v\n", err)
 		os.Exit(1)

@@ -1,12 +1,14 @@
 package cli
 
 import (
-	"bufio"
 	"context"
+	_ "embed"
 	"fmt"
 	"strings"
-	"unicode"
 )
+
+//go:embed cli.def
+var DefaultDSL string
 
 type Engine struct {
 	GlobalFlags []*Flag
@@ -36,237 +38,8 @@ func (e *Engine) Register(cmdPath string, h Handler) {
 }
 
 func (e *Engine) parseDSL(dsl string) error {
-
-	scanner := bufio.NewScanner(strings.NewReader(dsl))
-
-	var stack []*Command
-
-	var lastTopic *Topic
-
-	inMultiLine := false
-
-	var multiLineBuffer strings.Builder
-
-	for scanner.Scan() {
-
-		line := scanner.Text()
-
-		trimmed := strings.TrimSpace(line)
-
-		if inMultiLine {
-
-			if idx := strings.Index(line, `"""`); idx != -1 {
-
-				multiLineBuffer.WriteString(line[:idx])
-
-				if lastTopic != nil {
-
-					lastTopic.Text = strings.TrimSpace(multiLineBuffer.String())
-
-				}
-
-				inMultiLine = false
-
-				multiLineBuffer.Reset()
-
-			} else {
-
-				multiLineBuffer.WriteString(line + "\n")
-
-			}
-
-			continue
-
-		}
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-
-			continue
-
-		}
-
-		level := countIndentation(line)
-
-		parts := splitLine(trimmed)
-
-		if len(parts) == 0 {
-
-			continue
-
-		}
-
-		// Pop stack based on indentation
-
-		for len(stack) > 0 && stack[len(stack)-1].Level >= level {
-
-			stack = stack[:len(stack)-1]
-
-		}
-
-		switch parts[0] {
-
-		case "flag":
-
-			if len(parts) < 4 {
-				continue
-			}
-
-			f := &Flag{Name: parts[1], Type: parts[2], Desc: parts[3]}
-
-			if len(parts) > 4 {
-				f.Short = parts[4]
-			}
-
-			if len(stack) == 0 {
-
-				e.GlobalFlags = append(e.GlobalFlags, f)
-
-			} else {
-
-				stack[len(stack)-1].Flags = append(stack[len(stack)-1].Flags, f)
-
-			}
-
-		case "cmd", "sub":
-
-			// cmd <name> [subname] "desc"
-
-			var name, desc string
-
-			var subName string
-
-			if len(parts) >= 3 && strings.HasPrefix(parts[len(parts)-1], "\"") {
-
-				// Last part is description
-
-				desc = strings.Trim(parts[len(parts)-1], "\"")
-
-				name = parts[1]
-
-				if len(parts) >= 4 {
-
-					subName = parts[2]
-
-				}
-
-			} else if len(parts) >= 3 {
-
-				name = parts[1]
-
-				desc = parts[2]
-
-			} else if len(parts) == 2 {
-
-				name = parts[1]
-
-			}
-
-			c := &Command{Name: name, Desc: desc, Level: level}
-
-			if len(stack) == 0 {
-
-				e.Commands = append(e.Commands, c)
-
-			} else {
-
-				parent := stack[len(stack)-1]
-
-				c.Parent = parent
-
-				parent.Subs = append(parent.Subs, c)
-
-			}
-
-			stack = append(stack, c)
-
-			if subName != "" {
-
-				// Auto-nest subName
-
-				sc := &Command{Name: subName, Desc: desc, Level: level + 4, Parent: c}
-
-				c.Subs = append(c.Subs, sc)
-
-				stack = append(stack, sc)
-
-			}
-
-			lastTopic = nil
-
-		case "arg":
-
-			if len(parts) < 4 {
-				continue
-			}
-
-			if len(stack) > 0 {
-
-				stack[len(stack)-1].Args = append(stack[len(stack)-1].Args, &Arg{Name: parts[1], Type: parts[2], Desc: parts[3]})
-
-			}
-
-		case "example":
-
-			if len(parts) < 2 {
-				continue
-			}
-
-			if len(stack) > 0 {
-
-				stack[len(stack)-1].Examples = append(stack[len(stack)-1].Examples, parts[1])
-
-			}
-
-		case "topic":
-
-			if len(parts) < 3 {
-				continue
-			}
-
-			t := &Topic{Name: parts[1], Desc: parts[2]}
-
-			e.Topics = append(e.Topics, t)
-
-			lastTopic = t
-
-			stack = nil
-
-		case "text":
-
-			content := strings.TrimSpace(strings.TrimPrefix(trimmed, "text"))
-
-			if strings.HasPrefix(content, `"""`) {
-
-				content = strings.TrimPrefix(content, `"""`)
-
-				if strings.HasSuffix(content, `"""`) {
-
-					if lastTopic != nil {
-
-						lastTopic.Text = strings.TrimSpace(strings.TrimSuffix(content, `"""`))
-
-					}
-
-				} else {
-
-					inMultiLine = true
-
-					multiLineBuffer.WriteString(content + "\n")
-
-				}
-
-			} else if lastTopic != nil {
-
-				lastTopic.Text = content
-
-			}
-
-		}
-
-	}
-
-	return nil
-
+	p := newParser(dsl, e)
+	return p.parse()
 }
 
 func (e *Engine) Run(ctx context.Context, args []string) error {
@@ -661,51 +434,6 @@ func (e *Engine) PrintCommandHelp(c *Command) {
 
 func (e *Engine) PrintTopicHelp(t *Topic) {
 	fmt.Printf("Topic: %s\nDescription: %s\n\n%s\n", t.Name, t.Desc, t.Text)
-}
-
-func countIndentation(line string) int {
-	count := 0
-	for _, r := range line {
-		if r == ' ' {
-			count++
-		} else if r == '\t' {
-			count += 4
-		} else {
-			break
-		}
-	}
-	return count
-}
-
-func splitLine(line string) []string {
-	if idx := strings.Index(line, `"""`); idx != -1 {
-		// Special handling: return parts before """ and then the rest as one part starting with """
-		before := strings.TrimSpace(line[:idx])
-		parts := splitLine(before)
-		parts = append(parts, line[idx:])
-		return parts
-	}
-	var parts []string
-	var current strings.Builder
-	inQuotes := false
-	for _, r := range line {
-		if r == '"' {
-			inQuotes = !inQuotes
-			continue
-		}
-		if unicode.IsSpace(r) && !inQuotes {
-			if current.Len() > 0 {
-				parts = append(parts, current.String())
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(r)
-		}
-	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-	return parts
 }
 
 func getCmdPath(c *Command) string {

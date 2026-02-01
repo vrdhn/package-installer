@@ -19,14 +19,15 @@ cmd enter "Enter the sandbox shell"
     example "pi enter"
 
 cmd remote "Manage remote repositories"
-    cmd list "List all remote repositories"
-        example "pi remote list"
-        example "pi list"
-    
-    cmd add "Add a new remote repository"
-        arg name string "Name of the repository"
-        arg url string "URL of the repository"
-        example "pi remote add official https://github.com/google/pi-recipes"
+
+cmd remote list "List all remote repositories"
+    example "pi remote list"
+    example "pi list"
+
+cmd remote add "Add a new remote repository"
+    arg name string "Name of the repository"
+    arg url string "URL of the repository"
+    example "pi remote add official https://github.com/google/pi-recipes"
 
 # Help Topics
 topic cave "The Cave (Sandbox)"

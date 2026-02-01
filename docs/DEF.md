@@ -1,21 +1,22 @@
 # CLI Definition Language (.def)
 
-`pi` uses a simple, indentation-aware DSL to define its command-line interface. This file is parsed at runtime to build the command tree, handle flag parsing, and generate help documentation.
+`pi` uses a simple, flat DSL to define its command-line interface. This file is parsed at runtime to build the command tree, handle flag parsing, and generate help documentation.
 
 ## General Syntax
 
 - **Comments**: Lines starting with `#` are ignored.
-- **Indentation**: Used to define hierarchy. Commands, flags, and arguments belong to the parent keyword they are indented under.
-- **Keywords**: Each line starts with a keyword (`flag`, `cmd`, `arg`, `example`, `topic`, `text`).
+- **Hierarchy-Independent**: Indentation and braces are not used. Hierarchy is defined by command paths or contextual attachment.
+- **Keywords**: Each statement starts with a keyword (`flag`, `cmd`, `arg`, `example`, `topic`, `text`).
+- **Strings**: Single-line strings are enclosed in double quotes `"`. Multi-line strings use triple double-quotes `"""`.
 
 ---
 
 ## Global Elements
 
-Keywords at the root (no indentation) apply globally.
+`flag` keywords appearing before any `cmd` are considered global.
 
 ### `flag <name> <type> "<description>" [<short>]`
-Defines a global flag.
+Defines a flag.
 - **type**: `bool` or `string`.
 - **short**: (Optional) Single character alias (e.g., `v` for `verbose`).
 
@@ -28,54 +29,57 @@ flag verbose bool "Enable verbose output" v
 
 ## Command Hierarchy
 
-### `cmd <name> "<description>"`
-Defines a top-level command. Sub-commands are defined by nesting another `cmd` under it with indentation.
+### `cmd <path> "<description>"`
+Defines a command. The `<path>` can be a single word for top-level commands or multiple words for subcommands.
 
 Example:
 ```
 cmd remote "Manage repositories"
-    cmd list "List all"
+cmd remote list "List all"
 ```
 
 ### `arg <name> <type> "<description>"`
-Defines a positional argument for the parent command.
-- **type**: Usually `string`.
+Defines a positional argument for the *immediately preceding* command.
 
 ### `flag <name> <type> "<description>" [<short>]`
-When indented under a `cmd`, defines a command-specific flag.
+When following a `cmd`, defines a command-specific flag.
 
 ### `example "<text>"`
-Adds an example usage string to the command's help page.
+Adds an example usage string to the *immediately preceding* command.
 
 Example:
 ```
 cmd install "Install package"
-    arg package string "Name of pkg"
-    flag force bool "Overwrite" f
-    example "pi install nodejs@20"
+arg package string "Name of pkg"
+flag force bool "Overwrite" f
+example "pi install nodejs@20"
 ```
 
 ---
 
 ## Documentation Topics
 
-Guide books and conceptual documentation are defined using `topic`.
+Guide books and conceptual documentation are defined using `topic` and `text`.
 
 ### `topic <name> "<description>"`
 Defines a help topic.
 
 ### `text <content>`
-Adds documentation text to the parent topic.
+Adds documentation text to the *immediately preceding* topic.
 
 ### Multiline Strings (`"""`)
-For long documentation, use triple double-quotes.
+Used for long documentation.
+**Formatting Rules:**
+- Leading spaces on each line are replaced by a single space.
+- Empty lines in the source are preserved as newlines.
+- Leading and trailing empty lines are stripped.
 
 Example:
 ```
 topic cave "The Sandbox"
-    text """
-    This is a multiline description
-    of how caves work in pi.
+text """
+    A 'Cave' is an isolated environment powered by Linux bubblewrap.
+    It ensures that your project has exactly the tools it needs.
     """
 ```
 

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pi/pkg/embed"
+	"pi/pkg/recipe"
 )
 
 type Manager struct {
@@ -18,12 +18,12 @@ func NewManager() (*Manager, error) {
 		recipes: make(map[string]string),
 	}
 
-	err := fs.WalkDir(embed.Recipes, "recipes", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() && strings.HasSuffix(path, ".star") {
-			content, err := fs.ReadFile(embed.Recipes, path)
+			content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
 			if err != nil {
 				return err
 			}

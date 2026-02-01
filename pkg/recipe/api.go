@@ -1,6 +1,12 @@
 package recipe
 
-import "pi/pkg/config"
+import (
+	"embed"
+	"pi/pkg/config"
+)
+
+//go:embed recipes/*.star
+var BuiltinRecipes embed.FS
 
 // PackageDefinition describes a specific build of a package.
 type PackageDefinition struct {

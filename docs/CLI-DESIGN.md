@@ -22,18 +22,18 @@ go files with all the required structures, and code to do parsing.
 # Plan
 
 1.  **Define Specification Language (`cli.def`)**:
-    *   Design a simple, line-oriented DSL to declare global flags, commands, subcommands, and their respective flags/arguments.
-    *   Support types: `bool`, `string`, `int`.
+    *   Design a simple, keyword-based DSL to declare global flags, commands, subcommands, and their respective flags/arguments.
+    *   Indentation and braces are ignored; hierarchy is defined via command paths (e.g., `cmd remote list`) or contextual order.
+    *   Support types: `bool`, `string`.
     *   Include descriptions for automatic help generation.
-    *   Support positional arguments with optionality and varargs.
+    *   Support multi-line strings with specific formatting rules (leading spaces replaced by single space, empty lines preserved).
 
-2.  **Develop CLI Generator (`tool/cligen`)**:
-    *   A small Go utility that reads `cli.def`.
-    *   Parses the DSL into an internal representation.
-    *   Uses `text/template` to generate `pkg/cli/generated.go`.
-    *   **Decision**: We will generate a **custom parser** instead of using a library like `cobra`. This allows us to natively support the "shortest unique prefix" and "omitted command" requirements without the overhead and rigidity of an external dependency.
+2.  **CLI Engine**:
+    *   The `pkg/cli` package includes a custom lexer and parser that reads `cli.def` at runtime.
+    *   **Lexer**: A fast, character-by-character scanner.
+    *   **Parser**: A stateful parser that builds the command tree using path-based resolution and contextual attachment.
 
-3.  **Generated Code Structure & Parsing Logic**:
+3.  **Parsing Logic**:
     *   **Registry**: A generated data structure containing all possible command paths and flag definitions.
     *   **Custom Parser**:
         *   **Prefix Matching**: Logic to resolve `i` to `install` or `e` to `enter` by checking for the shortest unambiguous match.
@@ -42,9 +42,9 @@ go files with all the required structures, and code to do parsing.
     *   **Interfaces**: A `Runner` interface with an `Execute(ctx context.Context) error` method for each command/subcommand.
 
 4.  **Integration & Usage**:
-    *   Add `//go:generate go run ./tool/cligen` to `main.go`.
-    *   Implement command handlers in `pkg/cli/handlers/` (manual code) that satisfy the generated interfaces.
-    *   Update `main.go` to be a thin wrapper around the generated parser.
+    *   The `cli.def` file is embedded into the binary.
+    *   `main.go` initializes the CLI engine with the embedded definition.
+    *   Command handlers are registered to the engine based on their command path.
 
 5.  **Evolution**:
     *   Add validation (e.g., choice lists, range checks) to the DSL.
