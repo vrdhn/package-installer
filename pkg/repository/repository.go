@@ -1,15 +1,13 @@
 package repository
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
-)
 
-//go:embed recipes/*.star
-var recipesFS embed.FS
+	"pi/pkg/embed"
+)
 
 type Manager struct {
 	recipes map[string]string
@@ -20,12 +18,12 @@ func NewManager() (*Manager, error) {
 		recipes: make(map[string]string),
 	}
 
-	err := fs.WalkDir(recipesFS, "recipes", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(embed.Recipes, "recipes", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() && strings.HasSuffix(path, ".star") {
-			content, err := recipesFS.ReadFile(path)
+			content, err := fs.ReadFile(embed.Recipes, path)
 			if err != nil {
 				return err
 			}

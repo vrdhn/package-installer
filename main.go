@@ -2,19 +2,16 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"os"
 
 	"pi/pkg/cli"
+	"pi/pkg/embed"
 	"pi/pkg/repository"
 )
 
-//go:embed pkg/cli/cli.def
-var cliDSL string
-
 func main() {
-	engine, err := cli.NewEngine(cliDSL)
+	engine, err := cli.NewEngine(embed.CLIDef)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing CLI definition: %v\n", err)
 		os.Exit(1)
