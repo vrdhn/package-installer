@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"pi/pkg/cli"
+	"pi/pkg/repository"
 )
 
 //go:embed pkg/cli/cli.def
@@ -19,7 +20,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := &cli.DefaultHandler{}
+	repo, err := repository.NewManager()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing repository: %v\n", err)
+		os.Exit(1)
+	}
+
+	handler := &cli.DefaultHandler{Repo: repo}
 
 	// Register the same handler for all paths, it internally switches
 	registerAll(engine, engine.Commands, handler)

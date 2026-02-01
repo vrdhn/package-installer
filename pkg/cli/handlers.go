@@ -9,16 +9,19 @@ import (
 	"pi/pkg/display"
 	"pi/pkg/installer"
 	"pi/pkg/recipe"
+	"pi/pkg/repository"
 	"pi/pkg/resolver"
 )
 
-type DefaultHandler struct{}
+type DefaultHandler struct {
+	Repo *repository.Manager
+}
 
 func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
 	path := getCmdPath(inv.Command)
 	switch path {
 	case "install":
-		return runInstall(ctx, inv)
+		return h.runInstall(ctx, inv)
 	case "sync":
 		fmt.Println("Syncing workspace...")
 	case "init":
@@ -35,7 +38,7 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
 	return nil
 }
 
-func runInstall(ctx context.Context, inv *Invocation) error {
+func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) error {
 	pkgQuery := inv.Args["package"]
 	if pkgQuery == "" {
 		return fmt.Errorf("package name required")
@@ -57,14 +60,14 @@ func runInstall(ctx context.Context, inv *Invocation) error {
 	defer disp.Close()
 
 	// Find recipe
-	var recipeObj *recipe.Recipe
-	switch name {
-	case "nodejs":
-		recipeObj = recipe.GetNodejsRecipe()
-	case "java":
-		recipeObj = recipe.GetJavaRecipe()
-	default:
-		return fmt.Errorf("error: unknown package ecosystem: %s", name)
+	src, err := h.Repo.GetRecipe(name)
+	if err != nil {
+		return fmt.Errorf("error loading recipe: %v", err)
+	}
+
+	recipeObj, err := recipe.NewStarlarkRecipe(name, src)
+	if err != nil {
+		return fmt.Errorf("error initializing recipe: %v", err)
 	}
 
 	task := disp.StartTask(name)
