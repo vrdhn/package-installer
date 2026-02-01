@@ -39,7 +39,7 @@ pi enter
 
 **Language:** Go 1.25+
 
-**Coding Style (from `Prompts/CODING.md`):**
+**Coding Style (from `docs/CODING.md`):**
 *   **Structure:** Keep files small (~250 lines) and functions concise (~15 lines).
 *   **Typing:** Avoid `any` where possible; use strict static typing.
 *   **Interfaces:** Prefer defining interfaces over structs at package boundaries.
@@ -52,7 +52,7 @@ pi enter
 *   Run `go test ./...` to verify logic.
 
 ## Key Documentation Files
-*   `Prompts/SPEC.md`: Detailed functional specification.
-*   `Prompts/ARCHITECTURE.md`: Core design and architecture notes.
-*   `Prompts/CODING.md`: Detailed coding standards and style guide.
-*   `Prompts/MODULES.md`: Documentation for internal Go packages.
+*   `docs/SPEC.md`: Detailed functional specification.
+*   `docs/ARCHITECTURE.md`: Core design and architecture notes.
+*   `docs/CODING.md`: Detailed coding standards and style guide.
+*   `docs/MODULES.md`: Documentation for internal Go packages.
