@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"pi/pkg/cave"
@@ -39,6 +40,8 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 		fmt.Println("Syncing workspace...")
 	case "cave/init":
 		return h.runInit(ctx, inv)
+	case "cave/addpkg":
+		return h.runAddPkg(ctx, inv)
 	case "enter":
 		return h.runCaveCommand(ctx, inv)
 	case "remote/list":
@@ -69,7 +72,7 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 	}
 
 	// Ensure packages are installed and get symlinks
-	symlinks, err := h.PkgsMgr.Prepare(ctx, settings.Packages)
+	prep, err := h.PkgsMgr.Prepare(ctx, settings.Packages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare packages: %w", err)
 	}
@@ -84,7 +87,7 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 	}
 
 	backend := cave_bwrap.Create()
-	cmd, err := backend.ResolveLaunch(ctx, c, settings, symlinks, command)
+	cmd, err := backend.ResolveLaunch(ctx, c, settings, prep, command)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +133,45 @@ func (h *DefaultHandler) runInit(ctx context.Context, inv *Invocation) (*Executi
 		return nil, err
 	}
 	fmt.Println("Initialized new workspace in", cwd)
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runAddPkg(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	pkgStr := inv.Args["package"]
+	if pkgStr == "" {
+		return nil, fmt.Errorf("package string required")
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := h.CaveMgr.Find(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add package to config
+	found := false
+	for _, p := range c.Config.Cave.Packages {
+		if p == pkgStr {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		c.Config.Cave.Packages = append(c.Config.Cave.Packages, pkgStr)
+		cfgPath := filepath.Join(c.Workspace, "pi.cave.json")
+		if err := c.Config.Save(cfgPath); err != nil {
+			return nil, fmt.Errorf("failed to save cave config: %w", err)
+		}
+		fmt.Printf("Added package %s to %s\n", pkgStr, cfgPath)
+	} else {
+		fmt.Printf("Package %s already exists in configuration\n", pkgStr)
+	}
+
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 

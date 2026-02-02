@@ -14,7 +14,18 @@ def parse(pkg_name, data, version_query, context):
         if version_str.startswith("go"):
             version_str = version_str[2:]
         
-        if version_query != "latest" and version_query != "" and not version_str.startswith(version_query):
+        is_stable = release.get("stable", False)
+        
+        match = False
+        if version_query == "latest" or version_query == "":
+            match = True # Take first one
+        elif version_query == "stable":
+            if is_stable:
+                match = True
+        elif version_str.startswith(version_query):
+            match = True
+
+        if not match:
             continue
 
         for file in release["files"]:
@@ -63,7 +74,11 @@ def parse(pkg_name, data, version_query, context):
                 "os": os_type,
                 "arch": arch_type,
                 "url": "https://go.dev/dl/" + filename,
-                "filename": filename
+                "filename": filename,
+                "env": {
+                    "GOROOT": "${PI_PKG_ROOT}",
+                    "GOPATH": "~/go"
+                }
             })
 
     return pkgs

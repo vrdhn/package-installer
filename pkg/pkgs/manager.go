@@ -9,6 +9,7 @@ import (
 	"pi/pkg/recipe"
 	"pi/pkg/repository"
 	"pi/pkg/resolver"
+	"strings"
 )
 
 type Manager struct {
@@ -26,64 +27,124 @@ func NewManager(repo *repository.Manager, disp display.Display, sysCfg *config.C
 }
 
 // Prepare ensures all packages are installed and returns the required symlinks.
-func (m *Manager) Prepare(ctx context.Context, pkgStrings []string) ([]Symlink, error) {
+
+func (m *Manager) Prepare(ctx context.Context, pkgStrings []string) (*Result, error) {
+
 	var allSymlinks []Symlink
 
+	allEnv := make(map[string]string)
+
 	for _, pkgStr := range pkgStrings {
+
 		p, err := Parse(pkgStr)
+
 		if err != nil {
+
 			return nil, err
+
 		}
 
 		// Use ecosystem if provided, otherwise use name as recipe name
+
 		recipeName := p.Ecosystem
+
 		if recipeName == "" {
+
 			recipeName = p.Name
+
 		}
 
 		src, err := m.Repo.GetRecipe(recipeName)
+
 		if err != nil {
+
 			return nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
+
 		}
 
 		task := m.Disp.StartTask(p.String())
 
 		recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+
 		if err != nil {
+
 			task.Done()
+
 			return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
+
 		}
 
 		// Resolve
+
 		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, recipeObj, p.Name, p.Version, task)
+
 		if err != nil {
+
 			task.Done()
+
 			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
+
 		}
 
 		// Plan
+
 		plan, err := installer.NewPlan(m.SysConfig, *pkgDef)
+
 		if err != nil {
+
 			task.Done()
+
 			return nil, fmt.Errorf("planning failed for %s: %v", p.String(), err)
+
 		}
 
 		// Install
+
 		if err := installer.Install(ctx, plan, task); err != nil {
+
 			task.Done()
+
 			return nil, fmt.Errorf("installation failed for %s: %v", p.String(), err)
+
 		}
 
 		// Discover symlinks
+
 		links, err := DiscoverSymlinks(plan.InstallPath)
+
 		if err != nil {
+
 			task.Done()
+
 			return nil, fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
+
 		}
 
 		allSymlinks = append(allSymlinks, links...)
+
+		// Handle environment variables
+
+		for k, v := range pkgDef.Env {
+
+			// Replace ${PI_PKG_ROOT} with the actual install path
+
+			// Inside the cave, we will bind the package directory to its host path.
+
+			resolvedVal := strings.ReplaceAll(v, "${PI_PKG_ROOT}", plan.InstallPath)
+
+			allEnv[k] = resolvedVal
+
+		}
+
 		task.Done()
+
 	}
 
-	return allSymlinks, nil
+	return &Result{
+
+		Symlinks: allSymlinks,
+
+		Env: allEnv,
+	}, nil
+
 }

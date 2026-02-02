@@ -423,6 +423,21 @@ func (sr *StarlarkRecipe) Parse(cfg *config.Config, pkgName string, data []byte,
 		pkg.Filename = getString(dict, "filename")
 		pkg.Checksum = getString(dict, "checksum")
 
+		// Parse Env
+		if envVal, ok, _ := dict.Get(starlark.String("env")); ok {
+			if envDict, ok := envVal.(*starlark.Dict); ok {
+				pkg.Env = make(map[string]string)
+				for _, k := range envDict.Keys() {
+					if ks, ok := k.(starlark.String); ok {
+						val, _, _ := envDict.Get(k)
+						if vs, ok := val.(starlark.String); ok {
+							pkg.Env[ks.GoString()] = vs.GoString()
+						}
+					}
+				}
+			}
+		}
+
 		osStr := getString(dict, "os")
 		archStr := getString(dict, "arch")
 

@@ -187,7 +187,7 @@ func sortedKeys[T any](m map[string]T) []string {
 
 // ResolveLaunch implements cave.Backend
 
-func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *config.CaveSettings, symlinks []pkgs.Symlink, command []string) (*exec.Cmd, error) {
+func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *config.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
 
 	// 1. Setup basic binds
 
@@ -203,9 +203,37 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *
 
 	}
 
-	b.AddBind(BIND_RO, "/etc/alternatives") // For java etc
+	b.AddBind(BIND_RO_TRY, "/etc/alternatives") // For java etc
 
 	b.AddBind(BIND_RO, "/etc/resolv.conf")
+
+	// 1.1 Bind global package directory (readonly)
+
+	// This is where symlinks point to.
+
+	// We need to find the SysConfig to get PkgDir, but Backend doesn't have it.
+
+	// However, we can use the parent of one of the symlink sources if available,
+
+	// or assume the host path is visible if we bind it.
+
+	// Actually, the Manager should probably provide the SysConfig or PkgDir.
+
+	// For now, let's assume we need to bind the directories where symlinks point.
+
+	for _, s := range prep.Symlinks {
+
+		// This is a bit overkill, but ensures the target is visible.
+
+		// A better way is to bind the whole PkgDir.
+
+		// Since we don't have PkgDir here easily, we'll bind the parent of the source.
+
+		pkgRoot := filepath.Dir(filepath.Dir(s.Source))
+
+		b.AddBind(BIND_RO, pkgRoot)
+
+	}
 
 	// 2. Setup Workspace
 
@@ -222,12 +250,17 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *
 	b.AddMapBind(BIND, c.HomePath, os.Getenv("HOME"))
 
 	// 3.1 Create symlinks for packages
-	if err := pkgs.CreateSymlinks(c.HomePath, symlinks); err != nil {
+	if err := pkgs.CreateSymlinks(c.HomePath, prep.Symlinks); err != nil {
 		return nil, fmt.Errorf("failed to create symlinks: %w", err)
 	}
 
 	// 3.2 Ensure .local/bin is in PATH
 	b.AddEnvFirst("PATH", filepath.Join(os.Getenv("HOME"), ".local", "bin"))
+
+	// 3.3 Apply recipe environment variables
+	for k, v := range prep.Env {
+		b.envs[k] = v
+	}
 
 	// 4. Set environment variables from settings
 

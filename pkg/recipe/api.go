@@ -17,6 +17,7 @@ type PackageDefinition struct {
 	URL      string
 	Filename string
 	Checksum string
+	Env      map[string]string
 }
 
 // Recipe defines how to discover and resolve packages for an ecosystem.

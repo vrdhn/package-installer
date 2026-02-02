@@ -26,6 +26,10 @@ cmd cave sync "Sync all packages in pi.cave.json"
 cmd cave init "Initialize a new workspace"
     example "pi cave init"
 
+cmd cave addpkg "Add a package to the cave configuration"
+    arg package string "Package name and version (e.g., go=stable)"
+    example "pi cave addpkg go=stable"
+
 cmd enter "Enter the sandbox shell (shortcut for cave run)"
     example "pi enter"
 

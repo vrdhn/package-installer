@@ -20,6 +20,12 @@ type Symlink struct {
 	Target string // Relative path in the cave (the symlink itself)
 }
 
+// Result contains the outcome of package preparation.
+type Result struct {
+	Symlinks []Symlink
+	Env      map[string]string
+}
+
 // Parse parses a package string in the format [ecosystem:]name[=version]
 func Parse(s string) (*Package, error) {
 	p := &Package{}
