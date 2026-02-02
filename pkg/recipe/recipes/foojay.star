@@ -1,4 +1,4 @@
-def discover(version_query, context):
+def discover(pkg_name, version_query, context):
     # Map pi OS names to foojay OS names
     os_map = {
         "linux": "linux",
@@ -19,7 +19,7 @@ def discover(version_query, context):
         "method": "GET"
     }
 
-def parse(data, version_query, context):
+def parse(pkg_name, data, version_query, context):
     resp = json.decode(data)
     pkgs = []
     

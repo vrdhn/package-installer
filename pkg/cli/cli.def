@@ -11,13 +11,22 @@ cmd install "Install a package"
 
 cmd cave "Manage the cave (sandbox)"
 
+cmd cave info "Display information about the current cave"
+    example "pi cave info"
+
+cmd cave run "Run a command inside the cave"
+    arg command string "Command to run"
+    flag variant string "Variant to use" v
+    example "pi cave run ls"
+    example "pi cave run -v test go test ./..."
+
 cmd cave sync "Sync all packages in pi.cave.json"
     example "pi cave sync"
 
 cmd cave init "Initialize a new workspace"
     example "pi cave init"
 
-cmd enter "Enter the sandbox shell"
+cmd enter "Enter the sandbox shell (shortcut for cave run)"
     example "pi enter"
 
 cmd remote "Manage remote repositories"

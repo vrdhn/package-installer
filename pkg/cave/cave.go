@@ -62,8 +62,11 @@ func (m *Manager) Find(cwd string) (*Cave, error) {
 // CreateInitConfig creates a default pi.cave.json in the specified directory.
 func (m *Manager) CreateInitConfig(dir string) error {
 	cfg := &config.CaveConfig{
-		Packages: []string{},
-		Env:      make(map[string]string),
+		Cave: config.CaveSettings{
+			Packages: []string{},
+			Env:      make(map[string]string),
+		},
+		Variants: make(map[string]config.CaveSettings),
 	}
 	path := filepath.Join(dir, "pi.cave.json")
 	if _, err := os.Stat(path); err == nil {
@@ -78,7 +81,7 @@ func findWorkspaceRoot(start string) (string, error) {
 		if _, err := os.Stat(filepath.Join(curr, "pi.cave.json")); err == nil {
 			return curr, nil
 		}
-		
+
 		parent := filepath.Dir(curr)
 		if parent == curr {
 			return "", fmt.Errorf("pi.cave.json not found in %s or any parent directory", start)

@@ -2,20 +2,27 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
-// CaveConfig represents the content of pi.cave.json
-type CaveConfig struct {
+// CaveSettings defines the configuration for a specific environment (default or variant).
+type CaveSettings struct {
 	// Packages is a list of package requirements (e.g. "nodejs@20", "go@1.21")
 	Packages []string `json:"packages"`
 
 	// Env is a map of environment variables to set in the cave
 	Env map[string]string `json:"env,omitempty"`
+}
 
-	// Variants defines alternative configurations (e.g. "test", "prod")
+// CaveConfig represents the content of pi.cave.json
+type CaveConfig struct {
+	// Cave holds the default configuration (variant "")
+	Cave CaveSettings `json:"cave"`
+
+	// Variants defines alternative configurations
 	// These override or extend the base configuration
-	Variants map[string]*CaveConfig `json:"variants,omitempty"`
+	Variants map[string]CaveSettings `json:"variants,omitempty"`
 }
 
 // Load reads a CaveConfig from a file path.
@@ -43,31 +50,34 @@ func (c *CaveConfig) Save(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// MergeVariant merges a variant config into the base config.
-// The variant takes precedence.
-func (c *CaveConfig) MergeVariant(v *CaveConfig) *CaveConfig {
-	if v == nil {
-		return c
-	}
-
-	merged := &CaveConfig{
-		Packages: append([]string(nil), c.Packages...),
+// Resolve returns the settings for a specific variant, merging with the default.
+// If variant is "", returns the default configuration.
+func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
+	// Start with a copy of the base config
+	merged := &CaveSettings{
+		Packages: append([]string(nil), c.Cave.Packages...),
 		Env:      make(map[string]string),
-		Variants: c.Variants, // Variants are not recursively merged usually, but kept from base? Or just ignored.
+	}
+	for k, v := range c.Cave.Env {
+		merged.Env[k] = v
 	}
 
-	// Copy base env
-	for k, val := range c.Env {
-		merged.Env[k] = val
+	if variant == "" {
+		return merged, nil
 	}
 
-	// Append variant packages
-	merged.Packages = append(merged.Packages, v.Packages...)
-
-	// Overwrite env
-	for k, val := range v.Env {
-		merged.Env[k] = val
+	vConfig, ok := c.Variants[variant]
+	if !ok {
+		return nil, fmt.Errorf("variant not found: %s", variant)
 	}
 
-	return merged
+	// Merge variant packages
+	merged.Packages = append(merged.Packages, vConfig.Packages...)
+
+	// Overwrite/Append env
+	for k, v := range vConfig.Env {
+		merged.Env[k] = v
+	}
+
+	return merged, nil
 }

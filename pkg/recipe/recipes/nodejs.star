@@ -1,10 +1,10 @@
-def discover(version_query, context):
+def discover(pkg_name, version_query, context):
     return {
         "url": "https://nodejs.org/dist/index.json",
         "method": "GET"
     }
 
-def parse(data, version_query, context):
+def parse(pkg_name, data, version_query, context):
     versions = json.decode(data)
     pkgs = []
     

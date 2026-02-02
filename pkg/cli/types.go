@@ -42,6 +42,16 @@ type Invocation struct {
 	Global  map[string]any
 }
 
+type ExecutionResult struct {
+	IsCave   bool
+	ExitCode int
+
+	// Cave Launch details
+	Exe  string
+	Args []string
+	Env  []string
+}
+
 type Handler interface {
-	Execute(ctx context.Context, inv *Invocation) error
+	Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error)
 }

@@ -338,7 +338,7 @@ func toStarlark(v any) starlark.Value {
 	}
 }
 
-func (sr *StarlarkRecipe) Discover(cfg *config.Config, versionQuery string) (string, string, error) {
+func (sr *StarlarkRecipe) Discover(cfg *config.Config, pkgName string, versionQuery string) (string, string, error) {
 	discover, ok := sr.globals["discover"]
 	if !ok {
 		return "", "", fmt.Errorf("discover function not found in recipe %s", sr.Name)
@@ -356,7 +356,7 @@ func (sr *StarlarkRecipe) Discover(cfg *config.Config, versionQuery string) (str
 		"extensions": starlarkExts,
 	})
 
-	res, err := starlark.Call(sr.thread, discover, starlark.Tuple{starlark.String(versionQuery), ctx}, nil)
+	res, err := starlark.Call(sr.thread, discover, starlark.Tuple{starlark.String(pkgName), starlark.String(versionQuery), ctx}, nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -380,7 +380,7 @@ func (sr *StarlarkRecipe) Discover(cfg *config.Config, versionQuery string) (str
 	return urlVal.(starlark.String).GoString(), method, nil
 }
 
-func (sr *StarlarkRecipe) Parse(cfg *config.Config, data []byte, versionQuery string) ([]PackageDefinition, error) {
+func (sr *StarlarkRecipe) Parse(cfg *config.Config, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error) {
 	parse, ok := sr.globals["parse"]
 	if !ok {
 		return nil, fmt.Errorf("parse function not found in recipe %s", sr.Name)
@@ -398,7 +398,7 @@ func (sr *StarlarkRecipe) Parse(cfg *config.Config, data []byte, versionQuery st
 		"extensions": starlarkExts,
 	})
 
-	res, err := starlark.Call(sr.thread, parse, starlark.Tuple{starlark.String(string(data)), starlark.String(versionQuery), ctx}, nil)
+	res, err := starlark.Call(sr.thread, parse, starlark.Tuple{starlark.String(pkgName), starlark.String(string(data)), starlark.String(versionQuery), ctx}, nil)
 	if err != nil {
 		return nil, err
 	}

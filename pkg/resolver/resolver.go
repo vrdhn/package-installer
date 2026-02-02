@@ -17,17 +17,17 @@ import (
 )
 
 // Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, version string, task display.Task) (*recipe.PackageDefinition, error) {
+func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
 	task.SetStage("Resolve", r.GetName())
 
-	url, method, data, err := fetchDiscoveryData(ctx, cfg, r, version, task)
+	url, method, data, err := fetchDiscoveryData(ctx, cfg, r, pkgName, version, task)
 	if err != nil {
 		return nil, err
 	}
 	_ = url
 	_ = method
 
-	pkgs, err := r.Parse(cfg, data, version)
+	pkgs, err := r.Parse(cfg, pkgName, data, version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse discovery data: %w", err)
 	}
@@ -75,8 +75,8 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, version s
 	return bestMatch, nil
 }
 
-func fetchDiscoveryData(ctx context.Context, cfg *config.Config, r recipe.Recipe, versionQuery string, task display.Task) (string, string, []byte, error) {
-	url, method, err := r.Discover(cfg, versionQuery)
+func fetchDiscoveryData(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName string, versionQuery string, task display.Task) (string, string, []byte, error) {
+	url, method, err := r.Discover(cfg, pkgName, versionQuery)
 	if err != nil {
 		return "", "", nil, err
 	}

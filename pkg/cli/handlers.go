@@ -7,21 +7,22 @@ import (
 	"strings"
 
 	"pi/pkg/cave"
+	"pi/pkg/cave_bwrap"
 	"pi/pkg/config"
 	"pi/pkg/display"
-	"pi/pkg/installer"
-	"pi/pkg/recipe"
+	"pi/pkg/pkgs"
 	"pi/pkg/repository"
-	"pi/pkg/resolver"
 )
 
 type DefaultHandler struct {
 	Repo    *repository.Manager
 	Disp    display.Display
 	CaveMgr *cave.Manager
+	PkgsMgr *pkgs.Manager
+	SysCfg  *config.Config
 }
 
-func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
+func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
 	if v, ok := inv.Global["verbose"].(bool); ok {
 		h.Disp.SetVerbose(v)
 	}
@@ -30,85 +31,118 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
 	switch path {
 	case "install":
 		return h.runInstall(ctx, inv)
+	case "cave/info":
+		return h.runInfo(ctx, inv)
+	case "cave/run":
+		return h.runCaveCommand(ctx, inv)
 	case "cave/sync":
 		fmt.Println("Syncing workspace...")
 	case "cave/init":
 		return h.runInit(ctx, inv)
 	case "enter":
-		fmt.Println("Entering sandbox...")
+		return h.runCaveCommand(ctx, inv)
 	case "remote/list":
 		fmt.Println("Listing remotes...")
 	case "remote/add":
 		fmt.Printf("Adding remote %s: %s\n", inv.Args["name"], inv.Args["url"])
 	default:
-		return fmt.Errorf("command not implemented: %s", path)
+		return nil, fmt.Errorf("command not implemented: %s", path)
 	}
-	return nil
+	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *DefaultHandler) runInit(ctx context.Context, inv *Invocation) error {
+func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := h.CaveMgr.CreateInitConfig(cwd); err != nil {
-		return err
+
+	c, err := h.CaveMgr.Find(cwd)
+	if err != nil {
+		return nil, err
 	}
-	fmt.Println("Initialized new workspace in", cwd)
-	return nil
+
+	variant, _ := inv.Flags["variant"].(string)
+	settings, err := c.Config.Resolve(variant)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure packages are installed and get symlinks
+	symlinks, err := h.PkgsMgr.Prepare(ctx, settings.Packages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare packages: %w", err)
+	}
+
+	// For 'run', we take the 'command' arg. For 'enter', it's empty.
+	var command []string
+	if cmd, ok := inv.Args["command"]; ok && cmd != "" {
+		// This is a bit simplistic as it doesn't handle multiple args well if the CLI engine
+		// only gives us one 'command' string.
+		// In a real scenario, we'd want all remaining args.
+		command = strings.Fields(cmd)
+	}
+
+	backend := cave_bwrap.Create()
+	cmd, err := backend.ResolveLaunch(ctx, c, settings, symlinks, command)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ExecutionResult{
+		IsCave: true,
+		Exe:    cmd.Path,
+		Args:   cmd.Args,
+		Env:    cmd.Env,
+	}, nil
 }
 
-func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) error {
+func (h *DefaultHandler) runInfo(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := h.CaveMgr.Find(cwd)
+	if err != nil {
+		fmt.Printf("Current directory is not in a pi workspace.\n")
+		return &ExecutionResult{ExitCode: 0}, nil
+	}
+
+	fmt.Printf("Cave ID:    %s\n", c.ID)
+	fmt.Printf("Workspace:  %s\n", c.Workspace)
+	fmt.Printf("Home Path:  %s\n", c.HomePath)
+
+	settings, _ := c.Config.Resolve("")
+	if len(settings.Packages) > 0 {
+		fmt.Printf("Packages:   %s\n", strings.Join(settings.Packages, ", "))
+	}
+
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runInit(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	if err := h.CaveMgr.CreateInitConfig(cwd); err != nil {
+		return nil, err
+	}
+	fmt.Println("Initialized new workspace in", cwd)
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
 	pkgQuery := inv.Args["package"]
 	if pkgQuery == "" {
-		return fmt.Errorf("package name required")
+		return nil, fmt.Errorf("package name required")
 	}
 
-	parts := strings.Split(pkgQuery, "@")
-	name := parts[0]
-	version := "latest"
-	if len(parts) > 1 {
-		version = parts[1]
-	}
-
-	cfg, err := config.Init()
+	_, err := h.PkgsMgr.Prepare(ctx, []string{pkgQuery})
 	if err != nil {
-		return fmt.Errorf("error initializing config: %v", err)
+		return nil, err
 	}
 
-	// Find recipe
-	src, err := h.Repo.GetRecipe(name)
-	if err != nil {
-		return fmt.Errorf("error loading recipe: %v", err)
-	}
-
-	task := h.Disp.StartTask(name)
-	defer task.Done()
-
-	recipeObj, err := recipe.NewStarlarkRecipe(name, src, task.Log)
-	if err != nil {
-		return fmt.Errorf("error initializing recipe: %v", err)
-	}
-
-	// Resolve
-	pkgDef, err := resolver.Resolve(ctx, cfg, recipeObj, version, task)
-	if err != nil {
-		task.Log(fmt.Sprintf("Resolution failed: %v", err))
-		return err
-	}
-
-	// Plan
-	plan, err := installer.NewPlan(cfg, *pkgDef)
-	if err != nil {
-		task.Log(fmt.Sprintf("Planning failed: %v", err))
-		return err
-	}
-
-	// Install
-	if err := installer.Install(ctx, plan, task); err != nil {
-		task.Log(fmt.Sprintf("Installation failed: %v", err))
-		return err
-	}
-
-	return nil
+	return &ExecutionResult{ExitCode: 0}, nil
 }

@@ -1,0 +1,89 @@
+package pkgs
+
+import (
+	"context"
+	"fmt"
+	"pi/pkg/config"
+	"pi/pkg/display"
+	"pi/pkg/installer"
+	"pi/pkg/recipe"
+	"pi/pkg/repository"
+	"pi/pkg/resolver"
+)
+
+type Manager struct {
+	Repo      *repository.Manager
+	Disp      display.Display
+	SysConfig *config.Config
+}
+
+func NewManager(repo *repository.Manager, disp display.Display, sysCfg *config.Config) *Manager {
+	return &Manager{
+		Repo:      repo,
+		Disp:      disp,
+		SysConfig: sysCfg,
+	}
+}
+
+// Prepare ensures all packages are installed and returns the required symlinks.
+func (m *Manager) Prepare(ctx context.Context, pkgStrings []string) ([]Symlink, error) {
+	var allSymlinks []Symlink
+
+	for _, pkgStr := range pkgStrings {
+		p, err := Parse(pkgStr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Use ecosystem if provided, otherwise use name as recipe name
+		recipeName := p.Ecosystem
+		if recipeName == "" {
+			recipeName = p.Name
+		}
+
+		src, err := m.Repo.GetRecipe(recipeName)
+		if err != nil {
+			return nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
+		}
+
+		task := m.Disp.StartTask(p.String())
+
+		recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+		if err != nil {
+			task.Done()
+			return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
+		}
+
+		// Resolve
+		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, recipeObj, p.Name, p.Version, task)
+		if err != nil {
+			task.Done()
+			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
+		}
+
+		// Plan
+		plan, err := installer.NewPlan(m.SysConfig, *pkgDef)
+		if err != nil {
+			task.Done()
+			return nil, fmt.Errorf("planning failed for %s: %v", p.String(), err)
+		}
+
+		// Install
+		if err := installer.Install(ctx, plan, task); err != nil {
+			task.Done()
+			return nil, fmt.Errorf("installation failed for %s: %v", p.String(), err)
+		}
+
+		// Discover symlinks
+		links, err := DiscoverSymlinks(plan.InstallPath)
+		if err != nil {
+			task.Done()
+			return nil, fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
+		}
+
+		allSymlinks = append(allSymlinks, links...)
+		task.Done()
+	}
+
+	return allSymlinks, nil
+}

@@ -1,10 +1,10 @@
-def discover(version_query, context):
+def discover(pkg_name, version_query, context):
     return {
         "url": "https://jdk.java.net/archive/",
         "method": "GET"
     }
 
-def parse(data, version_query, context):
+def parse(pkg_name, data, version_query, context):
     print("Starting OpenJDK parse...")
     
     # Convert HTML to a JSON-compatible tree

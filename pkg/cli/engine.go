@@ -42,7 +42,7 @@ func (e *Engine) parseDSL(dsl string) error {
 	return p.parse()
 }
 
-func (e *Engine) Run(ctx context.Context, args []string) error {
+func (e *Engine) Run(ctx context.Context, args []string) (*ExecutionResult, error) {
 
 	inv := &Invocation{
 
@@ -109,7 +109,7 @@ func (e *Engine) Run(ctx context.Context, args []string) error {
 
 		e.PrintHelp(remaining...)
 
-		return nil
+		return &ExecutionResult{ExitCode: 0}, nil
 
 	}
 
@@ -117,7 +117,7 @@ func (e *Engine) Run(ctx context.Context, args []string) error {
 
 		e.PrintHelp()
 
-		return nil
+		return &ExecutionResult{ExitCode: 0}, nil
 
 	}
 
@@ -125,7 +125,7 @@ func (e *Engine) Run(ctx context.Context, args []string) error {
 
 }
 
-func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command, args []string) error {
+func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command, args []string) (*ExecutionResult, error) {
 
 	word := args[0]
 
@@ -159,7 +159,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 			names = append(names, m.Name)
 		}
 
-		return fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
+		return nil, fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
 
 	}
 
@@ -173,7 +173,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 			e.PrintHelp(args[1:]...)
 
-			return nil
+			return &ExecutionResult{ExitCode: 0}, nil
 
 		}
 
@@ -185,7 +185,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 			e.PrintCommandHelp(cmd)
 
-			return nil
+			return &ExecutionResult{ExitCode: 0}, nil
 
 		}
 
@@ -193,11 +193,11 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 		if len(currArgs) > 0 && len(cmd.Subs) > 0 {
 
-			err := e.dispatch(ctx, inv, cmd.Subs, currArgs)
+			res, err := e.dispatch(ctx, inv, cmd.Subs, currArgs)
 
 			if err == nil {
 
-				return nil
+				return res, nil
 
 			}
 
@@ -205,7 +205,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 			if strings.HasPrefix(err.Error(), "ambiguous") {
 
-				return err
+				return nil, err
 
 			}
 
@@ -217,7 +217,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 			e.PrintCommandHelp(cmd)
 
-			return nil
+			return &ExecutionResult{ExitCode: 0}, nil
 
 		}
 
@@ -233,7 +233,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 		}
 
-		return fmt.Errorf("no handler registered for command: %s", path)
+		return nil, fmt.Errorf("no handler registered for command: %s", path)
 
 	}
 
@@ -265,7 +265,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 				names = append(names, getCmdPath(m))
 			}
 
-			return fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
+			return nil, fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
 
 		}
 
@@ -289,7 +289,7 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 
 	}
 
-	return fmt.Errorf("unknown command: %s", word)
+	return nil, fmt.Errorf("unknown command: %s", word)
 
 }
 

@@ -1,12 +1,18 @@
 package cave_bwrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
+
+	"pi/pkg/cave"
+	"pi/pkg/cave/config"
+	"pi/pkg/pkgs"
 )
 
 // Arguments to bubblewrap.
@@ -177,4 +183,82 @@ func sortedKeys[T any](m map[string]T) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ResolveLaunch implements cave.Backend
+
+func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *config.CaveSettings, symlinks []pkgs.Symlink, command []string) (*exec.Cmd, error) {
+
+	// 1. Setup basic binds
+
+	b.AddBind(BIND_RO, "/usr")
+
+	b.AddBind(BIND_RO, "/bin")
+
+	b.AddBind(BIND_RO, "/lib")
+
+	if _, err := os.Stat("/lib64"); err == nil {
+
+		b.AddBind(BIND_RO, "/lib64")
+
+	}
+
+	b.AddBind(BIND_RO, "/etc/alternatives") // For java etc
+
+	b.AddBind(BIND_RO, "/etc/resolv.conf")
+
+	// 2. Setup Workspace
+
+	b.AddBind(BIND, c.Workspace)
+
+	// 3. Setup Home
+
+	if err := os.MkdirAll(c.HomePath, 0755); err != nil {
+
+		return nil, fmt.Errorf("failed to create home directory: %w", err)
+
+	}
+
+	b.AddMapBind(BIND, c.HomePath, os.Getenv("HOME"))
+
+	// 3.1 Create symlinks for packages
+	if err := pkgs.CreateSymlinks(c.HomePath, symlinks); err != nil {
+		return nil, fmt.Errorf("failed to create symlinks: %w", err)
+	}
+
+	// 3.2 Ensure .local/bin is in PATH
+	b.AddEnvFirst("PATH", filepath.Join(os.Getenv("HOME"), ".local", "bin"))
+
+	// 4. Set environment variables from settings
+
+	for k, v := range settings.Env {
+
+		b.envs[k] = v
+
+	}
+
+	// 5. Set command
+
+	if len(command) > 0 {
+
+		b.SetCommand(command[0], command[1:]...)
+
+	} else {
+
+		shell := os.Getenv("SHELL")
+
+		if shell == "" {
+
+			shell = "/bin/bash"
+
+		}
+
+		b.SetCommand(shell)
+
+	}
+
+	// 6. Return command
+
+	return b.Cmd(), nil
+
 }
