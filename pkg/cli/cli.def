@@ -9,11 +9,13 @@ cmd install "Install a package"
     example "pi install nodejs@20"
     example "pi i nodejs@latest"
 
-cmd sync "Sync all packages in pi.cave.json"
-    example "pi sync"
+cmd cave "Manage the cave (sandbox)"
 
-cmd init "Initialize a new workspace"
-    example "pi init"
+cmd cave sync "Sync all packages in pi.cave.json"
+    example "pi cave sync"
+
+cmd cave init "Initialize a new workspace"
+    example "pi cave init"
 
 cmd enter "Enter the sandbox shell"
     example "pi enter"
@@ -30,7 +32,7 @@ cmd remote add "Add a new remote repository"
     example "pi remote add official https://github.com/google/pi-recipes"
 
 # Help Topics
-topic cave "The Cave (Sandbox)"
+topic about-caves "The Cave (Sandbox)"
     text """
     A 'Cave' is an isolated environment powered by Linux bubblewrap.
     It ensures that your project has exactly the tools it needs, isolated from the host.

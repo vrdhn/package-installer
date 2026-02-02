@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"pi/pkg/cave"
 	"pi/pkg/cli"
+	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/repository"
 )
@@ -22,6 +24,12 @@ func main() {
 		}
 	}
 
+	sysCfg, err := config.Init()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
+		os.Exit(1)
+	}
+
 	engine, err := cli.NewEngine(cli.DefaultDSL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing CLI definition: %v\n", err)
@@ -34,9 +42,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	caveMgr := cave.NewManager(sysCfg)
+
 	handler := &cli.DefaultHandler{
-		Repo: repo,
-		Disp: disp,
+		Repo:    repo,
+		Disp:    disp,
+		CaveMgr: caveMgr,
 	}
 
 	// Register the same handler for all paths, it internally switches

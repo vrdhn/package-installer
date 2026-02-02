@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
+	"pi/pkg/cave"
 	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/installer"
@@ -14,8 +16,9 @@ import (
 )
 
 type DefaultHandler struct {
-	Repo *repository.Manager
-	Disp display.Display
+	Repo    *repository.Manager
+	Disp    display.Display
+	CaveMgr *cave.Manager
 }
 
 func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
@@ -27,10 +30,10 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
 	switch path {
 	case "install":
 		return h.runInstall(ctx, inv)
-	case "sync":
+	case "cave/sync":
 		fmt.Println("Syncing workspace...")
-	case "init":
-		fmt.Println("Initializing workspace...")
+	case "cave/init":
+		return h.runInit(ctx, inv)
 	case "enter":
 		fmt.Println("Entering sandbox...")
 	case "remote/list":
@@ -40,6 +43,18 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) error {
 	default:
 		return fmt.Errorf("command not implemented: %s", path)
 	}
+	return nil
+}
+
+func (h *DefaultHandler) runInit(ctx context.Context, inv *Invocation) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if err := h.CaveMgr.CreateInitConfig(cwd); err != nil {
+		return err
+	}
+	fmt.Println("Initialized new workspace in", cwd)
 	return nil
 }
 
