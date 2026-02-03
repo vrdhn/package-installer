@@ -24,6 +24,7 @@ type DefaultHandler struct {
 	PkgsMgr *pkgs.Manager
 	DiskMgr *disk.Manager
 	SysCfg  config.ReadOnly
+	Theme   *Theme
 }
 
 func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
@@ -226,7 +227,8 @@ func (h *DefaultHandler) runDiskClean(ctx context.Context, inv *Invocation) (*Ex
 func (h *DefaultHandler) runDiskUninstall(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
 	force, _ := inv.Flags["force"].(bool)
 	if !force {
-		fmt.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
+		h.Disp.Close() // Terminate Bubble Tea before interactive prompt
+		fmt.Print(h.Theme.Styled(h.Theme.Red, "This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: "))
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" {

@@ -71,6 +71,7 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 		PkgsMgr: pkgsMgr,
 		DiskMgr: diskMgr,
 		SysCfg:  sysCfg,
+		Theme:   engine.Theme,
 	}
 
 	// Register the same handler for all paths, it internally switches

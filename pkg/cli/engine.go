@@ -263,7 +263,7 @@ func (e *Engine) PrintHelp(args ...string) {
 		}
 	}
 
-	fmt.Printf("%s\n", t.Styled(t.Bold+t.Cyan, "pi - Universal Package Installer"))
+	fmt.Printf("%s\n", t.Styled(t.Cyan.Copy().Bold(true), "pi - Universal Package Installer"))
 
 	fmt.Printf("\n%s\n", t.Styled(t.Bold, "Usage:"))
 	fmt.Printf("  pi %s\n", t.Styled(t.Yellow, "[flags] <command>"))
@@ -291,22 +291,27 @@ func (e *Engine) PrintHelp(args ...string) {
 	}
 
 	shown := make(map[string]bool)
+	fmt.Println() // Space before commands
 	for _, cat := range categories {
-		fmt.Printf("\n%s %s\n", cat.icon, t.Styled(t.Bold, cat.name))
+		firstInCat := true
 		for _, name := range cat.cmds {
 			for _, c := range e.Commands {
 				if c.Name == name {
-					e.printCommandTree(c, "", true)
+					if !firstInCat {
+						// This case probably won't happen with current categories but for safety
+					}
+					e.printCommandTree(c, "", true, cat.icon)
+					fmt.Println() // Newline after each top-level category
 					shown[c.Name] = true
+					firstInCat = false
 				}
 			}
 		}
 	}
-
 	// Show remaining commands under MISC
 	var misc []*Command
 	for _, c := range e.Commands {
-		if !shown[c.Name] {
+		if !shown[c.Name] && c.Name != "help" {
 			misc = append(misc, c)
 		}
 	}
@@ -314,28 +319,53 @@ func (e *Engine) PrintHelp(args ...string) {
 	if len(misc) > 0 {
 		fmt.Printf("\n%s %s\n", t.Bullet, t.Styled(t.Bold, "MISC"))
 		for i, c := range misc {
-			e.printCommandTree(c, "", i == len(misc)-1)
+			e.printCommandTree(c, "", i == len(misc)-1, "")
 		}
 	}
 
 	fmt.Printf("\n%s %s\n", t.IconHelp, t.Styled(t.Bold, "Topics:"))
 	for _, topic := range e.Topics {
-		fmt.Printf("  %-15s %s\n", t.Styled(t.Cyan, topic.Name), t.Styled(t.Dim, topic.Desc))
+		name := t.Styled(t.Cyan, topic.Name)
+		padding := e.getPadding(topic.Name, 20)
+		fmt.Printf("  %s %s %s\n", name, padding, t.Styled(t.Dim, topic.Desc))
 	}
 
 	fmt.Printf("\nType '%s' for more details.\n", t.Styled(t.Yellow, "pi help <command>"))
 }
 
-func (e *Engine) printCommandTree(c *Command, indent string, isLast bool) {
+func (e *Engine) getPadding(name string, target int) string {
+	t := e.Theme
+	dots := target - len(name)
+	if dots < 2 {
+		dots = 2
+	}
+	return t.Styled(t.Dim, strings.Repeat(".", dots))
+}
+
+func (e *Engine) printCommandTree(c *Command, indent string, isLast bool, icon string) {
 	t := e.Theme
 	prefix := t.BoxTree
 	if isLast {
 		prefix = t.BoxLast
 	}
 
-	line := fmt.Sprintf("%s%s %-12s %s", indent, prefix, t.Styled(t.Cyan, c.Name), t.Styled(t.Dim, c.Desc))
-	fmt.Println(line)
+	namePart := indent + prefix + " "
+	if icon != "" {
+		namePart += icon + " "
+	}
+	namePart += t.Styled(t.Cyan, c.Name)
 
+	// Calculate padding based on visual length
+	visualLen := len(indent) + 4 // 3 for box prefix + 1 for space
+	if icon != "" {
+		visualLen += 3 // 2 for icon (assumed) + 1 for space
+	}
+	visualLen += len(c.Name)
+
+	padding := e.getPadding(strings.Repeat(" ", visualLen), 30)
+
+	line := fmt.Sprintf("%s %s %s", namePart, padding, t.Styled(t.Dim, c.Desc))
+	fmt.Println(line)
 	newIndent := indent
 	if isLast {
 		newIndent += "    "
@@ -344,14 +374,14 @@ func (e *Engine) printCommandTree(c *Command, indent string, isLast bool) {
 	}
 
 	for i, s := range c.Subs {
-		e.printCommandTree(s, newIndent, i == len(c.Subs)-1)
+		e.printCommandTree(s, newIndent, i == len(c.Subs)-1, "")
 	}
 }
-
 func (e *Engine) PrintCommandHelp(c *Command) {
 	t := e.Theme
 	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Command:"), t.Styled(t.Cyan, getCmdPath(c)))
 	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, c.Desc))
+	fmt.Println()
 
 	if len(c.Subs) > 0 {
 		fmt.Printf("\n%s\n", t.Styled(t.Bold, "Subcommands:"))
@@ -395,7 +425,8 @@ func (e *Engine) PrintTopicHelp(topic *Topic) {
 	t := e.Theme
 	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Topic:"), t.Styled(t.Cyan, topic.Name))
 	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, topic.Desc))
-	fmt.Printf("\n%s\n\n", topic.Text)
+	fmt.Println()
+	fmt.Printf("%s\n\n", topic.Text)
 }
 
 func getCmdPath(c *Command) string {

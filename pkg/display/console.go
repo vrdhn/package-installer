@@ -4,176 +4,219 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
+
+	"github.com/charmbracelet/bubbles/progress"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-// Ensure interfaces are implemented
-var _ Display = &consoleDisplay{}
-var _ Task = &consoleTask{}
+var (
+	subtleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	infoStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	doneStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+)
 
-// Mutable
-type consoleTask struct {
+// teaTask represents a single task in the Bubble Tea model
+type teaTask struct {
+	id      string
 	name    string
 	stage   string
 	target  string
-	percent int
+	percent float64
 	status  string
-	disp    *consoleDisplay
+	prog    progress.Model
 }
 
-// Mutable
+// model holds the state for the Bubble Tea program
+type model struct {
+	tasks []teaTask
+	logs  []string
+	mu    sync.Mutex
+}
+
+func (m *model) Init() tea.Cmd {
+	return nil
+}
+
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	case taskUpdateMsg:
+		for i, t := range m.tasks {
+			if t.id == msg.id {
+				m.tasks[i].percent = msg.percent
+				m.tasks[i].status = msg.status
+				m.tasks[i].stage = msg.stage
+				m.tasks[i].target = msg.target
+				return m, nil
+			}
+		}
+	case logMsg:
+		m.logs = append(m.logs, string(msg))
+		if len(m.logs) > 10 { // Keep only last 10 logs for display
+			m.logs = m.logs[len(m.logs)-10:]
+		}
+	case taskDoneMsg:
+		for i, t := range m.tasks {
+			if t.id == string(msg) {
+				m.tasks = append(m.tasks[:i], m.tasks[i+1:]...)
+				break
+			}
+		}
+	case newTaskMsg:
+		m.tasks = append(m.tasks, teaTask{
+			id:   msg.id,
+			name: msg.name,
+			prog: progress.New(progress.WithDefaultGradient()),
+		})
+	}
+	return m, nil
+}
+
+func (m *model) View() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var s string
+
+	// Render logs
+	for _, l := range m.logs {
+		s += subtleStyle.Render(l) + "\n"
+	}
+
+	if len(m.tasks) > 0 {
+		s += "\n"
+	}
+
+	// Render tasks
+	for _, t := range m.tasks {
+		name := infoStyle.Render(t.name)
+		if t.stage != "" {
+			name += subtleStyle.Render(":" + t.stage)
+		}
+
+		s += fmt.Sprintf("%-30s %s %s\n", name, t.prog.ViewAs(t.percent), t.status)
+	}
+
+	return s
+}
+
+type taskUpdateMsg struct {
+	id      string
+	percent float64
+	status  string
+	stage   string
+	target  string
+}
+type logMsg string
+type taskDoneMsg string
+type newTaskMsg struct {
+	id   string
+	name string
+}
+
+// consoleDisplay implements Display using Bubble Tea
 type consoleDisplay struct {
-	mu          sync.Mutex
-	out         io.Writer
-	activeTasks []*consoleTask
-	lastLines   int
-	verbose     bool
+	p       *tea.Program
+	model   *model
+	verbose bool
+	wg      sync.WaitGroup
 }
 
-// NewConsole creates a new Display that outputs to stdout.
 func NewConsole() Display {
-	return &consoleDisplay{
-		out: os.Stdout,
+	m := &model{}
+	p := tea.NewProgram(m)
+	d := &consoleDisplay{
+		p:     p,
+		model: m,
+	}
+
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		if _, err := p.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running display: %v\n", err)
+		}
+	}()
+
+	return d
+}
+
+func (d *consoleDisplay) StartTask(name string) Task {
+	id := fmt.Sprintf("%p", &name) // Simple unique ID
+	d.p.Send(newTaskMsg{id: id, name: name})
+	return &consoleTask{id: id, name: name, disp: d}
+}
+
+func (d *consoleDisplay) Log(msg string) {
+	if d.verbose {
+		d.p.Send(logMsg(msg))
 	}
 }
 
 func (d *consoleDisplay) SetVerbose(v bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	d.verbose = v
 }
 
-func (d *consoleDisplay) Log(msg string) {
-	d.log(msg)
-}
-
-// NewWriterDisplay creates a new Display that outputs to the given writer.
-func NewWriterDisplay(w io.Writer) Display {
-	return &consoleDisplay{
-		out: w,
-	}
-}
-
-func (d *consoleDisplay) StartTask(name string) Task {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.clearLines()
-	t := &consoleTask{
-		name: name,
-		disp: d,
-	}
-	d.activeTasks = append(d.activeTasks, t)
-	d.render()
-	return t
-}
-
 func (d *consoleDisplay) Close() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.clearLines()
-	d.activeTasks = nil
+	if d.p != nil {
+		d.p.Quit()
+		d.wg.Wait()
+		d.p = nil
+	}
 }
 
-func (d *consoleDisplay) log(msg string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if !d.verbose {
-		return
-	}
-
-	d.clearLines()
-	fmt.Fprintln(d.out, msg)
-	d.render()
-}
-
-func (d *consoleDisplay) update() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.clearLines()
-	d.render()
-}
-
-func (d *consoleDisplay) remove(t *consoleTask) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.clearLines()
-
-	// Filter out the task
-	newTasks := make([]*consoleTask, 0, len(d.activeTasks))
-	for _, task := range d.activeTasks {
-		if task != t {
-			newTasks = append(newTasks, task)
-		}
-	}
-	d.activeTasks = newTasks
-	d.render()
-}
-
-// Internal helper to clear previously rendered lines.
-// Must be called with lock held.
-func (d *consoleDisplay) clearLines() {
-	for i := 0; i < d.lastLines; i++ {
-		fmt.Fprint(d.out, "\033[1A\033[2K")
-	}
-	d.lastLines = 0
-}
-
-// Internal helper to render active tasks.
-// Must be called with lock held.
-func (d *consoleDisplay) render() {
-	// Re-print active tasks
-	for _, t := range d.activeTasks {
-		bar := drawBar(t.percent)
-		fullTag := t.name
-		if t.stage != "" {
-			fullTag += ":" + t.stage
-		}
-		if t.target != "" {
-			fullTag += ":" + filepath.Base(t.target)
-		}
-		line := fmt.Sprintf("[%s] %s %s (%d%%)", fullTag, bar, t.status, t.percent)
-		fmt.Fprintln(d.out, line)
-	}
-	d.lastLines = len(d.activeTasks)
-}
-
-func drawBar(percent int) string {
-	width := 20
-	completed := (percent * width) / 100
-	if completed > width {
-		completed = width
-	}
-	if completed < 0 {
-		completed = 0
-	}
-	return fmt.Sprintf("[%s%s]",
-		strings.Repeat("=", completed),
-		strings.Repeat(" ", width-completed))
+// consoleTask implements Task
+type consoleTask struct {
+	id      string
+	name    string
+	stage   string
+	target  string
+	percent float64
+	status  string
+	disp    *consoleDisplay
 }
 
 func (t *consoleTask) Log(msg string) {
-	t.disp.log(fmt.Sprintf("[%s] %s", t.name, msg))
+	t.disp.Log(fmt.Sprintf("[%s] %s", t.name, msg))
 }
 
 func (t *consoleTask) SetStage(name string, target string) {
 	t.stage = name
 	t.target = target
-	t.disp.update()
+	t.update()
 }
 
 func (t *consoleTask) Progress(percent int, message string) {
-	t.percent = percent
+	t.percent = float64(percent) / 100.0
 	t.status = message
-	t.disp.update()
+	t.update()
+}
+
+func (t *consoleTask) update() {
+	t.disp.p.Send(taskUpdateMsg{
+		id:      t.id,
+		percent: t.percent,
+		status:  t.status,
+		stage:   t.stage,
+		target:  t.target,
+	})
 }
 
 func (t *consoleTask) Done() {
-	// Log completion and remove from active list
-	t.disp.log(fmt.Sprintf("[%s] Done", t.name))
-	t.disp.remove(t)
+	t.disp.Log(doneStyle.Render(fmt.Sprintf("[%s] Completed", t.name)))
+	t.disp.p.Send(taskDoneMsg(t.id))
+}
+
+// NewWriterDisplay not supported well with interactive Bubble Tea,
+// but we keep it for API compatibility, just using a no-op or simple logger.
+func NewWriterDisplay(w io.Writer) Display {
+	return NewConsole() // Fallback
 }
