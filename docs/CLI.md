@@ -24,8 +24,8 @@ The CLI structure is defined in `pkg/cli/cli.def` using a simple DSL:
 | `text` | Adds documentation to a topic (supports `"""` for multiline). |
 
 ## Core Commands
-*   `install <pkg>`: Installs a package to the global cache.
+*   `pkg install <pkg>`: Installs a package to the global cache.
 *   `cave init`: Initializes a `pi.cave.json` in the current directory.
 *   `cave sync`: Ensures all packages in `pi.cave.json` are installed and symlinked.
 *   `cave run <cmd>`: Executes a command inside the sandbox.
-*   `enter`: Shortcut for `cave run $SHELL`.
+*   `cave enter`: Shortcut for `cave run $SHELL`.

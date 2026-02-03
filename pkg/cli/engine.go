@@ -16,11 +16,13 @@ type Engine struct {
 	Commands    []*Command
 	Topics      []*Topic
 	Handlers    map[string]Handler
+	Theme       *Theme
 }
 
 func NewEngine(dsl string) (*Engine, error) {
 	e := &Engine{
 		Handlers: make(map[string]Handler),
+		Theme:    DefaultTheme(),
 	}
 	if err := e.parseDSL(dsl); err != nil {
 		return nil, err
@@ -226,21 +228,15 @@ func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) {
 }
 
 func (e *Engine) PrintHelp(args ...string) {
+	t := e.Theme
 	if len(args) > 0 {
 		subject := args[0]
 		// Try topic
-		for _, t := range e.Topics {
-			if t.Name == subject || strings.HasPrefix(t.Name, subject) {
-				e.PrintTopicHelp(t)
+		for _, topic := range e.Topics {
+			if topic.Name == subject || strings.HasPrefix(topic.Name, subject) {
+				e.PrintTopicHelp(topic)
 				return
 			}
-		}
-		if subject == "topic" || subject == "topics" {
-			fmt.Println("\nHelp Topics:")
-			for _, t := range e.Topics {
-				fmt.Printf("  %-15s %s\n", t.Name, t.Desc)
-			}
-			return
 		}
 
 		// Find command in hierarchy
@@ -261,77 +257,145 @@ func (e *Engine) PrintHelp(args ...string) {
 			curr = match.Subs
 		}
 
-		// Try omitted parent
-		if found == nil && len(args) == 1 {
-			word := args[0]
-			for _, c := range e.Commands {
-				for _, s := range c.Subs {
-					if s.Name == word || strings.HasPrefix(s.Name, word) {
-						found = s
-						break
-					}
-				}
-				if found != nil {
-					break
-				}
-			}
-		}
-
 		if found != nil {
 			e.PrintCommandHelp(found)
 			return
 		}
 	}
 
-	fmt.Println("pi - Universal Package Installer")
-	fmt.Println("\nGlobal Flags:")
-	fmt.Printf("  --%-10s -%s  %s\n", "help", "h", "Show help [command | topic]")
+	fmt.Printf("%s\n", t.Styled(t.Bold+t.Cyan, "pi - Universal Package Installer"))
+
+	fmt.Printf("\n%s\n", t.Styled(t.Bold, "Usage:"))
+	fmt.Printf("  pi %s\n", t.Styled(t.Yellow, "[flags] <command>"))
+
+	fmt.Printf("\n%s\n", t.Styled(t.Bold, "Global Flags:"))
+	fmt.Printf("  %-12s %s\n", t.Styled(t.Cyan, "--help, -h"), t.Styled(t.Dim, "Show help [command | topic]"))
 	for _, f := range e.GlobalFlags {
-		fmt.Printf("  --%-10s -%s  %s\n", f.Name, f.Short, f.Desc)
-	}
-	fmt.Println("\nHelp Topics:")
-	for _, t := range e.Topics {
-		fmt.Printf("  %-15s %s\n", t.Name, t.Desc)
-	}
-	fmt.Println("\nCommands:")
-	for _, c := range e.Commands {
-		fmt.Printf("  %-15s %s\n", c.Name, c.Desc)
-		for _, s := range c.Subs {
-			fmt.Printf("    %-13s %s\n", s.Name, s.Desc)
+		short := ""
+		if f.Short != "" {
+			short = ", -" + f.Short
 		}
+		fmt.Printf("  %-12s %s\n", t.Styled(t.Cyan, "--"+f.Name+short), t.Styled(t.Dim, f.Desc))
+	}
+
+	// Categorize commands
+	categories := []struct {
+		name string
+		icon string
+		cmds []string
+	}{
+		{"PACKAGE", t.IconPkg, []string{"pkg"}},
+		{"CAVE", t.IconCave, []string{"cave"}},
+		{"DISK", t.IconDisk, []string{"disk"}},
+		{"REMOTE", t.IconWorld, []string{"remote"}},
+	}
+
+	shown := make(map[string]bool)
+	for _, cat := range categories {
+		fmt.Printf("\n%s %s\n", cat.icon, t.Styled(t.Bold, cat.name))
+		for _, name := range cat.cmds {
+			for _, c := range e.Commands {
+				if c.Name == name {
+					e.printCommandTree(c, "", true)
+					shown[c.Name] = true
+				}
+			}
+		}
+	}
+
+	// Show remaining commands under MISC
+	var misc []*Command
+	for _, c := range e.Commands {
+		if !shown[c.Name] {
+			misc = append(misc, c)
+		}
+	}
+
+	if len(misc) > 0 {
+		fmt.Printf("\n%s %s\n", t.Bullet, t.Styled(t.Bold, "MISC"))
+		for i, c := range misc {
+			e.printCommandTree(c, "", i == len(misc)-1)
+		}
+	}
+
+	fmt.Printf("\n%s %s\n", t.IconHelp, t.Styled(t.Bold, "Topics:"))
+	for _, topic := range e.Topics {
+		fmt.Printf("  %-15s %s\n", t.Styled(t.Cyan, topic.Name), t.Styled(t.Dim, topic.Desc))
+	}
+
+	fmt.Printf("\nType '%s' for more details.\n", t.Styled(t.Yellow, "pi help <command>"))
+}
+
+func (e *Engine) printCommandTree(c *Command, indent string, isLast bool) {
+	t := e.Theme
+	prefix := t.BoxTree
+	if isLast {
+		prefix = t.BoxLast
+	}
+
+	line := fmt.Sprintf("%s%s %-12s %s", indent, prefix, t.Styled(t.Cyan, c.Name), t.Styled(t.Dim, c.Desc))
+	fmt.Println(line)
+
+	newIndent := indent
+	if isLast {
+		newIndent += "    "
+	} else {
+		newIndent += t.BoxItem + " "
+	}
+
+	for i, s := range c.Subs {
+		e.printCommandTree(s, newIndent, i == len(c.Subs)-1)
 	}
 }
 
 func (e *Engine) PrintCommandHelp(c *Command) {
-	fmt.Printf("Command: %s\nDescription: %s\n", getCmdPath(c), c.Desc)
+	t := e.Theme
+	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Command:"), t.Styled(t.Cyan, getCmdPath(c)))
+	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, c.Desc))
+
 	if len(c.Subs) > 0 {
-		fmt.Println("\nSubcommands:")
-		for _, s := range c.Subs {
-			fmt.Printf("  %-15s %s\n", s.Name, s.Desc)
+		fmt.Printf("\n%s\n", t.Styled(t.Bold, "Subcommands:"))
+		for i, s := range c.Subs {
+			prefix := t.BoxTree
+			if i == len(c.Subs)-1 {
+				prefix = t.BoxLast
+			}
+			fmt.Printf("  %s %-12s %s\n", prefix, t.Styled(t.Cyan, s.Name), t.Styled(t.Dim, s.Desc))
 		}
 	}
+
 	if len(c.Args) > 0 {
-		fmt.Println("\nArguments:")
+		fmt.Printf("\n%s\n", t.Styled(t.Bold, "Arguments:"))
 		for _, a := range c.Args {
-			fmt.Printf("  %-15s %s\n", a.Name, a.Desc)
+			fmt.Printf("  %-15s %s\n", t.Styled(t.Yellow, "<"+a.Name+">"), t.Styled(t.Dim, a.Desc))
 		}
 	}
+
 	if len(c.Flags) > 0 {
-		fmt.Println("\nFlags:")
+		fmt.Printf("\n%s\n", t.Styled(t.Bold, "Flags:"))
 		for _, f := range c.Flags {
-			fmt.Printf("  --%-10s -%s  %s\n", f.Name, f.Short, f.Desc)
+			short := ""
+			if f.Short != "" {
+				short = ", -" + f.Short
+			}
+			fmt.Printf("  %-15s %s\n", t.Styled(t.Cyan, "--"+f.Name+short), t.Styled(t.Dim, f.Desc))
 		}
 	}
+
 	if len(c.Examples) > 0 {
-		fmt.Println("\nExamples:")
+		fmt.Printf("\n%s\n", t.Styled(t.Bold, "Examples:"))
 		for _, ex := range c.Examples {
-			fmt.Printf("  %s\n", ex)
+			fmt.Printf("  %s %s\n", t.Styled(t.Green, "$"), ex)
 		}
 	}
+	fmt.Println()
 }
 
-func (e *Engine) PrintTopicHelp(t *Topic) {
-	fmt.Printf("Topic: %s\nDescription: %s\n\n%s\n", t.Name, t.Desc, t.Text)
+func (e *Engine) PrintTopicHelp(topic *Topic) {
+	t := e.Theme
+	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Topic:"), t.Styled(t.Cyan, topic.Name))
+	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, topic.Desc))
+	fmt.Printf("\n%s\n\n", topic.Text)
 }
 
 func getCmdPath(c *Command) string {

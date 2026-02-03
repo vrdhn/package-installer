@@ -33,7 +33,7 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 
 	path := getCmdPath(inv.Command)
 	switch path {
-	case "install":
+	case "pkg/install":
 		return h.runInstall(ctx, inv)
 	case "cave/info":
 		return h.runInfo(ctx, inv)
@@ -45,7 +45,7 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 		return h.runInit(ctx, inv)
 	case "cave/addpkg":
 		return h.runAddPkg(ctx, inv)
-	case "enter":
+	case "cave/enter":
 		return h.runCaveCommand(ctx, inv)
 	case "disk/info":
 		return h.runDiskInfo(ctx, inv)

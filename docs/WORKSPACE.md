@@ -27,7 +27,7 @@ To avoid PATH pollution, `pi` populates a "Symlink Forest" inside the Cave's pri
 *   `include/`: Symlinks to headers.
 
 ## Sandbox Isolation (Linux)
-When running inside a Cave (e.g., via `pi enter`), `pi` uses `bubblewrap` to:
+When running inside a Cave (e.g., via `pi cave enter`), `pi` uses `bubblewrap` to:
 1.  **Mount System Dirs**: `/usr`, `/lib`, `/etc` are mounted Read-Only.
 2.  **Mount Pkg Cache**: `~/.cache/pi/pkgs` is mounted Read-Only.
 3.  **Mount Workspace**: The current project directory is mounted Read-Write.
