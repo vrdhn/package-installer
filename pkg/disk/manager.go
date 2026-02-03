@@ -33,7 +33,6 @@ func (m *Manager) GetInfo() ([]Usage, int64) {
 		"Recipes":   m.cfg.GetRecipeDir(),
 		"Homes":     m.cfg.GetHomeDir(),
 	}
-
 	var total int64
 	var stats []Usage
 	for label, path := range paths {
@@ -55,7 +54,6 @@ func (m *Manager) Clean() []string {
 		m.cfg.GetDownloadDir(),
 		m.cfg.GetDiscoveryDir(),
 	}
-
 	var cleaned []string
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); err == nil {
@@ -74,7 +72,6 @@ func (m *Manager) Uninstall() []string {
 		m.cfg.GetConfigDir(),
 		m.cfg.GetStateDir(),
 	}
-
 	var removed []string
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); err == nil {

@@ -2,13 +2,12 @@ package display
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"sync"
-
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"io"
+	"os"
+	"sync"
 )
 
 var (
@@ -38,11 +37,9 @@ type model struct {
 func (m *model) Init() tea.Cmd {
 	return nil
 }
-
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
@@ -79,32 +76,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-
 func (m *model) View() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	var s string
-
 	// Render logs
 	for _, l := range m.logs {
 		s += subtleStyle.Render(l) + "\n"
 	}
-
 	if len(m.tasks) > 0 {
 		s += "\n"
 	}
-
 	// Render tasks
 	for _, t := range m.tasks {
 		name := infoStyle.Render(t.name)
 		if t.stage != "" {
 			name += subtleStyle.Render(":" + t.stage)
 		}
-
-		s += fmt.Sprintf("%-30s %s %s\n", name, t.prog.ViewAs(t.percent), t.status)
+		s += fmt.Sprintf("% -30s %s %s\n", name, t.prog.ViewAs(t.percent), t.status)
 	}
-
 	return s
 }
 
@@ -124,52 +114,68 @@ type newTaskMsg struct {
 
 // consoleDisplay implements Display using Bubble Tea
 type consoleDisplay struct {
+	mu      sync.Mutex
 	p       *tea.Program
 	model   *model
 	verbose bool
 	wg      sync.WaitGroup
+	started bool
 }
 
 func NewConsole() Display {
-	m := &model{}
-	p := tea.NewProgram(m)
-	d := &consoleDisplay{
-		p:     p,
-		model: m,
+	return &consoleDisplay{
+		model: &model{},
 	}
-
+}
+func (d *consoleDisplay) start() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.started {
+		return
+	}
+	d.started = true
+	d.p = tea.NewProgram(d.model)
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		if _, err := p.Run(); err != nil {
+		if _, err := d.p.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error running display: %v\n", err)
 		}
 	}()
-
-	return d
 }
-
 func (d *consoleDisplay) StartTask(name string) Task {
+	d.start()
 	id := fmt.Sprintf("%p", &name) // Simple unique ID
 	d.p.Send(newTaskMsg{id: id, name: name})
 	return &consoleTask{id: id, name: name, disp: d}
 }
-
 func (d *consoleDisplay) Log(msg string) {
-	if d.verbose {
+	d.mu.Lock()
+	started := d.started
+	d.mu.Unlock()
+	if !d.verbose {
+		return
+	}
+	if started {
 		d.p.Send(logMsg(msg))
+	} else {
+		// Before TUI starts, just print to stderr/stdout
+		fmt.Fprintln(os.Stderr, subtleStyle.Render(msg))
 	}
 }
-
 func (d *consoleDisplay) SetVerbose(v bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.verbose = v
 }
-
 func (d *consoleDisplay) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.p != nil {
 		d.p.Quit()
 		d.wg.Wait()
 		d.p = nil
+		d.started = false
 	}
 }
 
@@ -187,36 +193,39 @@ type consoleTask struct {
 func (t *consoleTask) Log(msg string) {
 	t.disp.Log(fmt.Sprintf("[%s] %s", t.name, msg))
 }
-
 func (t *consoleTask) SetStage(name string, target string) {
 	t.stage = name
 	t.target = target
 	t.update()
 }
-
 func (t *consoleTask) Progress(percent int, message string) {
 	t.percent = float64(percent) / 100.0
 	t.status = message
 	t.update()
 }
-
 func (t *consoleTask) update() {
-	t.disp.p.Send(taskUpdateMsg{
-		id:      t.id,
-		percent: t.percent,
-		status:  t.status,
-		stage:   t.stage,
-		target:  t.target,
-	})
+	t.disp.mu.Lock()
+	p := t.disp.p
+	t.disp.mu.Unlock()
+	if p != nil {
+		p.Send(taskUpdateMsg{
+			id:      t.id,
+			percent: t.percent,
+			status:  t.status,
+			stage:   t.stage,
+			target:  t.target,
+		})
+	}
 }
-
 func (t *consoleTask) Done() {
 	t.disp.Log(doneStyle.Render(fmt.Sprintf("[%s] Completed", t.name)))
-	t.disp.p.Send(taskDoneMsg(t.id))
+	t.disp.mu.Lock()
+	p := t.disp.p
+	t.disp.mu.Unlock()
+	if p != nil {
+		p.Send(taskDoneMsg(t.id))
+	}
 }
-
-// NewWriterDisplay not supported well with interactive Bubble Tea,
-// but we keep it for API compatibility, just using a no-op or simple logger.
 func NewWriterDisplay(w io.Writer) Display {
-	return NewConsole() // Fallback
+	return NewConsole()
 }
