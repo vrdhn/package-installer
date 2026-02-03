@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pi/pkg/cave"
 	"pi/pkg/bubblewrap"
+	"pi/pkg/cave"
 	"pi/pkg/config"
+	"pi/pkg/disk"
 	"pi/pkg/display"
 	"pi/pkg/pkgs"
 	"pi/pkg/repository"
@@ -21,6 +22,7 @@ type DefaultHandler struct {
 	Disp    display.Display
 	CaveMgr *cave.Manager
 	PkgsMgr *pkgs.Manager
+	DiskMgr *disk.Manager
 	SysCfg  config.ReadOnly
 }
 
@@ -45,6 +47,12 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 		return h.runAddPkg(ctx, inv)
 	case "enter":
 		return h.runCaveCommand(ctx, inv)
+	case "disk/info":
+		return h.runDiskInfo(ctx, inv)
+	case "disk/clean":
+		return h.runDiskClean(ctx, inv)
+	case "disk/uninstall":
+		return h.runDiskUninstall(ctx, inv)
 	case "remote/list":
 		fmt.Println("Listing remotes...")
 	case "remote/add":
@@ -187,5 +195,51 @@ func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) (*Exec
 		return nil, err
 	}
 
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runDiskInfo(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	stats, total := h.DiskMgr.GetInfo()
+
+	fmt.Printf("%-15s %-10s %s\n", "Type", "Size", "Path")
+	fmt.Println(strings.Repeat("-", 60))
+
+	for _, s := range stats {
+		fmt.Printf("%-15s %-10s %s\n", s.Label, disk.FormatSize(s.Size), s.Path)
+	}
+
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("%-15s %-10s\n", "Total", disk.FormatSize(total))
+
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runDiskClean(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	cleaned := h.DiskMgr.Clean()
+	for _, dir := range cleaned {
+		fmt.Printf("Cleaning %s...\n", dir)
+	}
+	fmt.Println("Clean complete.")
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runDiskUninstall(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	force, _ := inv.Flags["force"].(bool)
+	if !force {
+		fmt.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		if strings.ToLower(response) != "y" {
+			fmt.Println("Aborted.")
+			return &ExecutionResult{ExitCode: 0}, nil
+		}
+	}
+
+	removed := h.DiskMgr.Uninstall()
+	for _, dir := range removed {
+		fmt.Printf("Removing %s...\n", dir)
+	}
+
+	fmt.Println("Uninstall complete. Local data removed.")
 	return &ExecutionResult{ExitCode: 0}, nil
 }

@@ -9,6 +9,7 @@ import (
 	"pi/pkg/cave"
 	"pi/pkg/cli"
 	"pi/pkg/config"
+	"pi/pkg/disk"
 	"pi/pkg/display"
 	"pi/pkg/pkgs"
 	"pi/pkg/repository"
@@ -61,12 +62,14 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 
 	caveMgr := cave.NewManager(sysCfg)
 	pkgsMgr := pkgs.NewManager(repo, disp, sysCfg)
+	diskMgr := disk.NewManager(sysCfg)
 
 	handler := &cli.DefaultHandler{
 		Repo:    repo,
 		Disp:    disp,
 		CaveMgr: caveMgr,
 		PkgsMgr: pkgsMgr,
+		DiskMgr: diskMgr,
 		SysCfg:  sysCfg,
 	}
 

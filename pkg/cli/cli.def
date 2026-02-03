@@ -33,6 +33,18 @@ cmd cave addpkg "Add a package to the cave configuration"
 cmd enter "Enter the sandbox shell (shortcut for cave run)"
     example "pi enter"
 
+cmd disk "Manage local storage"
+
+cmd disk info "Show disk usage summary"
+    example "pi disk info"
+
+cmd disk clean "Remove all cached data (packages, downloads, discovery cache)"
+    example "pi disk clean"
+
+cmd disk uninstall "Wipe all pi data (cache, state, and config)"
+    flag force bool "Skip confirmation prompt" f
+    example "pi disk uninstall"
+
 cmd remote "Manage remote repositories"
 
 cmd remote list "List all remote repositories"
