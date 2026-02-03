@@ -186,110 +186,73 @@ func sortedKeys[T any](m map[string]T) []string {
 
 // ResolveLaunch implements cave.Backend
 func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
+	// Internal home path inside the sandbox
+	const internalHome = "/home/user"
 
 	// 1. Setup basic binds
-
 	b.AddBind(BIND_RO, "/usr")
-
 	b.AddBind(BIND_RO, "/bin")
-
 	b.AddBind(BIND_RO, "/lib")
-
 	if _, err := os.Stat("/lib64"); err == nil {
-
 		b.AddBind(BIND_RO, "/lib64")
-
 	}
-
 	b.AddBind(BIND_RO_TRY, "/etc/alternatives") // For java etc
-
 	b.AddBind(BIND_RO, "/etc/resolv.conf")
 
-	// 1.1 Bind global package directory (readonly)
-
-	// This is where symlinks point to.
-
-	// We need to find the SysConfig to get PkgDir, but Backend doesn't have it.
-
-	// However, we can use the parent of one of the symlink sources if available,
-
-	// or assume the host path is visible if we bind it.
-
-	// Actually, the Manager should probably provide the SysConfig or PkgDir.
-
-	// For now, let's assume we need to bind the directories where symlinks point.
-
-	for _, s := range prep.Symlinks {
-
-		// This is a bit overkill, but ensures the target is visible.
-
-		// A better way is to bind the whole PkgDir.
-
-		// Since we don't have PkgDir here easily, we'll bind the parent of the source.
-
-		pkgRoot := filepath.Dir(filepath.Dir(s.Source))
-
-		b.AddBind(BIND_RO, pkgRoot)
-
+	// 1.1 Bind global cache directory (readonly)
+	if prep.CacheDir != "" {
+		caveCache := filepath.Join(c.HomePath, ".cache", "pi")
+		if err := os.MkdirAll(caveCache, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create cave cache dir: %w", err)
+		}
+		b.AddMapBind(BIND_RO, prep.CacheDir, filepath.Join(internalHome, ".cache", "pi"))
 	}
 
 	// 2. Setup Workspace
-
 	b.AddBind(BIND, c.Workspace)
 
 	// 3. Setup Home
-
 	if err := os.MkdirAll(c.HomePath, 0755); err != nil {
-
 		return nil, fmt.Errorf("failed to create home directory: %w", err)
-
 	}
 
-	b.AddMapBind(BIND, c.HomePath, os.Getenv("HOME"))
+	// 3.1 Ensure .local/bin exists in host Cave Home so symlinks can be created
+	localBin := filepath.Join(c.HomePath, ".local", "bin")
+	if err := os.MkdirAll(localBin, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .local/bin: %w", err)
+	}
 
-	// 3.1 Create symlinks for packages
+	// 3.2 Map host Cave Home to internal Home
+	b.AddMapBind(BIND, c.HomePath, internalHome)
+
+	// 3.3 Create symlinks for packages in host Cave Home
 	if err := pkgs.CreateSymlinks(c.HomePath, prep.Symlinks); err != nil {
 		return nil, fmt.Errorf("failed to create symlinks: %w", err)
 	}
 
-	// 3.2 Ensure .local/bin is in PATH
-	b.AddEnvFirst("PATH", filepath.Join(os.Getenv("HOME"), ".local", "bin"))
+	// 3.4 Set Environment
+	b.envs["HOME"] = internalHome
+	b.AddEnvFirst("PATH", filepath.Join(internalHome, ".local", "bin"))
 
-	// 3.3 Apply recipe environment variables
+	// 3.5 Apply recipe environment variables
 	for k, v := range prep.Env {
 		b.envs[k] = v
 	}
 
 	// 4. Set environment variables from settings
-
 	for k, v := range settings.Env {
-
 		b.envs[k] = v
-
 	}
 
 	// 5. Set command
-
 	if len(command) > 0 {
-
 		b.SetCommand(command[0], command[1:]...)
-
 	} else {
-
-		shell := os.Getenv("SHELL")
-
-		if shell == "" {
-
-			shell = "/bin/bash"
-
-		}
-
-		b.SetCommand(shell)
-
+		b.SetCommand("/bin/bash")
 	}
 
 	// 6. Return command
-
 	return b.Cmd(), nil
-
 }
+
+

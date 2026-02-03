@@ -439,6 +439,21 @@ func (sr *StarlarkRecipe) Parse(cfg config.ReadOnly, pkgName string, data []byte
 			}
 		}
 
+		// Parse Symlinks
+		if symVal, ok, _ := dict.Get(starlark.String("symlinks")); ok {
+			if symDict, ok := symVal.(*starlark.Dict); ok {
+				pkg.Symlinks = make(map[string]string)
+				for _, k := range symDict.Keys() {
+					if ks, ok := k.(starlark.String); ok {
+						val, _, _ := symDict.Get(k)
+						if vs, ok := val.(starlark.String); ok {
+							pkg.Symlinks[ks.GoString()] = vs.GoString()
+						}
+					}
+				}
+			}
+		}
+
 		osStr := getString(dict, "os")
 		archStr := getString(dict, "arch")
 

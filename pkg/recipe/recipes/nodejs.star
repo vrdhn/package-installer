@@ -43,7 +43,10 @@ def parse(pkg_name, data, version_query, context):
                 "os": os_type,
                 "arch": arch_type,
                 "url": url,
-                "filename": filename
+                "filename": filename,
+                "symlinks": {
+                    "node-v{}-{}/bin/*".format(version, file): ".local/bin"
+                }
             })
     return pkgs
 

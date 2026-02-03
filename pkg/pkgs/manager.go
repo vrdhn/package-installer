@@ -77,7 +77,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 		}
 
 		// Discover symlinks
-		links, err := DiscoverSymlinks(plan.InstallPath)
+		links, err := DiscoverSymlinks(plan.InstallPath, pkgDef.Symlinks)
 		if err != nil {
 			task.Done()
 			return nil, fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
@@ -97,5 +97,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 	return &Result{
 		Symlinks: allSymlinks,
 		Env:      allEnv,
+		PkgDir:   m.SysConfig.GetPkgDir(),
+		CacheDir: m.SysConfig.GetCacheDir(),
 	}, nil
 }

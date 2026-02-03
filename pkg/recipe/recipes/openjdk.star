@@ -91,7 +91,10 @@ def parse(pkg_name, data, version_query, context):
                     "os": url_os,
                     "arch": url_arch,
                     "url": href,
-                    "filename": filename
+                    "filename": filename,
+                    "symlinks": {
+                        "bin/*": ".local/bin"
+                    }
                 })
     
     print("Found {} matching packages".format(len(pkgs)))

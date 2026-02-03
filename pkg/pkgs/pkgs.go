@@ -28,6 +28,8 @@ type Symlink struct {
 type Result struct {
 	Symlinks []Symlink
 	Env      map[string]string
+	PkgDir   string
+	CacheDir string
 }
 
 // Parse parses a package string in the format [ecosystem:]name[=version]
@@ -68,32 +70,49 @@ func (p *Package) String() string {
 	return res
 }
 
-// DiscoverSymlinks finds all binaries in the install path and returns them as symlinks.
-// For now, it just looks into the "bin" directory.
-func DiscoverSymlinks(installPath string) ([]Symlink, error) {
-	binDir := filepath.Join(installPath, "bin")
-	entries, err := os.ReadDir(binDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+// DiscoverSymlinks finds all files matching patterns in the install path and returns them as symlinks.
+// Patterns are like {"bin/*": ".local/bin"}.
+func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink, error) {
+	if len(patterns) == 0 {
+		// Default behavior: bin/* -> .local/bin
+		patterns = map[string]string{
+			"bin/*": ".local/bin",
 		}
-		return nil, err
 	}
 
 	var symlinks []Symlink
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		// Skip hidden files
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
+	for srcPattern, destDir := range patterns {
+		if strings.HasSuffix(srcPattern, "/*") {
+			// Directory expansion
+			subDir := strings.TrimSuffix(srcPattern, "/*")
+			absSubDir := filepath.Join(installPath, subDir)
 
-		symlinks = append(symlinks, Symlink{
-			Source: filepath.Join(binDir, entry.Name()),
-			Target: filepath.Join(".local", "bin", entry.Name()),
-		})
+			entries, err := os.ReadDir(absSubDir)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read expansion directory %s: %w", absSubDir, err)
+			}
+
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				// Skip hidden files
+				if strings.HasPrefix(entry.Name(), ".") {
+					continue
+				}
+
+				symlinks = append(symlinks, Symlink{
+					Source: filepath.Join(absSubDir, entry.Name()),
+					Target: filepath.Join(destDir, entry.Name()),
+				})
+			}
+		} else {
+			// Direct file/dir mapping
+			symlinks = append(symlinks, Symlink{
+				Source: filepath.Join(installPath, srcPattern),
+				Target: destDir,
+			})
+		}
 	}
 
 	return symlinks, nil
