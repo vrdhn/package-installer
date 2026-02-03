@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"pi/pkg/cave/config"
 	sysconfig "pi/pkg/config"
 )
 
@@ -14,10 +13,10 @@ import (
 // Mutable
 type Cave struct {
 	ID        string
-	Workspace string
-	HomePath  string
+	Workspace sysconfig.HostPath
+	HomePath  sysconfig.HostPath
 	Variant   string
-	Config    *config.CaveConfig
+	Config    *CaveConfig
 }
 
 // Manager handles cave discovery and loading.
@@ -38,24 +37,38 @@ func NewManager(sysCfg sysconfig.ReadOnly) *Manager {
 func (m *Manager) Find(cwd string) (*Cave, error) {
 	root, err := findWorkspaceRoot(cwd)
 	if err != nil {
+		// If not found by walking up, we don't yet support registry-only lookup here
+		// as we need a workspace context. But we could potentially find by Name later.
 		return nil, err
 	}
 
 	cfgPath := filepath.Join(root, "pi.cave.json")
-	cfg, err := config.Load(cfgPath)
+	cfg, err := LoadConfig(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave config: %w", err)
 	}
 
-	// Generate ID based on workspace path
-	id := generateID(root)
+	workspace := root
+	if cfg.Workspace != "" {
+		workspace = cfg.Workspace
+	}
 
-	// Determine HomePath
-	homePath := filepath.Join(m.SysConfig.GetHomeDir(), id)
+	var homePath string
+	if cfg.Home != "" {
+		if filepath.IsAbs(cfg.Home) {
+			homePath = cfg.Home
+		} else {
+			homePath = filepath.Join(m.SysConfig.GetHomeDir(), cfg.Home)
+		}
+	} else {
+		// Fallback to hash-based ID for backward compatibility
+		id := generateID(root)
+		homePath = filepath.Join(m.SysConfig.GetHomeDir(), id)
+	}
 
 	return &Cave{
-		ID:        id,
-		Workspace: root,
+		ID:        filepath.Base(homePath),
+		Workspace: workspace,
 		HomePath:  homePath,
 		Config:    cfg,
 	}, nil
@@ -63,18 +76,60 @@ func (m *Manager) Find(cwd string) (*Cave, error) {
 
 // CreateInitConfig creates a default pi.cave.json in the specified directory.
 func (m *Manager) CreateInitConfig(dir string) error {
-	cfg := &config.CaveConfig{
-		Cave: config.CaveSettings{
-			Packages: []string{},
-			Env:      make(map[string]string),
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+
+	name := filepath.Base(absDir)
+
+	cfg := &CaveConfig{
+		Name:      name,
+		Workspace: absDir,
+		Home:      name,
+		Variants: map[string]CaveSettings{
+			"": {
+				Pkgs: []sysconfig.PkgRef{},
+			},
 		},
-		Variants: make(map[string]config.CaveSettings),
 	}
-	path := filepath.Join(dir, "pi.cave.json")
+
+	path := filepath.Join(absDir, "pi.cave.json")
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("pi.cave.json already exists in %s", dir)
+		return fmt.Errorf("pi.cave.json already exists in %s", absDir)
 	}
-	return cfg.Save(path)
+
+	if err := cfg.Save(path); err != nil {
+		return err
+	}
+
+	return m.SyncRegistry(cfg)
+}
+
+// SyncRegistry updates the global caves.json with the provided config.
+func (m *Manager) SyncRegistry(cfg *CaveConfig) error {
+	reg, err := LoadRegistry(m.SysConfig)
+	if err != nil {
+		return err
+	}
+
+	found := false
+	for i, entry := range reg.Caves {
+		if entry.Name == cfg.Name {
+			reg.Caves[i].Workspace = cfg.Workspace
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		reg.Caves = append(reg.Caves, RegistryEntry{
+			Name:      cfg.Name,
+			Workspace: cfg.Workspace,
+		})
+	}
+
+	return reg.Save(m.SysConfig)
 }
 
 func findWorkspaceRoot(start string) (string, error) {
@@ -94,5 +149,5 @@ func findWorkspaceRoot(start string) (string, error) {
 
 func generateID(path string) string {
 	hash := sha256.Sum256([]byte(path))
-	return hex.EncodeToString(hash[:])[:12] // Short hash is usually enough
+	return hex.EncodeToString(hash[:])[:12]
 }

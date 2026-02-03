@@ -76,16 +76,13 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 		return nil, err
 	}
 	// Ensure packages are installed and get symlinks
-	prep, err := h.PkgsMgr.Prepare(ctx, settings.Packages)
+	prep, err := h.PkgsMgr.Prepare(ctx, settings.Pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare packages: %w", err)
 	}
 	// For 'run', we take the 'command' arg. For 'enter', it's empty.
 	var command []string
 	if cmd, ok := inv.Args["command"]; ok && cmd != "" {
-		// This is a bit simplistic as it doesn't handle multiple args well if the CLI engine
-		// only gives us one 'command' string.
-		// In a real scenario, we'd want all remaining args.
 		command = strings.Fields(cmd)
 	}
 	backend := bubblewrap.Create()
@@ -110,12 +107,12 @@ func (h *DefaultHandler) runInfo(ctx context.Context, inv *Invocation) (*Executi
 		fmt.Printf("Current directory is not in a pi workspace.\n")
 		return &ExecutionResult{ExitCode: 0}, nil
 	}
-	fmt.Printf("Cave ID:    %s\n", c.ID)
+	fmt.Printf("Cave Name:  %s\n", c.Config.Name)
 	fmt.Printf("Workspace:  %s\n", c.Workspace)
 	fmt.Printf("Home Path:  %s\n", c.HomePath)
 	settings, _ := c.Config.Resolve("")
-	if len(settings.Packages) > 0 {
-		fmt.Printf("Packages:   %s\n", strings.Join(settings.Packages, ", "))
+	if len(settings.Pkgs) > 0 {
+		fmt.Printf("Packages:   %s\n", strings.Join(settings.Pkgs, ", "))
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
@@ -143,16 +140,21 @@ func (h *DefaultHandler) runAddPkg(ctx context.Context, inv *Invocation) (*Execu
 	if err != nil {
 		return nil, err
 	}
-	// Add package to config
+	// Add package to default variant config
+	base, ok := c.Config.Variants[""]
+	if !ok {
+		base = cave.CaveSettings{}
+	}
 	found := false
-	for _, p := range c.Config.Cave.Packages {
+	for _, p := range base.Pkgs {
 		if p == pkgStr {
 			found = true
 			break
 		}
 	}
 	if !found {
-		c.Config.Cave.Packages = append(c.Config.Cave.Packages, pkgStr)
+		base.Pkgs = append(base.Pkgs, pkgStr)
+		c.Config.Variants[""] = base
 		cfgPath := filepath.Join(c.Workspace, "pi.cave.json")
 		if err := c.Config.Save(cfgPath); err != nil {
 			return nil, fmt.Errorf("failed to save cave config: %w", err)

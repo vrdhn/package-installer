@@ -22,6 +22,12 @@ const (
 	ArchUnknown ArchType = "unknown"
 )
 
+// HostPath represents a path on the host filesystem.
+type HostPath = string
+
+// PkgRef represents a package reference (e.g. "nodejs@20").
+type PkgRef = string
+
 func ParseOS(os string) (OSType, error) {
 	switch strings.ToLower(os) {
 	case "linux":

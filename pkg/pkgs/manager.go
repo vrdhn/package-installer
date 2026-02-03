@@ -3,7 +3,7 @@ package pkgs
 import (
 	"context"
 	"fmt"
-	"pi/pkg/config"
+	sysconfig "pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/installer"
 	"pi/pkg/recipe"
@@ -16,10 +16,10 @@ import (
 type Manager struct {
 	Repo      *repository.Manager
 	Disp      display.Display
-	SysConfig config.ReadOnly
+	SysConfig sysconfig.ReadOnly
 }
 
-func NewManager(repo *repository.Manager, disp display.Display, sysCfg config.ReadOnly) *Manager {
+func NewManager(repo *repository.Manager, disp display.Display, sysCfg sysconfig.ReadOnly) *Manager {
 	return &Manager{
 		Repo:      repo,
 		Disp:      disp,
@@ -28,7 +28,7 @@ func NewManager(repo *repository.Manager, disp display.Display, sysCfg config.Re
 }
 
 // Prepare ensures all packages are installed and returns the required symlinks.
-func (m *Manager) Prepare(ctx context.Context, pkgStrings []string) (*Result, error) {
+func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*Result, error) {
 	var allSymlinks []Symlink
 	allEnv := make(map[string]string)
 

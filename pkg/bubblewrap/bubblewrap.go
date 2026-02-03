@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"pi/pkg/cave"
-	"pi/pkg/cave/config"
 	"pi/pkg/pkgs"
 )
 
@@ -186,8 +185,7 @@ func sortedKeys[T any](m map[string]T) []string {
 }
 
 // ResolveLaunch implements cave.Backend
-
-func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *config.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
+func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
 
 	// 1. Setup basic binds
 

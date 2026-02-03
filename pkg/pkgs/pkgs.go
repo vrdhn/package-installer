@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	sysconfig "pi/pkg/config"
 	"strings"
 )
 
@@ -30,7 +31,7 @@ type Result struct {
 }
 
 // Parse parses a package string in the format [ecosystem:]name[=version]
-func Parse(s string) (*Package, error) {
+func Parse(s sysconfig.PkgRef) (*Package, error) {
 	p := &Package{}
 
 	// Extract ecosystem if present
