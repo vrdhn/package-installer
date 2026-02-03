@@ -86,7 +86,7 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 		command = strings.Fields(cmd)
 	}
 	backend := bubblewrap.Create()
-	cmd, err := backend.ResolveLaunch(ctx, c, settings, prep, command)
+	cmd, err := backend.ResolveLaunch(ctx, h.SysCfg, c, settings, prep, command)
 	if err != nil {
 		return nil, err
 	}

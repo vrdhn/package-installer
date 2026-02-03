@@ -46,6 +46,11 @@ func (p *parser) parseStatement() error {
 
 	keyword := p.tok.value
 	switch keyword {
+	case "global":
+		p.lastCmd = nil
+		p.lastTopic = nil
+		p.next()
+		return nil
 	case "cmd":
 		return p.parseCommand()
 	case "flag":

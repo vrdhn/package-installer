@@ -1,6 +1,7 @@
 # Global flags
-flag verbose bool "Enable verbose output" v
-flag config string "Path to config file" c
+global
+    flag verbose bool "Enable verbose output" v
+    flag config string "Path to config file" c
 
 # Commands
 cmd pkg "Manage packages"
@@ -62,7 +63,7 @@ cmd remote add "Add a new remote repository"
 # Help Topics
 topic about "Overview"
     text """
-    pi is a universal, workspace-based package installer that manages dependencies 
+    pi is a universal, workspace-based package installer that manages dependencies
     across multiple ecosystems (Node.js, Go, Java, etc.) using isolated sandboxes.
     It ensures deterministic environments without polluting your host system.
     """
@@ -87,8 +88,8 @@ topic workspace "Workspace & Manifests"
     text """
     Workspaces are managed via the 'pi.cave.json' manifest.
     - Symlink Forest: pi populates .local/bin in the Cave Home with symlinks to the package cache.
-    - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing') 
-      within the same workspace.
+    - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing')
+    within the same workspace.
     """
 
 topic recipes "Starlark Recipes"

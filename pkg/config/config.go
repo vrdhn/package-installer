@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"os/user"
 	"path/filepath"
 	"runtime"
 
@@ -20,6 +22,8 @@ type ReadOnly interface {
 	GetDiscoveryDir() string
 	GetOS() OSType
 	GetArch() ArchType
+	GetUser() string
+	GetHostHome() string
 	Freeze()
 	Checkout() Writable
 }
@@ -49,6 +53,9 @@ type Config struct {
 	os   OSType
 	arch ArchType
 
+	user     string
+	hostHome string
+
 	frozen bool
 	edited bool
 }
@@ -66,6 +73,8 @@ func (c *Config) GetHomeDir() string      { return c.homeDir }
 func (c *Config) GetDiscoveryDir() string { return c.discoveryDir }
 func (c *Config) GetOS() OSType           { return c.os }
 func (c *Config) GetArch() ArchType       { return c.arch }
+func (c *Config) GetUser() string         { return c.user }
+func (c *Config) GetHostHome() string     { return c.hostHome }
 
 func (c *Config) SetCacheDir(s string) {
 	if c.frozen {
@@ -119,12 +128,19 @@ func Init() (ReadOnly, error) {
 	osType, _ := ParseOS(runtime.GOOS)
 	archType, _ := ParseArch(runtime.GOARCH)
 
+	u, err := user.Current()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current user: %w", err)
+	}
+
 	c := &Config{
 		cacheDir:  filepath.Join(xdg.CacheHome, "pi"),
 		configDir: filepath.Join(xdg.ConfigHome, "pi"),
 		stateDir:  filepath.Join(xdg.StateHome, "pi"),
 		os:        osType,
 		arch:      archType,
+		user:      u.Username,
+		hostHome:  u.HomeDir,
 	}
 
 	c.updateDerived()

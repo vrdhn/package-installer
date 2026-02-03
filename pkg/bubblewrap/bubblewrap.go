@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"pi/pkg/cave"
+	"pi/pkg/config"
 	"pi/pkg/pkgs"
 )
 
@@ -39,6 +40,12 @@ const (
 	BIND_DATA BindType = "--bind-data" // Note: space removed to match usage
 	// FD DEST Copy from FD to file which is readonly bind-mounted on DEST
 	BIND_DATA_RO BindType = "--ro-bind-data" // Note: space removed
+
+	// Virtual filesystems
+	PROC  BindType = "--proc"
+	DEV   BindType = "--dev"
+	TMPFS BindType = "--tmpfs"
+	DIR   BindType = "--dir"
 )
 
 type bindPair struct {
@@ -53,6 +60,12 @@ type Bubblewrap struct {
 
 	// environment variables to set
 	envs map[string]string
+
+	// environment variables to unset
+	unsets []string
+
+	// flags like --unshare-pid
+	flags []string
 
 	// the full path to executable, like /usr/bin/bash
 	executable string
@@ -94,6 +107,21 @@ func (b *Bubblewrap) AddMapBind(typ BindType, hostpath string, cavepath string) 
 	b.binds[cavepath] = bindPair{cavepath, hostpath, typ}
 }
 
+func (b *Bubblewrap) AddFlag(flag string) {
+	b.flags = append(b.flags, flag)
+}
+
+func (b *Bubblewrap) UnsetEnv(name string) {
+	b.unsets = append(b.unsets, name)
+}
+
+func (b *Bubblewrap) AddVirtual(typ BindType, path string) {
+	// We use the same map but since hostpath is not needed for these,
+	// we'll handle them specially in Cmd() or just store them separately.
+	// For simplicity, let's just store them in binds with empty host_source.
+	b.binds[path] = bindPair{path, "", typ}
+}
+
 func (b *Bubblewrap) AddEnvFirst(name string, entry string) {
 	val := b.envs[name]
 
@@ -119,14 +147,25 @@ func (b *Bubblewrap) Cmd() *exec.Cmd {
 	// Construct argument list
 	args := []string{}
 
-	// Ensure executable is set in argv0 if not empty
-	if b.executable != "" {
-		args = append(args, "--argv0", b.executable)
-	}
+	// Flags
+	args = append(args, b.flags...)
 
+	// Binds and Virtual FS
 	for _, key := range sortedKeys(b.binds) {
 		bind := b.binds[key]
-		args = append(args, bind.bindType, bind.host_source, bind.cave_target)
+		if bind.host_source == "" {
+			args = append(args, bind.bindType, bind.cave_target)
+		} else {
+			args = append(args, bind.bindType, bind.host_source, bind.cave_target)
+		}
+	}
+
+	// Environment
+	for _, k := range sortedKeys(b.envs) {
+		args = append(args, "--setenv", k, b.envs[k])
+	}
+	for _, k := range b.unsets {
+		args = append(args, "--unsetenv", k)
 	}
 
 	// Finally add the command and arguments.
@@ -136,13 +175,7 @@ func (b *Bubblewrap) Cmd() *exec.Cmd {
 	}
 
 	cmd := exec.Command(execPath, args...)
-
-	envList := make([]string, 0, len(b.envs))
-	for _, k := range sortedKeys(b.envs) {
-		envList = append(envList, fmt.Sprintf("%s=%s", k, b.envs[k]))
-	}
-	cmd.Env = envList
-
+	// Note: We don't set cmd.Env here because we use --setenv inside bwrap
 	return cmd
 }
 
@@ -185,21 +218,32 @@ func sortedKeys[T any](m map[string]T) []string {
 }
 
 // ResolveLaunch implements cave.Backend
-func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
+func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.ReadOnly, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
 	// Internal home path inside the sandbox
-	const internalHome = "/home/user"
+	internalHome := cfg.GetHostHome()
 
-	// 1. Setup basic binds
+	// 1. Isolation & Flags
+	b.AddFlag("--unshare-pid")
+	b.AddFlag("--die-with-parent")
+
+	// 2. Base system bindings (read-only)
 	b.AddBind(BIND_RO, "/usr")
-	b.AddBind(BIND_RO, "/bin")
 	b.AddBind(BIND_RO, "/lib")
 	if _, err := os.Stat("/lib64"); err == nil {
 		b.AddBind(BIND_RO, "/lib64")
 	}
-	b.AddBind(BIND_RO_TRY, "/etc/alternatives") // For java etc
-	b.AddBind(BIND_RO, "/etc/resolv.conf")
+	b.AddBind(BIND_RO, "/bin")
+	b.AddBind(BIND_RO, "/sbin")
+	b.AddBind(BIND_RO, "/opt")
+	b.AddBind(BIND_RO, "/etc")
 
-	// 1.1 Bind global cache directory (readonly)
+	// 3. Virtual filesystems
+	b.AddVirtual(PROC, "/proc")
+	b.AddVirtual(DEV, "/dev")
+	b.AddVirtual(TMPFS, "/tmp")
+	b.AddVirtual(TMPFS, "/run")
+
+	// 4. Bind global cache directory (readonly)
 	if prep.CacheDir != "" {
 		caveCache := filepath.Join(c.HomePath, ".cache", "pi")
 		if err := os.MkdirAll(caveCache, 0755); err != nil {
@@ -208,51 +252,79 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, c *cave.Cave, settings *
 		b.AddMapBind(BIND_RO, prep.CacheDir, filepath.Join(internalHome, ".cache", "pi"))
 	}
 
-	// 2. Setup Workspace
+	// 5. Setup Workspace & Home
 	b.AddBind(BIND, c.Workspace)
-
-	// 3. Setup Home
 	if err := os.MkdirAll(c.HomePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create home directory: %w", err)
 	}
-
-	// 3.1 Ensure .local/bin exists in host Cave Home so symlinks can be created
 	localBin := filepath.Join(c.HomePath, ".local", "bin")
 	if err := os.MkdirAll(localBin, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create .local/bin: %w", err)
 	}
-
-	// 3.2 Map host Cave Home to internal Home
 	b.AddMapBind(BIND, c.HomePath, internalHome)
 
-	// 3.3 Create symlinks for packages in host Cave Home
+	// 6. Audio / Display / Agents (RO Try)
+	xdgRuntime := os.Getenv("XDG_RUNTIME_DIR")
+	if xdgRuntime != "" {
+		b.envs["XDG_RUNTIME_DIR"] = xdgRuntime
+		b.AddBind(BIND, xdgRuntime) // Shared for bus, display etc
+
+		// Wayland
+		waylandDisplay := os.Getenv("WAYLAND_DISPLAY")
+		if waylandDisplay != "" {
+			b.envs["WAYLAND_DISPLAY"] = waylandDisplay
+		}
+
+		// DBus
+		dbusAddr := os.Getenv("DBUS_SESSION_BUS_ADDRESS")
+		if dbusAddr != "" {
+			b.envs["DBUS_SESSION_BUS_ADDRESS"] = dbusAddr
+		}
+	}
+
+	// SSH Agent
+	sshAuth := os.Getenv("SSH_AUTH_SOCK")
+	if sshAuth != "" {
+		b.envs["SSH_AUTH_SOCK"] = sshAuth
+		b.AddBind(BIND_RO_TRY, sshAuth)
+	}
+
+	// 7. Graphics / USB / Hardware
+	b.AddBind(BIND_RO, "/sys")
+	b.AddBind(BIND_DEV, "/dev/dri")
+	b.AddBind(BIND_DEV_TRY, "/dev/bus/usb")
+
+	// 8. Create symlinks for packages in host Cave Home
 	if err := pkgs.CreateSymlinks(c.HomePath, prep.Symlinks); err != nil {
 		return nil, fmt.Errorf("failed to create symlinks: %w", err)
 	}
 
-	// 3.4 Set Environment
+	// 9. Set Environment
 	b.envs["HOME"] = internalHome
+	b.envs["USER"] = cfg.GetUser()
+	b.AddEnvFirst("PATH", "/usr/bin:/bin")
 	b.AddEnvFirst("PATH", filepath.Join(internalHome, ".local", "bin"))
 
-	// 3.5 Apply recipe environment variables
+	// Portals
+	b.UnsetEnv("GTK_USE_PORTAL")
+	b.UnsetEnv("QT_USE_PORTAL")
+
+	// Apply recipe environment variables
 	for k, v := range prep.Env {
 		b.envs[k] = v
 	}
 
-	// 4. Set environment variables from settings
+	// Apply settings environment variables
 	for k, v := range settings.Env {
 		b.envs[k] = v
 	}
 
-	// 5. Set command
+	// 10. Set command
 	if len(command) > 0 {
 		b.SetCommand(command[0], command[1:]...)
 	} else {
 		b.SetCommand("/bin/bash")
 	}
 
-	// 6. Return command
 	return b.Cmd(), nil
 }
-
-
