@@ -1,33 +1,28 @@
 # Architecture
 
-## Immutability Pattern
+`pi` is designed for safety, speed, and universality. It manages package lifecycles within isolated environments called Caves.
 
-To ensure predictability and prevent accidental state mutation, `pi` employs a `ReadOnly`/`Writable` interface pattern for core configuration and state structures.
+## Core Patterns
 
-*   **ReadOnly Interface**: Provides getter methods and a `Checkout()` method to obtain a writable version.
-*   **Writable Interface**: Extends the `ReadOnly` interface with setter methods and a `Freeze()` method to lock the structure.
+### Immutability
+To ensure predictability, core structures use a `ReadOnly`/`Writable` interface pattern.
+*   **ReadOnly**: Provides getters and a `Checkout()` method.
+*   **Writable**: Extends ReadOnly with setters and a `Freeze()` method.
 *   **Safety**: Attempting to modify a frozen structure or checking out a writable version twice results in a panic.
 
-## Recipe Engine (Starlark)
+### Starlark Recipe Engine
+`pi` uses **Starlark** for its recipe engine. Recipes are pure, declarative, and isolated from I/O.
+1.  **Discovery**: A recipe returns a `DiscoveryRequest` (URLs, methods).
+2.  **Resolution**: The `pi` host performs the network I/O.
+3.  **Parsing**: The host passes raw data back to the recipe's `parse` function to produce `PackageDefinition` structs.
 
-`pi` uses **Starlark** (a dialect of Python) for its recipe engine. Recipes are pure and declarative, meaning they cannot perform I/O themselves.
+### Sandboxing (Caves)
+Caves provide isolation using Linux `bubblewrap`.
+*   **Filesystem**: Restricts access to the workspace and a dedicated isolated HOME.
+*   **Symlink Forest**: Installed packages are bind-mounted read-only, with symlinks provided in the cave's `.local/bin`.
 
-1.  **Discovery**: A recipe provides a `discover` function that returns the necessary metadata (URLs, methods) to find package versions.
-2.  **Resolution**: The `pi` host performs the network I/O and passes the raw data back to the recipe's `parse` function.
-3.  **Result**: The recipe returns a list of `PackageDefinition` structs which `pi` then uses to plan and execute the installation.
-
-## Multi-processing
-
-`pi` leverages Go's goroutines and channels for concurrent operations. Independent tasks like downloading and extracting multiple packages are performed in parallel to maximize efficiency.
-
-## Sandboxing (Caves)
-
-The "Cave" model provides a secure, isolated environment for running development tools.
-
-*   **Backend**: Currently implemented using Linux `bubblewrap`.
-*   **Isolation**: Restricts filesystem access to the workspace and a dedicated isolated HOME directory.
-*   **Package Visibility**: Installed packages are bind-mounted into the cave as read-only directories, with symlinks provided in the cave's isolated `.local/bin`.
-
-## Display & Monitoring
-
-The `display` module provides a unified API for progress reporting and logging. It supports concurrent tasks, each with its own progress bar and status updates, rendered cleanly to the console.
+## Pipeline
+1.  **Resolve**: Map package name/version to a specific artifact via Starlark recipes.
+2.  **Download**: Fetch the artifact (HTTP/HTTPS) to a shared cache.
+3.  **Install**: Extract the artifact to a version-specific directory in `~/.cache/pi/pkgs`.
+4.  **Reify**: Update the symlink forest in the Cave Home to include the active packages.

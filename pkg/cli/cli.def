@@ -45,14 +45,41 @@ cmd remote add "Add a new remote repository"
     example "pi remote add official https://github.com/google/pi-recipes"
 
 # Help Topics
-topic about-caves "The Cave (Sandbox)"
+topic about "Overview"
     text """
-    A 'Cave' is an isolated environment powered by Linux bubblewrap.
-    It ensures that your project has exactly the tools it needs, isolated from the host.
+    pi is a universal, workspace-based package installer that manages dependencies 
+    across multiple ecosystems (Node.js, Go, Java, etc.) using isolated sandboxes.
+    It ensures deterministic environments without polluting your host system.
     """
 
-topic recipes "Package Recipes"
+topic architecture "Architecture & Patterns"
     text """
-    Recipes describe how packages are discovered, resolved, and installed.
-    They are currently implemented as Go functions but will move to Starlark.
+    pi is built for safety and speed using the following patterns:
+    - Immutability: Core structures use ReadOnly/Writable interfaces to prevent accidental mutation.
+    - Pipeline: Installation follows a strict Resolve -> Download -> Install -> Reify flow.
+    - Concurrency: Go's goroutines are used for parallel downloads and extractions.
+    """
+
+topic caves "The Cave Sandbox"
+    text """
+    A 'Cave' is an isolated environment powered by Linux bubblewrap.
+    - Isolation: Restricts filesystem access to the workspace and a private HOME.
+    - Zero Pollution: Tools installed for one project do not affect the host or other projects.
+    - Redirected Home: Environment variables (GOPATH, CARGO_HOME) are redirected into the Cave.
+    """
+
+topic workspace "Workspace & Manifests"
+    text """
+    Workspaces are managed via the 'pi.cave.json' manifest.
+    - Symlink Forest: pi populates .local/bin in the Cave Home with symlinks to the package cache.
+    - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing') 
+      within the same workspace.
+    """
+
+topic recipes "Starlark Recipes"
+    text """
+    Recipes describe how packages are discovered and installed.
+    - Language: Written in Starlark (a Python dialect).
+    - Pure: Recipes are declarative and perform no direct I/O.
+    - Discovery: Recipes return a 'DiscoveryRequest' for the host to fetch, then parse the response.
     """
