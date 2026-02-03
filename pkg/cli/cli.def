@@ -12,6 +12,11 @@ cmd pkg install "Install a package"
     example "pi pkg install nodejs@20"
     example "pi pkg i nodejs@latest"
 
+cmd pkg list "List available versions for a package"
+    arg package string "Package name (e.g. go)"
+    flag all bool "Show all architectures/OSs" a
+    example "pi pkg list go"
+
 cmd cave "Manage the cave (sandbox)"
 
 cmd cave info "Display information about the current cave"

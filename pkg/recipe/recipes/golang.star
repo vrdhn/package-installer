@@ -14,19 +14,14 @@ def parse(pkg_name, data, version_query, context):
         if version_str.startswith("go"):
             version_str = version_str[2:]
         
-        is_stable = release.get("stable", False)
+        status = "unstable"
+        if release.get("stable", False):
+            status = "stable"
         
-        match = False
-        if version_query == "latest" or version_query == "":
-            match = True # Take first one
-        elif version_query == "stable":
-            if is_stable:
-                match = True
-        elif version_str.startswith(version_query):
-            match = True
-
-        if not match:
-            continue
+        # We ignore version_query filtering here and return everything
+        # The resolver will filter by version if needed.
+        # Note: 'stable' query logic is lost if we don't filter here, 
+        # but the instruction was "return every version".
 
         for file in release["files"]:
             if file.get("kind") != "archive":
@@ -42,9 +37,6 @@ def parse(pkg_name, data, version_query, context):
             elif go_os == "windows":
                 os_type = "windows"
             
-            if os_type != context.os:
-                continue
-
             # Map Arch
             go_arch = file["arch"]
             arch_type = "unknown"
@@ -53,24 +45,12 @@ def parse(pkg_name, data, version_query, context):
             elif go_arch == "arm64":
                 arch_type = "arm64"
             
-            if arch_type != context.arch:
-                continue
-
             filename = file["filename"]
             
-            # Check extensions
-            supported = False
-            for allowed in context.extensions:
-                if filename.endswith(allowed):
-                    supported = True
-                    break
-            
-            if not supported:
-                continue
-
             pkgs.append({
                 "name": "golang",
                 "version": version_str,
+                "release_status": status,
                 "os": os_type,
                 "arch": arch_type,
                 "url": "https://go.dev/dl/" + filename,

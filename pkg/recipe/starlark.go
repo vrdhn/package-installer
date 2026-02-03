@@ -420,6 +420,7 @@ func (sr *StarlarkRecipe) Parse(cfg config.ReadOnly, pkgName string, data []byte
 		pkg := PackageDefinition{}
 		pkg.Name = getString(dict, "name")
 		pkg.Version = getString(dict, "version")
+		pkg.ReleaseStatus = getString(dict, "release_status")
 		pkg.URL = getString(dict, "url")
 		pkg.Filename = getString(dict, "filename")
 		pkg.Checksum = getString(dict, "checksum")

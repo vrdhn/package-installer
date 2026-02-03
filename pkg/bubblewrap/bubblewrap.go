@@ -302,6 +302,13 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.ReadOnly, c *
 	// 9. Set Environment
 	b.envs["HOME"] = internalHome
 	b.envs["USER"] = cfg.GetUser()
+	b.envs["PI_WORKSPACE"] = c.Workspace
+	caveName := c.Config.Name
+	if c.Variant != "" {
+		caveName = fmt.Sprintf("%s:%s", caveName, c.Variant)
+	}
+	b.envs["PI_CAVENAME"] = caveName
+
 	b.AddEnvFirst("PATH", "/usr/bin:/bin")
 	b.AddEnvFirst("PATH", filepath.Join(internalHome, ".local", "bin"))
 

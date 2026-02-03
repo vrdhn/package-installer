@@ -101,3 +101,32 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 		CacheDir: m.SysConfig.GetCacheDir(),
 	}, nil
 }
+
+// List returns all versions of a package.
+func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
+	p, err := Parse(pkgStr)
+	if err != nil {
+		return nil, err
+	}
+
+	recipeName := p.Ecosystem
+	if recipeName == "" {
+		recipeName = p.Name
+	}
+
+	src, err := m.Repo.GetRecipe(recipeName)
+	if err != nil {
+		return nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
+	}
+
+	task := m.Disp.StartTask("Listing " + p.String())
+	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+	if err != nil {
+		task.Done()
+		return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
+	}
+
+	pkgs, err := resolver.List(ctx, m.SysConfig, recipeObj, p.Name, p.Version, task)
+	task.Done()
+	return pkgs, err
+}

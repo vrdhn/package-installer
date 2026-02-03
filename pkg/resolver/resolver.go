@@ -16,9 +16,9 @@ import (
 	"time"
 )
 
-// Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
-	task.SetStage("Resolve", r.GetName())
+// List returns all available packages for the given recipe and version query.
+func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
+	task.SetStage("List", r.GetName())
 
 	url, method, data, err := fetchDiscoveryData(ctx, cfg, r, pkgName, version, task)
 	if err != nil {
@@ -31,6 +31,17 @@ func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse discovery data: %w", err)
 	}
+	return pkgs, nil
+}
+
+// Resolve finds the best matching package for the given recipe and version constraint.
+func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
+	if err != nil {
+		return nil, err
+	}
+
+	task.SetStage("Resolve", r.GetName())
 
 	// Filter by OS/Arch and Version and Extension
 	targetOS := cfg.GetOS()
@@ -46,7 +57,7 @@ func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName 
 		}
 
 		// Basic filtering
-		if version != "latest" && version != "" && !strings.HasPrefix(p.Version, version) {
+		if version != "latest" && version != "stable" && version != "" && !strings.HasPrefix(p.Version, version) {
 			continue
 		}
 

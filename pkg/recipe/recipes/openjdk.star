@@ -45,8 +45,7 @@ def parse(pkg_name, data, version_query, context):
         if not current_version:
             continue
 
-        if version_query != "latest" and version_query != "" and not current_version.startswith(version_query):
-            continue
+        # Removed version filtering
 
         links = jq.query('.. | select(.tag? == "a" and (.attr?.href? | startswith("http")))', row)
         if not links:
@@ -66,8 +65,7 @@ def parse(pkg_name, data, version_query, context):
             elif "macos" in filename or "osx" in filename: url_os = "darwin"
             elif "windows" in filename or "win" in filename: url_os = "windows"
             
-            if url_os != context.os:
-                continue
+            # Removed OS filtering
                 
             url_arch = "unknown"
             if "x64" in filename or "x86_64" in filename or "amd64" in filename:
@@ -75,27 +73,26 @@ def parse(pkg_name, data, version_query, context):
             elif "aarch64" in filename or "arm64" in filename:
                 url_arch = "arm64"
             
-            if url_arch != context.arch:
-                continue
+            # Removed Arch filtering
                 
-            supported = False
-            for ext in context.extensions:
-                if filename.endswith(ext):
-                    supported = True
-                    break
+            # Removed extension filtering
             
-            if supported:
-                pkgs.append({
-                    "name": "openjdk",
-                    "version": current_version,
-                    "os": url_os,
-                    "arch": url_arch,
-                    "url": href,
-                    "filename": filename,
-                    "symlinks": {
-                        "bin/*": ".local/bin"
-                    }
-                })
+            status = "stable"
+            if "ea" in version.lower() or "ea" in filename:
+                status = "ea"
+            
+            pkgs.append({
+                "name": "openjdk",
+                "version": current_version,
+                "release_status": status,
+                "os": url_os,
+                "arch": url_arch,
+                "url": href,
+                "filename": filename,
+                "symlinks": {
+                    "bin/*": ".local/bin"
+                }
+            })
     
     print("Found {} matching packages".format(len(pkgs)))
     return pkgs

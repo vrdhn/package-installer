@@ -11,15 +11,16 @@ var BuiltinRecipes embed.FS
 // PackageDefinition describes a specific build of a package.
 // Immutable
 type PackageDefinition struct {
-	Name     string
-	Version  string
-	OS       config.OSType
-	Arch     config.ArchType
-	URL      string
-	Filename string
-	Checksum string
-	Env      map[string]string
-	Symlinks map[string]string
+	Name          string
+	Version       string
+	ReleaseStatus string
+	OS            config.OSType
+	Arch          config.ArchType
+	URL           string
+	Filename      string
+	Checksum      string
+	Env           map[string]string
+	Symlinks      map[string]string
 }
 
 // Recipe defines how to discover and resolve packages for an ecosystem.

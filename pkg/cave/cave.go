@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	sysconfig "pi/pkg/config"
+	"strings"
 )
 
 // Cave represents an active sandbox context.
@@ -32,14 +33,48 @@ func NewManager(sysCfg sysconfig.ReadOnly) *Manager {
 	}
 }
 
-// Find looks for a pi.cave.json starting from cwd and walking up.
-// If not found, it returns an error.
+// Find looks for a pi.cave.json.
+// Priority:
+// 1. PI_WORKSPACE environment variable
+// 2. PI_CAVENAME environment variable (lookup in registry)
+// 3. Walking up from cwd
 func (m *Manager) Find(cwd string) (*Cave, error) {
-	root, err := findWorkspaceRoot(cwd)
-	if err != nil {
-		// If not found by walking up, we don't yet support registry-only lookup here
-		// as we need a workspace context. But we could potentially find by Name later.
-		return nil, err
+	var root string
+	var variant string
+
+	envWorkspace := os.Getenv("PI_WORKSPACE")
+	envCaveName := os.Getenv("PI_CAVENAME")
+
+	if envWorkspace != "" {
+		root = envWorkspace
+	}
+
+	if envCaveName != "" {
+		parts := strings.SplitN(envCaveName, ":", 2)
+		name := parts[0]
+		if len(parts) > 1 {
+			variant = parts[1]
+		}
+
+		if root == "" {
+			reg, err := LoadRegistry(m.SysConfig)
+			if err == nil {
+				for _, entry := range reg.Caves {
+					if entry.Name == name {
+						root = entry.Workspace
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if root == "" {
+		var err error
+		root, err = findWorkspaceRoot(cwd)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cfgPath := filepath.Join(root, "pi.cave.json")
@@ -70,6 +105,7 @@ func (m *Manager) Find(cwd string) (*Cave, error) {
 		ID:        filepath.Base(homePath),
 		Workspace: workspace,
 		HomePath:  homePath,
+		Variant:   variant,
 		Config:    cfg,
 	}, nil
 }

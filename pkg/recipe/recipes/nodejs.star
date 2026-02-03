@@ -10,8 +10,10 @@ def parse(pkg_name, data, version_query, context):
     
     for v in versions:
         version = v["version"].lstrip("v")
-        if version_query != "latest" and version_query != "" and not version.startswith(version_query):
-            continue
+        
+        status = "current"
+        if v.get("lts"):
+            status = "lts"
             
         for file in v["files"]:
             info = map_file(file)
@@ -28,18 +30,10 @@ def parse(pkg_name, data, version_query, context):
             filename = "node-v{}-{}{}".format(version, file, ext)
             url = "https://nodejs.org/dist/v{}/{}".format(version, filename)
             
-            # Final check against supported extensions for current OS
-            supported = False
-            for allowed in context.extensions:
-                if filename.endswith(allowed):
-                    supported = True
-                    break
-            if not supported:
-                continue
-
             pkgs.append({
                 "name": "nodejs",
                 "version": version,
+                "release_status": status,
                 "os": os_type,
                 "arch": arch_type,
                 "url": url,

@@ -121,8 +121,8 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 			if err == nil {
 				return res, nil
 			}
-			// If error is ambiguity, propagate it
-			if strings.HasPrefix(err.Error(), "ambiguous") {
+			// Propagate error unless it's "unknown command", which means we should fallback to this command's help
+			if !strings.HasPrefix(err.Error(), "unknown command") {
 				return nil, err
 			}
 		}

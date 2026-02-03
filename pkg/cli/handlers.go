@@ -31,9 +31,19 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 		h.Disp.SetVerbose(v)
 	}
 	path := getCmdPath(inv.Command)
+
+	// Restriction: if already in a cave, only allow 'cave info'
+	if envCave := os.Getenv("PI_CAVENAME"); envCave != "" {
+		if path != "cave/info" {
+			return nil, fmt.Errorf("already in cave %s", envCave)
+		}
+	}
+
 	switch path {
 	case "pkg/install":
 		return h.runInstall(ctx, inv)
+	case "pkg/list":
+		return h.runPkgList(ctx, inv)
 	case "cave/info":
 		return h.runInfo(ctx, inv)
 	case "cave/run":
@@ -71,6 +81,10 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 		return nil, err
 	}
 	variant, _ := inv.Flags["variant"].(string)
+	if variant == "" {
+		variant = c.Variant
+	}
+	c.Variant = variant
 	settings, err := c.Config.Resolve(variant)
 	if err != nil {
 		return nil, err
@@ -108,6 +122,9 @@ func (h *DefaultHandler) runInfo(ctx context.Context, inv *Invocation) (*Executi
 		return &ExecutionResult{ExitCode: 0}, nil
 	}
 	fmt.Printf("Cave Name:  %s\n", c.Config.Name)
+	if c.Variant != "" {
+		fmt.Printf("Variant:    %s\n", c.Variant)
+	}
 	fmt.Printf("Workspace:  %s\n", c.Workspace)
 	fmt.Printf("Home Path:  %s\n", c.HomePath)
 	settings, _ := c.Config.Resolve("")
@@ -173,6 +190,41 @@ func (h *DefaultHandler) runInstall(ctx context.Context, inv *Invocation) (*Exec
 	_, err := h.PkgsMgr.Prepare(ctx, []string{pkgQuery})
 	if err != nil {
 		return nil, err
+	}
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runPkgList(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	pkgQuery := inv.Args["package"]
+	if pkgQuery == "" {
+		return nil, fmt.Errorf("package name required")
+	}
+	showAll, _ := inv.Flags["all"].(bool)
+
+	pkgs, err := h.PkgsMgr.List(ctx, pkgQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	h.Disp.Close() // Close TUI to print list to stdout
+
+	fmt.Printf("%-20s %-15s %-10s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "OS", "ARCH")
+	fmt.Println(strings.Repeat("-", 75))
+
+	myOS := h.SysCfg.GetOS()
+	myArch := h.SysCfg.GetArch()
+
+	for _, p := range pkgs {
+		if !showAll {
+			if p.OS != myOS || p.Arch != myArch {
+				continue
+			}
+		}
+		status := p.ReleaseStatus
+		if status == "" {
+			status = "unknown"
+		}
+		fmt.Printf("%-20s %-15s %-10s %-10s %-10s\n", p.Name, p.Version, status, p.OS, p.Arch)
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
