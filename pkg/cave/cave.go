@@ -11,6 +11,7 @@ import (
 )
 
 // Cave represents an active sandbox context.
+// Mutable
 type Cave struct {
 	ID        string
 	Workspace string
@@ -20,12 +21,13 @@ type Cave struct {
 }
 
 // Manager handles cave discovery and loading.
+// Mutable
 type Manager struct {
-	SysConfig *sysconfig.Config
+	SysConfig sysconfig.ReadOnly
 }
 
 // NewManager creates a new Cave Manager.
-func NewManager(sysCfg *sysconfig.Config) *Manager {
+func NewManager(sysCfg sysconfig.ReadOnly) *Manager {
 	return &Manager{
 		SysConfig: sysCfg,
 	}
@@ -49,7 +51,7 @@ func (m *Manager) Find(cwd string) (*Cave, error) {
 	id := generateID(root)
 
 	// Determine HomePath
-	homePath := filepath.Join(m.SysConfig.HomeDir, id)
+	homePath := filepath.Join(m.SysConfig.GetHomeDir(), id)
 
 	return &Cave{
 		ID:        id,

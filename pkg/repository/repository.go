@@ -10,6 +10,7 @@ import (
 	"pi/pkg/recipe"
 )
 
+// Mutable
 type Manager struct {
 	recipes map[string]string
 	disp    display.Display

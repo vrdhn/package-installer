@@ -22,8 +22,10 @@ func Extensions(os config.OSType) []string {
 		return []string{".zip"}
 	case config.OSDarwin:
 		return []string{".tar.gz", ".tar.zst", ".zip", ".tgz", ".tar"}
-	default: // Linux and others
+	case config.OSLinux:
 		return []string{".tar.gz", ".tar.zst", ".tgz", ".tar"}
+	default:
+		panic("unreachable")
 	}
 }
 

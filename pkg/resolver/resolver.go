@@ -17,7 +17,7 @@ import (
 )
 
 // Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
 	task.SetStage("Resolve", r.GetName())
 
 	url, method, data, err := fetchDiscoveryData(ctx, cfg, r, pkgName, version, task)
@@ -33,8 +33,8 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName s
 	}
 
 	// Filter by OS/Arch and Version and Extension
-	targetOS := cfg.OS
-	targetArch := cfg.Arch
+	targetOS := cfg.GetOS()
+	targetArch := cfg.GetArch()
 	allowedExts := archive.Extensions(targetOS)
 
 	var bestMatch *recipe.PackageDefinition
@@ -75,21 +75,21 @@ func Resolve(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName s
 	return bestMatch, nil
 }
 
-func fetchDiscoveryData(ctx context.Context, cfg *config.Config, r recipe.Recipe, pkgName string, versionQuery string, task display.Task) (string, string, []byte, error) {
+func fetchDiscoveryData(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, versionQuery string, task display.Task) (string, string, []byte, error) {
 	url, method, err := r.Discover(cfg, pkgName, versionQuery)
 	if err != nil {
 		return "", "", nil, err
 	}
 
 	// 1. Create discovery directory
-	if err := os.MkdirAll(cfg.DiscoveryDir, 0755); err != nil {
+	if err := os.MkdirAll(cfg.GetDiscoveryDir(), 0755); err != nil {
 		return "", "", nil, err
 	}
 
 	// 2. Generate cache filename (sanitized URL)
 	safeURL := strings.ReplaceAll(url, "/", "_")
 	safeURL = strings.ReplaceAll(safeURL, ":", "_")
-	cachePath := filepath.Join(cfg.DiscoveryDir, safeURL+".json")
+	cachePath := filepath.Join(cfg.GetDiscoveryDir(), safeURL+".json")
 
 	// 3. Check TTL (1 hour)
 	if info, err := os.Stat(cachePath); err == nil {

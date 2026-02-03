@@ -77,7 +77,7 @@ Orchestrates the download and extraction process.
   - `Install(ctx context.Context, plan *Plan, task display.Task) error`: Runs the full installation flow.
   - `DownloadStage`, `ExtractStage`: Individual installation stages.
 
-## pkg/cave_bwrap
+## pkg/bubblewrap
 Bubblewrap-based sandboxing.
 
 - **Types**:

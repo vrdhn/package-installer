@@ -27,7 +27,6 @@ native/source, etc.).
 - Sandboxing restricts visibility of files in HOME.
 - An un-sandboxed process has full access to all files.
 
-
 ### Cave model
 - Cave is composed of following elements
   - a HOME, mapped to XDG_STATE_DIR/pi/homes/<dirname>

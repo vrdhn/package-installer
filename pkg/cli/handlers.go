@@ -8,19 +8,20 @@ import (
 	"strings"
 
 	"pi/pkg/cave"
-	"pi/pkg/cave_bwrap"
+	"pi/pkg/bubblewrap"
 	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/pkgs"
 	"pi/pkg/repository"
 )
 
+// Mutable
 type DefaultHandler struct {
 	Repo    *repository.Manager
 	Disp    display.Display
 	CaveMgr *cave.Manager
 	PkgsMgr *pkgs.Manager
-	SysCfg  *config.Config
+	SysCfg  config.ReadOnly
 }
 
 func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
@@ -49,7 +50,7 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 	case "remote/add":
 		fmt.Printf("Adding remote %s: %s\n", inv.Args["name"], inv.Args["url"])
 	default:
-		return nil, fmt.Errorf("command not implemented: %s", path)
+		panic("unreachable")
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
@@ -86,7 +87,7 @@ func (h *DefaultHandler) runCaveCommand(ctx context.Context, inv *Invocation) (*
 		command = strings.Fields(cmd)
 	}
 
-	backend := cave_bwrap.Create()
+	backend := bubblewrap.Create()
 	cmd, err := backend.ResolveLaunch(ctx, c, settings, prep, command)
 	if err != nil {
 		return nil, err

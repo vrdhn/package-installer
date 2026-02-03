@@ -15,14 +15,10 @@ version can be a keyword if strats with a-z, or version if starts from digit.
 
 keywords can be 'stable', 'lts', 'rc' etc.
 
-
-
-
 * python <- latest stable version of python
 * python=stable <- as above.
 * python=3.12 <- latest stable version of 3.12 series
 * python=3.12.1 <- exact version.
-
 
 * pip:numpy
 * npm:@gemini-cli/latest

@@ -11,6 +11,7 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+// Immutable
 type httpHandler struct {
 	client *http.Client
 }
@@ -55,6 +56,7 @@ func (h *httpHandler) Download(ctx context.Context, uri string, w io.Writer, tas
 	return err
 }
 
+// Mutable
 type progressWriter struct {
 	task    display.Task
 	total   int64

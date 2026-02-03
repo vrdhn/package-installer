@@ -8,6 +8,7 @@ import (
 )
 
 // Package represents a parsed package requirement.
+// Immutable
 type Package struct {
 	Ecosystem string
 	Name      string
@@ -15,12 +16,14 @@ type Package struct {
 }
 
 // Symlink represents a symlink that should be created in the cave.
+// Immutable
 type Symlink struct {
 	Source string // Path on the host (target of the symlink)
 	Target string // Relative path in the cave (the symlink itself)
 }
 
 // Result contains the outcome of package preparation.
+// Immutable
 type Result struct {
 	Symlinks []Symlink
 	Env      map[string]string

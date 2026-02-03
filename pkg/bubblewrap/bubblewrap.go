@@ -1,4 +1,4 @@
-package cave_bwrap
+package bubblewrap
 
 import (
 	"context"

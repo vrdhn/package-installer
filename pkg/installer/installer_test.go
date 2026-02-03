@@ -13,6 +13,7 @@ import (
 	"testing"
 )
 
+// Immutable
 type mockTask struct{}
 
 func (m *mockTask) Log(msg string)                       {}
@@ -22,11 +23,11 @@ func (m *mockTask) Done()                                {}
 
 func TestInstall(t *testing.T) {
 	// 0. Setup Config
-	cfg, _ := config.Init()
+	cfgRaw, _ := config.Init()
+	cfg := cfgRaw.Checkout()
 	// Override paths for testing to avoid touching system cache
 	tmpDir := t.TempDir()
-	cfg.DownloadDir = filepath.Join(tmpDir, "downloads")
-	cfg.PkgDir = filepath.Join(tmpDir, "pkgs")
+	cfg.SetCacheDir(tmpDir)
 
 	// 1. Create a mock tar.gz file
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +99,7 @@ func TestNewPlanWithFilename(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := filepath.Join(cfg.DownloadDir, "explicit.tar.gz")
+	expected := filepath.Join(cfg.GetDownloadDir(), "explicit.tar.gz")
 	if plan.DownloadPath != expected {
 		t.Errorf("Expected DownloadPath %s, got %s", expected, plan.DownloadPath)
 	}

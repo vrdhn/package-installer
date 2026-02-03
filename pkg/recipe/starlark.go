@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/html"
 )
 
+// Immutable
 type StarlarkRecipe struct {
 	Name    string
 	Source  string
@@ -338,21 +339,21 @@ func toStarlark(v any) starlark.Value {
 	}
 }
 
-func (sr *StarlarkRecipe) Discover(cfg *config.Config, pkgName string, versionQuery string) (string, string, error) {
+func (sr *StarlarkRecipe) Discover(cfg config.ReadOnly, pkgName string, versionQuery string) (string, string, error) {
 	discover, ok := sr.globals["discover"]
 	if !ok {
 		return "", "", fmt.Errorf("discover function not found in recipe %s", sr.Name)
 	}
 
-	exts := archive.Extensions(cfg.OS)
+	exts := archive.Extensions(cfg.GetOS())
 	starlarkExts := starlark.NewList(nil)
 	for _, ext := range exts {
 		starlarkExts.Append(starlark.String(ext))
 	}
 
 	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
-		"os":         starlark.String(cfg.OS),
-		"arch":       starlark.String(cfg.Arch),
+		"os":         starlark.String(cfg.GetOS().String()),
+		"arch":       starlark.String(cfg.GetArch().String()),
 		"extensions": starlarkExts,
 	})
 
@@ -380,21 +381,21 @@ func (sr *StarlarkRecipe) Discover(cfg *config.Config, pkgName string, versionQu
 	return urlVal.(starlark.String).GoString(), method, nil
 }
 
-func (sr *StarlarkRecipe) Parse(cfg *config.Config, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error) {
+func (sr *StarlarkRecipe) Parse(cfg config.ReadOnly, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error) {
 	parse, ok := sr.globals["parse"]
 	if !ok {
 		return nil, fmt.Errorf("parse function not found in recipe %s", sr.Name)
 	}
 
-	exts := archive.Extensions(cfg.OS)
+	exts := archive.Extensions(cfg.GetOS())
 	starlarkExts := starlark.NewList(nil)
 	for _, ext := range exts {
 		starlarkExts.Append(starlark.String(ext))
 	}
 
 	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
-		"os":         starlark.String(cfg.OS),
-		"arch":       starlark.String(cfg.Arch),
+		"os":         starlark.String(cfg.GetOS().String()),
+		"arch":       starlark.String(cfg.GetArch().String()),
 		"extensions": starlarkExts,
 	})
 

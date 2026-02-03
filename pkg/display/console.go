@@ -13,6 +13,7 @@ import (
 var _ Display = &consoleDisplay{}
 var _ Task = &consoleTask{}
 
+// Mutable
 type consoleTask struct {
 	name    string
 	stage   string
@@ -22,6 +23,7 @@ type consoleTask struct {
 	disp    *consoleDisplay
 }
 
+// Mutable
 type consoleDisplay struct {
 	mu          sync.Mutex
 	out         io.Writer

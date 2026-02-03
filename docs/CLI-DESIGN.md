@@ -4,20 +4,16 @@
 
     pi <global flags> command <command flags> subcommand <subcommand flags> <subcommand arguments ...>
 
-
 The command and subcommands can be abbriviated to shortest possible uambigious name.
 The command can be omitted if subcommand can be used to unambigously find command.
 
 global, command, and subcommand flags never overlap, so that the user doesn't have
 to remember the order .. e.g. verbosity flag, though global, can be given last also.
 
-
 # Requirement
 Ideally i need to declare all commands, subcommands, flags, and choices in a
 text file, and a tiny compiler which would read this and generate the required
 go files with all the required structures, and code to do parsing.
-
-
 
 # Plan
 

@@ -4,6 +4,7 @@ import (
 	"context"
 )
 
+// Immutable
 type Flag struct {
 	Name  string
 	Short string
@@ -12,6 +13,7 @@ type Flag struct {
 	Value any // Populated during parsing
 }
 
+// Immutable
 type Arg struct {
 	Name  string
 	Type  string
@@ -19,6 +21,7 @@ type Arg struct {
 	Value string // Populated during parsing
 }
 
+// Immutable
 type Command struct {
 	Name     string
 	Desc     string
@@ -29,12 +32,14 @@ type Command struct {
 	Examples []string
 }
 
+// Immutable
 type Topic struct {
 	Name string
 	Desc string
 	Text string
 }
 
+// Mutable
 type Invocation struct {
 	Command *Command
 	Args    map[string]string
@@ -42,6 +47,7 @@ type Invocation struct {
 	Global  map[string]any
 }
 
+// Mutable
 type ExecutionResult struct {
 	IsCave   bool
 	ExitCode int

@@ -30,6 +30,8 @@ func ParseOS(os string) (OSType, error) {
 		return OSDarwin, nil
 	case "windows", "win":
 		return OSWindows, nil
+	case "unknown":
+		return OSUnknown, nil
 	default:
 		return OSUnknown, fmt.Errorf("unsupported operating system: %s", os)
 	}
@@ -41,6 +43,8 @@ func ParseArch(arch string) (ArchType, error) {
 		return ArchX64, nil
 	case "arm64", "aarch64":
 		return ArchArm64, nil
+	case "unknown":
+		return ArchUnknown, nil
 	default:
 		return ArchUnknown, fmt.Errorf("unsupported architecture: %s", arch)
 	}

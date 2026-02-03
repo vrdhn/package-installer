@@ -48,7 +48,7 @@ different folder, so they can have different packages.
 - `pkg/cave/config`: Types and logic for parsing `pi.cave.json`.
 - `pkg/cave/manager`: Handles discovery of workspace roots and management of cave instances.
 - `pkg/cave/backend`: Interface for sandbox execution (e.g., Bubblewrap).
-- `pkg/cave_bwrap`: Implementation of the sandbox backend using Linux Bubblewrap.
+- `pkg/bubblewrap`: Implementation of the sandbox backend using Linux Bubblewrap.
 
 # Plan
 
@@ -64,7 +64,7 @@ different folder, so they can have different packages.
 - [ ] Implement `Home` management (mapping project-id to state directory)
 - [ ] Define `Backend` interface for sandbox abstraction
 
-## 3. Sandbox Integration (pkg/cave_bwrap)
+## 3. Sandbox Integration (pkg/bubblewrap)
 - [x] Basic Bubblewrap wrapper implemented
 - [ ] Implement `Backend` interface using `Bubblewrap`
 - [ ] Implement "Symlink Forest" logic:

@@ -7,42 +7,127 @@ import (
 	"github.com/adrg/xdg"
 )
 
+// ReadOnly defines the read-only interface for Config.
+// Immutable
+type ReadOnly interface {
+	GetCacheDir() string
+	GetConfigDir() string
+	GetStateDir() string
+	GetPkgDir() string
+	GetDownloadDir() string
+	GetRecipeDir() string
+	GetHomeDir() string
+	GetDiscoveryDir() string
+	GetOS() OSType
+	GetArch() ArchType
+	Freeze()
+	Checkout() Writable
+}
+
+// Writable defines the writable interface for Config.
+// Mutable
+type Writable interface {
+	ReadOnly
+	SetCacheDir(string)
+	SetConfigDir(string)
+	SetStateDir(string)
+}
+
 // Config holds the base directories and system info for pi.
+// Mutable
 type Config struct {
-	CacheDir  string // XDG_CACHE_HOME/pi
-	ConfigDir string // XDG_CONFIG_HOME/pi
-	StateDir  string // XDG_STATE_HOME/pi
+	cacheDir  string
+	configDir string
+	stateDir  string
 
-	// Derived paths
-	PkgDir       string // CacheDir/pkgs
-	DownloadDir  string // CacheDir/downloads
-	RecipeDir    string // ConfigDir/recipes
-	HomeDir      string // StateDir/homes
-	DiscoveryDir string // CacheDir/discovery
+	pkgDir       string
+	downloadDir  string
+	recipeDir    string
+	homeDir      string
+	discoveryDir string
 
-	// System info
-	OS   OSType
-	Arch ArchType
+	os   OSType
+	arch ArchType
+
+	frozen bool
+	edited bool
+}
+
+var _ ReadOnly = (*Config)(nil)
+var _ Writable = (*Config)(nil)
+
+func (c *Config) GetCacheDir() string     { return c.cacheDir }
+func (c *Config) GetConfigDir() string    { return c.configDir }
+func (c *Config) GetStateDir() string     { return c.stateDir }
+func (c *Config) GetPkgDir() string       { return c.pkgDir }
+func (c *Config) GetDownloadDir() string  { return c.downloadDir }
+func (c *Config) GetRecipeDir() string    { return c.recipeDir }
+func (c *Config) GetHomeDir() string      { return c.homeDir }
+func (c *Config) GetDiscoveryDir() string { return c.discoveryDir }
+func (c *Config) GetOS() OSType           { return c.os }
+func (c *Config) GetArch() ArchType       { return c.arch }
+
+func (c *Config) SetCacheDir(s string) {
+	if c.frozen {
+		panic("cannot modify frozen config")
+	}
+	c.cacheDir = s
+	c.updateDerived()
+}
+
+func (c *Config) SetConfigDir(s string) {
+	if c.frozen {
+		panic("cannot modify frozen config")
+	}
+	c.configDir = s
+	c.updateDerived()
+}
+
+func (c *Config) SetStateDir(s string) {
+	if c.frozen {
+		panic("cannot modify frozen config")
+	}
+	c.stateDir = s
+	c.updateDerived()
+}
+
+func (c *Config) Freeze() {
+	c.frozen = true
+}
+
+func (c *Config) Checkout() Writable {
+	if c.frozen {
+		panic("cannot checkout from frozen config")
+	}
+	if c.edited {
+		panic("config already checked out")
+	}
+	c.edited = true
+	return c
+}
+
+func (c *Config) updateDerived() {
+	c.pkgDir = filepath.Join(c.cacheDir, "pkgs")
+	c.downloadDir = filepath.Join(c.cacheDir, "downloads")
+	c.recipeDir = filepath.Join(c.configDir, "recipes")
+	c.homeDir = filepath.Join(c.stateDir, "homes")
+	c.discoveryDir = filepath.Join(c.cacheDir, "discovery")
 }
 
 // Init initializes the configuration using XDG base directories.
-func Init() (*Config, error) {
+func Init() (ReadOnly, error) {
 	osType, _ := ParseOS(runtime.GOOS)
 	archType, _ := ParseArch(runtime.GOARCH)
 
 	c := &Config{
-		CacheDir:  filepath.Join(xdg.CacheHome, "pi"),
-		ConfigDir: filepath.Join(xdg.ConfigHome, "pi"),
-		StateDir:  filepath.Join(xdg.StateHome, "pi"),
-		OS:        osType,
-		Arch:      archType,
+		cacheDir:  filepath.Join(xdg.CacheHome, "pi"),
+		configDir: filepath.Join(xdg.ConfigHome, "pi"),
+		stateDir:  filepath.Join(xdg.StateHome, "pi"),
+		os:        osType,
+		arch:      archType,
 	}
 
-	c.PkgDir = filepath.Join(c.CacheDir, "pkgs")
-	c.DownloadDir = filepath.Join(c.CacheDir, "downloads")
-	c.RecipeDir = filepath.Join(c.ConfigDir, "recipes")
-	c.HomeDir = filepath.Join(c.StateDir, "homes")
-	c.DiscoveryDir = filepath.Join(c.CacheDir, "discovery")
+	c.updateDerived()
 
 	return c, nil
 }

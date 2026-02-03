@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// Mutable
 type manager struct {
 	handlers map[string]SchemeHandler
 }

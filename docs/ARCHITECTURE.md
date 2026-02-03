@@ -1,54 +1,33 @@
-# Modules
+# Architecture
 
+## Immutability Pattern
 
-## Multi - processing
+To ensure predictability and prevent accidental state mutation, `pi` employs a `ReadOnly`/`Writable` interface pattern for core configuration and state structures.
 
-goroutine and 1 deep channels are used as far as possible.
-Only in rare case, mutex may be employed to update shared data structures.
+*   **ReadOnly Interface**: Provides getter methods and a `Checkout()` method to obtain a writable version.
+*   **Writable Interface**: Extends the `ReadOnly` interface with setter methods and a `Freeze()` method to lock the structure.
+*   **Safety**: Attempting to modify a frozen structure or checking out a writable version twice results in a panic.
 
-There can be several package, and `pi` will need to do several operations,
-like downloading, extracting, compiling, symlinking etc.
+## Recipe Engine (Starlark)
 
-The advantage of go is that we don't need to breakup these in multiple functions.
-If a pkg has dependency on 5 packages, than it should be possible to process
-these 5 package in parallel ( assuming they dont' have dependency on each other)
-This can be done either by making a graph upfront, or letting graph be built
-dynamically. `pi` allows this to be done dynamically.
+`pi` uses **Starlark** (a dialect of Python) for its recipe engine. Recipes are pure and declarative, meaning they cannot perform I/O themselves.
 
-At a very high level, the function `Install(packageDefinition) packageInstallation,error`
-is async, reentrant, and waitable, and cachable, and serialized for same package.
+1.  **Discovery**: A recipe provides a `discover` function that returns the necessary metadata (URLs, methods) to find package versions.
+2.  **Resolution**: The `pi` host performs the network I/O and passes the raw data back to the recipe's `parse` function.
+3.  **Result**: The recipe returns a list of `PackageDefinition` structs which `pi` then uses to plan and execute the installation.
 
-## Recipe
+## Multi-processing
 
-** For first version, we are not going to have starlark based recipe.
-We are going to have go functions providing packageDefinition implementation. **
+`pi` leverages Go's goroutines and channels for concurrent operations. Independent tasks like downloading and extracting multiple packages are performed in parallel to maximize efficiency.
 
+## Sandboxing (Caves)
 
-## Caching
+The "Cave" model provides a secure, isolated environment for running development tools.
 
-`pi` caches file system output of everything to avoid redoing ( downloading, extracting etc )
+*   **Backend**: Currently implemented using Linux `bubblewrap`.
+*   **Isolation**: Restricts filesystem access to the workspace and a dedicated isolated HOME directory.
+*   **Package Visibility**: Installed packages are bind-mounted into the cave as read-only directories, with symlinks provided in the cave's isolated `.local/bin`.
 
+## Display & Monitoring
 
-## Cave
-
-## Utility modules
-
-### display
-
-Single point for any screen/file display and logging.
-This can have a curses based imlementation.
-Allows caller to create a 'task', and then submit the log/display/progress of it.
-Flags determine what content goes to screen, logs etc.
-Keeps track ot active tasks, and displays progress bars in text.
-
-### archive
-
-Has the code to unarchive all sort of archives.
-
-
-### cave-bubblewrap
-
-bubblewrap impementation of cave.
-
-
-## Tooling
+The `display` module provides a unified API for progress reporting and logging. It supports concurrent tasks, each with its own progress bar and status updates, rendered cleanly to the console.

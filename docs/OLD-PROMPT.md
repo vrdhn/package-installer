@@ -15,8 +15,6 @@
   in multiple language, but use the same version of the installable depdendencies.
   `pi` will only update files in `~/.cache/pi/` and `{workspace}/.local`
 
-
-
 # Design
 
 ## Invocation

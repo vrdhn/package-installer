@@ -4,6 +4,7 @@ import (
 	"fmt"
 )
 
+// Mutable
 type parser struct {
 	lex       *lexer
 	tok       token
@@ -58,7 +59,7 @@ func (p *parser) parseStatement() error {
 	case "text":
 		return p.parseText()
 	default:
-		return fmt.Errorf("line %d: unknown keyword '%s'", p.tok.line, keyword)
+		panic("unreachable")
 	}
 }
 

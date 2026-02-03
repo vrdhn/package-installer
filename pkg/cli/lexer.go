@@ -14,12 +14,14 @@ const (
 	tokString
 )
 
+// Immutable
 type token struct {
 	kind  tokenKind
 	value string
 	line  int
 }
 
+// Mutable
 type lexer struct {
 	input string
 	pos   int

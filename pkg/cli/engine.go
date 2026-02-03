@@ -10,6 +10,7 @@ import (
 //go:embed cli.def
 var DefaultDSL string
 
+// Mutable
 type Engine struct {
 	GlobalFlags []*Flag
 	Commands    []*Command
@@ -32,9 +33,7 @@ func NewEngine(dsl string) (*Engine, error) {
 }
 
 func (e *Engine) Register(cmdPath string, h Handler) {
-
 	e.Handlers[cmdPath] = h
-
 }
 
 func (e *Engine) parseDSL(dsl string) error {
@@ -43,254 +42,153 @@ func (e *Engine) parseDSL(dsl string) error {
 }
 
 func (e *Engine) Run(ctx context.Context, args []string) (*ExecutionResult, error) {
-
 	inv := &Invocation{
-
-		Args: make(map[string]string),
-
-		Flags: make(map[string]any),
-
+		Args:   make(map[string]string),
+		Flags:  make(map[string]any),
 		Global: make(map[string]any),
 	}
 
 	var remaining []string
-
 	helpRequested := false
 
 	// Parse global flags and help
-
 	for i := 0; i < len(args); i++ {
-
 		arg := args[i]
-
 		if arg == "--help" || arg == "-h" {
-
 			helpRequested = true
-
 			continue
-
 		}
 
 		found := false
-
 		for _, gf := range e.GlobalFlags {
-
 			if arg == "--"+gf.Name || arg == "-"+gf.Short {
-
 				if gf.Type == "bool" {
-
 					inv.Global[gf.Name] = true
-
 					found = true
-
 				} else if gf.Type == "string" && i+1 < len(args) {
-
 					inv.Global[gf.Name] = args[i+1]
-
 					i++
-
 					found = true
-
 				}
-
 			}
-
 		}
 
 		if !found {
-
 			remaining = append(remaining, arg)
-
 		}
-
 	}
 
 	if helpRequested {
-
 		e.PrintHelp(remaining...)
-
 		return &ExecutionResult{ExitCode: 0}, nil
-
 	}
 
 	if len(remaining) == 0 {
-
 		e.PrintHelp()
-
 		return &ExecutionResult{ExitCode: 0}, nil
-
 	}
 
 	return e.dispatch(ctx, inv, e.Commands, remaining)
-
 }
 
 func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command, args []string) (*ExecutionResult, error) {
-
 	word := args[0]
 
 	// Command match
-
 	var matches []*Command
-
 	for _, c := range cmds {
-
 		if c.Name == word {
-
 			matches = []*Command{c}
-
 			break
-
 		}
-
 		if strings.HasPrefix(c.Name, word) {
-
 			matches = append(matches, c)
-
 		}
-
 	}
 
 	if len(matches) > 1 {
-
 		var names []string
-
 		for _, m := range matches {
 			names = append(names, m.Name)
 		}
-
 		return nil, fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
-
 	}
 
 	if len(matches) == 1 {
-
 		cmd := matches[0]
 
 		// Special case for built-in help
-
 		if cmd.Name == "help" {
-
 			e.PrintHelp(args[1:]...)
-
 			return &ExecutionResult{ExitCode: 0}, nil
-
 		}
 
 		currArgs := args[1:]
 
 		// If help requested for this command
-
 		if len(currArgs) > 0 && (currArgs[0] == "--help" || currArgs[0] == "-h") {
-
 			e.PrintCommandHelp(cmd)
-
 			return &ExecutionResult{ExitCode: 0}, nil
-
 		}
 
 		// Recurse to subcommands if possible
-
 		if len(currArgs) > 0 && len(cmd.Subs) > 0 {
-
 			res, err := e.dispatch(ctx, inv, cmd.Subs, currArgs)
-
 			if err == nil {
-
 				return res, nil
-
 			}
 
 			// If error is ambiguity, propagate it
-
 			if strings.HasPrefix(err.Error(), "ambiguous") {
-
 				return nil, err
-
 			}
-
 		}
 
 		// If no subcommands matched but command has subcommands, show help
-
 		if len(cmd.Subs) > 0 {
-
 			e.PrintCommandHelp(cmd)
-
 			return &ExecutionResult{ExitCode: 0}, nil
-
 		}
 
 		inv.Command = cmd
-
 		e.parseParams(inv, cmd, currArgs)
-
 		path := getCmdPath(cmd)
-
 		if h, ok := e.Handlers[path]; ok {
-
 			return h.Execute(ctx, inv)
-
 		}
-
 		return nil, fmt.Errorf("no handler registered for command: %s", path)
-
 	}
 
 	// Omitted parent support
-
 	if len(cmds) == len(e.Commands) {
-
 		var subMatches []*Command
-
 		for _, c := range cmds {
-
 			for _, s := range c.Subs {
-
 				if s.Name == word || strings.HasPrefix(s.Name, word) {
-
 					subMatches = append(subMatches, s)
-
 				}
-
 			}
-
 		}
 
 		if len(subMatches) > 1 {
-
 			var names []string
-
 			for _, m := range subMatches {
 				names = append(names, getCmdPath(m))
 			}
-
 			return nil, fmt.Errorf("ambiguous command: %s (candidates: %s)", word, strings.Join(names, ", "))
-
 		}
 
 		if len(subMatches) == 1 {
-
 			s := subMatches[0]
-
 			inv.Command = s
-
 			e.parseParams(inv, s, args[1:])
-
 			path := getCmdPath(s)
-
 			if h, ok := e.Handlers[path]; ok {
-
 				return h.Execute(ctx, inv)
-
 			}
-
 		}
-
 	}
-
 	return nil, fmt.Errorf("unknown command: %s", word)
-
 }
 
 func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) {
