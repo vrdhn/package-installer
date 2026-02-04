@@ -57,7 +57,6 @@ def parse(pkg_name, data, version_query, context):
                 "filename": filename,
                 "env": {
                     "GOROOT": "${PI_PKG_ROOT}",
-                    "GOPATH": "~/go"
                 },
                 "symlinks": {
                     "go/bin/*": ".local/bin"

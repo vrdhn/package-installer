@@ -22,6 +22,14 @@ cmd cave "Manage the cave (sandbox)"
 cmd cave info "Display information about the current cave"
     example "pi cave info"
 
+cmd cave list "List all registered caves and their variants"
+    example "pi cave list"
+
+cmd cave use "Start a cave by name from any directory"
+    arg cave string "Cave name and optional variant (e.g., project:dev)"
+    example "pi cave use myproject"
+    example "pi cave use myproject:dev"
+
 cmd cave run "Run a command inside the cave"
     arg command string "Command to run"
     flag variant string "Variant to use" v

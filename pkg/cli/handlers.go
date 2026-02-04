@@ -46,6 +46,10 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 		return h.runPkgList(ctx, inv)
 	case "cave/info":
 		return h.runInfo(ctx, inv)
+	case "cave/list":
+		return h.runCaveList(ctx, inv)
+	case "cave/use":
+		return h.runCaveUse(ctx, inv)
 	case "cave/run":
 		return h.runCaveCommand(ctx, inv)
 	case "cave/sync":
@@ -132,6 +136,88 @@ func (h *DefaultHandler) runInfo(ctx context.Context, inv *Invocation) (*Executi
 		fmt.Printf("Packages:   %s\n", strings.Join(settings.Pkgs, ", "))
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runCaveList(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	reg, err := cave.LoadRegistry(h.SysCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load cave registry: %w", err)
+	}
+
+	h.Disp.Close()
+
+	if len(reg.Caves) == 0 {
+		fmt.Println("No caves registered.")
+		return &ExecutionResult{ExitCode: 0}, nil
+	}
+
+	fmt.Printf("%-20s %-30s %s\n", "NAME", "VARIANTS", "WORKSPACE")
+	fmt.Println(strings.Repeat("-", 80))
+
+	for _, entry := range reg.Caves {
+		cfgPath := filepath.Join(entry.Workspace, "pi.cave.json")
+		cfg, err := cave.LoadConfig(cfgPath)
+		variants := "-"
+		if err == nil {
+			var names []string
+			for v := range cfg.Variants {
+				if v != "" {
+					names = append(names, v)
+				}
+			}
+			if len(names) > 0 {
+				variants = strings.Join(names, ", ")
+			}
+		}
+		fmt.Printf("%-20s %-30s %s\n", entry.Name, variants, entry.Workspace)
+	}
+
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *DefaultHandler) runCaveUse(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	target := inv.Args["cave"]
+	if target == "" {
+		return nil, fmt.Errorf("cave name required")
+	}
+
+	parts := strings.SplitN(target, ":", 2)
+	name := parts[0]
+	variant := ""
+	if len(parts) > 1 {
+		variant = parts[1]
+	}
+
+	reg, err := cave.LoadRegistry(h.SysCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load cave registry: %w", err)
+	}
+
+	var workspace string
+	for _, entry := range reg.Caves {
+		if entry.Name == name {
+			workspace = entry.Workspace
+			break
+		}
+	}
+
+	if workspace == "" {
+		return nil, fmt.Errorf("cave %s not found in registry", name)
+	}
+
+	if err := os.Chdir(workspace); err != nil {
+		return nil, fmt.Errorf("failed to change directory to workspace %s: %w", workspace, err)
+	}
+
+	// Override variant flag for runCaveCommand
+	if variant != "" {
+		if inv.Flags == nil {
+			inv.Flags = make(map[string]any)
+		}
+		inv.Flags["variant"] = variant
+	}
+
+	return h.runCaveCommand(ctx, inv)
 }
 func (h *DefaultHandler) runInit(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
 	cwd, err := os.Getwd()
