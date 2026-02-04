@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"pi/pkg/config"
 	"pi/pkg/display"
+	"regexp"
+	"sort"
 	"strings"
 
 	"pi/pkg/recipe"
@@ -59,4 +62,79 @@ func (m *Manager) ListRecipes() []string {
 		list = append(list, name)
 	}
 	return list
+}
+
+// Resolve selects the single matching recipe/regex for a package identifier.
+// pkgName must be [ecosystem:]name (no version).
+func (m *Manager) Resolve(pkgName string, cfg config.ReadOnly) (string, string, error) {
+	type match struct {
+		repo   string
+		recipe string
+		regex  string
+	}
+
+	var matches []match
+	for _, recipeName := range m.ListRecipes() {
+		src, err := m.GetRecipe(recipeName)
+		if err != nil {
+			return "", "", err
+		}
+		sr, err := recipe.NewStarlarkRecipe(recipeName, src, nil)
+		if err != nil {
+			return "", "", err
+		}
+		patterns, legacy, err := sr.Registry(cfg)
+		if err != nil {
+			return "", "", err
+		}
+		if legacy {
+			continue
+		}
+		for _, pattern := range patterns {
+			re, err := compileAnchored(pattern)
+			if err != nil {
+				return "", "", fmt.Errorf("invalid regex '%s' in recipe %s: %w", pattern, recipeName, err)
+			}
+			if re.MatchString(pkgName) {
+				matches = append(matches, match{
+					repo:   "builtin",
+					recipe: recipeName,
+					regex:  pattern,
+				})
+			}
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", "", fmt.Errorf("no recipe matched: %s", pkgName)
+	}
+	if len(matches) > 1 {
+		sort.Slice(matches, func(i, j int) bool {
+			if matches[i].repo != matches[j].repo {
+				return matches[i].repo < matches[j].repo
+			}
+			if matches[i].recipe != matches[j].recipe {
+				return matches[i].recipe < matches[j].recipe
+			}
+			return matches[i].regex < matches[j].regex
+		})
+		var lines []string
+		for _, m := range matches {
+			lines = append(lines, fmt.Sprintf("  %s/%s  %s", m.repo, m.recipe, m.regex))
+		}
+		return "", "", fmt.Errorf("ambiguous package match for %s:\n%s", pkgName, strings.Join(lines, "\n"))
+	}
+
+	return matches[0].recipe, matches[0].regex, nil
+}
+
+func compileAnchored(pattern string) (*regexp.Regexp, error) {
+	anchored := pattern
+	if !strings.HasPrefix(anchored, "^") {
+		anchored = "^" + anchored
+	}
+	if !strings.HasSuffix(anchored, "$") {
+		anchored = anchored + "$"
+	}
+	return regexp.Compile(anchored)
 }

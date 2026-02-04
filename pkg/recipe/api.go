@@ -38,6 +38,23 @@ type Recipe interface {
 	Execute(ctx *DiscoveryContext) ([]PackageDefinition, error)
 }
 
+// SelectedRecipe wraps a Starlark recipe and pins it to a specific regex.
+// Immutable.
+type SelectedRecipe struct {
+	base  *StarlarkRecipe
+	regex string
+}
+
+func NewSelectedRecipe(base *StarlarkRecipe, regex string) *SelectedRecipe {
+	return &SelectedRecipe{base: base, regex: regex}
+}
+
+func (r *SelectedRecipe) GetName() string { return r.base.GetName() }
+
+func (r *SelectedRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, error) {
+	return r.base.ExecuteRegex(ctx, r.regex)
+}
+
 // GoRecipe is the legacy Go-based implementation
 // Immutable
 type GoRecipe struct {

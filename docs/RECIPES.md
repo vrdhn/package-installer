@@ -14,6 +14,7 @@ Recipes are written in Starlark and register package handlers via `add_pkgdef(..
 
 Handlers use this signature:
 `def handler(pkg_name):`
+`pkg_name` is the full identifier and may include the ecosystem prefix (e.g., `npm:express`).
 
 ### Execution Model
 1.  Register handlers with `add_pkgdef(regex, handler)` at module load time.
@@ -41,6 +42,8 @@ All fields are required keyword args (use empty strings if unknown):
 ### Context
 Recipes do not receive a context object. They should emit as many versions as possible.
 Filtering is performed by `pi` after discovery.
+
+If multiple recipe regexes match a requested package, `pi` prints the matching repository/regex list and exits.
 
 ## Repositories
 Recipes are currently loaded from built-in Starlark files embedded in the binary.

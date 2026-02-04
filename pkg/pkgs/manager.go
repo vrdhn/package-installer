@@ -45,10 +45,14 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 			return nil, err
 		}
 
-		// Use ecosystem if provided, otherwise use name as recipe name
-		recipeName := p.Ecosystem
-		if recipeName == "" {
-			recipeName = p.Name
+		fullName := p.Name
+		if p.Ecosystem != "" {
+			fullName = p.Ecosystem + ":" + p.Name
+		}
+
+		recipeName, regexKey, err := m.Repo.Resolve(fullName, m.SysConfig)
+		if err != nil {
+			return nil, err
 		}
 
 		src, err := m.Repo.GetRecipe(recipeName)
@@ -62,9 +66,10 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 			task.Done()
 			return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 		}
+		selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
 
 		// Resolve
-		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, recipeObj, p.Ecosystem, p.Name, p.Version, task)
+		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Ecosystem, p.Name, p.Version, task)
 		if err != nil {
 			task.Done()
 			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
@@ -116,9 +121,14 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 		return nil, err
 	}
 
-	recipeName := p.Ecosystem
-	if recipeName == "" {
-		recipeName = p.Name
+	fullName := p.Name
+	if p.Ecosystem != "" {
+		fullName = p.Ecosystem + ":" + p.Name
+	}
+
+	recipeName, regexKey, err := m.Repo.Resolve(fullName, m.SysConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	src, err := m.Repo.GetRecipe(recipeName)
@@ -133,7 +143,8 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 		return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 	}
 
-	pkgs, err := resolver.List(ctx, m.SysConfig, recipeObj, p.Ecosystem, p.Name, p.Version, task)
+	selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
+	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Ecosystem, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
 }

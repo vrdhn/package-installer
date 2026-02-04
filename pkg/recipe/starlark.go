@@ -87,7 +87,6 @@ func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, e
 	}
 
 	pi := ctx.PkgName
-	pi := ctx.PkgName
 	handler, regexKey, err := sr.matchHandler(pi)
 	if err != nil {
 		return nil, err
@@ -96,6 +95,43 @@ func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, e
 		return nil, fmt.Errorf("recipe not applicable: %s", sr.Name)
 	}
 
+	return sr.executeHandler(&ctxWrapper, regexKey, handler, pkgs)
+}
+
+// ExecuteRegex runs the handler registered for a specific regex.
+func (sr *StarlarkRecipe) ExecuteRegex(ctx *DiscoveryContext, regexKey string) ([]PackageDefinition, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("missing discovery context")
+	}
+
+	var pkgs []PackageDefinition
+	ctxWrapper := *ctx
+	ctxWrapper.AddVersion = func(p PackageDefinition) {
+		pkgs = append(pkgs, p)
+		if ctx.AddVersion != nil {
+			ctx.AddVersion(p)
+		}
+	}
+	sr.currentCtx = &ctxWrapper
+
+	if !sr.registryLoaded {
+		if err := sr.loadRegistry(); err != nil {
+			return nil, err
+		}
+	}
+	if sr.legacy {
+		return nil, fmt.Errorf("legacy recipe does not support regex execution: %s", sr.Name)
+	}
+
+	handler, ok := sr.registry[regexKey]
+	if !ok {
+		return nil, fmt.Errorf("recipe handler not found for regex '%s' in %s", regexKey, sr.Name)
+	}
+
+	return sr.executeHandler(&ctxWrapper, regexKey, handler, pkgs)
+}
+
+func (sr *StarlarkRecipe) executeHandler(ctx *DiscoveryContext, regexKey string, handler starlark.Callable, pkgs []PackageDefinition) ([]PackageDefinition, error) {
 	if ctx.Config != nil {
 		if cached, ok, err := sr.loadHandlerCache(ctx, regexKey); err != nil {
 			return nil, err
@@ -104,7 +140,7 @@ func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, e
 		}
 	}
 
-	_, err = starlark.Call(sr.thread, handler, starlark.Tuple{
+	_, err := starlark.Call(sr.thread, handler, starlark.Tuple{
 		starlark.String(ctx.PkgName),
 	}, nil)
 	if err != nil {
@@ -455,7 +491,6 @@ func (sr *StarlarkRecipe) loadRegistry() error {
 	sr.registryLoaded = true
 	return nil
 }
-
 
 func (sr *StarlarkRecipe) matchHandler(pi string) (starlark.Callable, string, error) {
 	if len(sr.registry) == 0 {

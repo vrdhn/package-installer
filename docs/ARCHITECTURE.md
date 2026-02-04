@@ -39,8 +39,9 @@ The CLI follows a strict multi-stage initialization:
 *   `BuildTimestamp`: UTC build time.
 
 ## Pipeline
-1.  **Resolve**: Run Starlark recipes and filter by OS/arch/version/extension.
-2.  **Download**: Fetch the artifact to `~/.cache/pi/downloads` with cache locking.
-3.  **Install**: Extract into `~/.cache/pi/pkgs/<name-version-os-arch>` (atomic tmp dir).
-4.  **Prepare**: Build symlink map and env for the cave.
-5.  **Run**: For `cave run/enter`, launch bubblewrap with binds and env.
+1.  **Select**: Match the package identifier against recipe regexes. If multiple match, print matches and exit.
+2.  **Resolve**: Run the selected Starlark handler and filter by OS/arch/version/extension.
+3.  **Download**: Fetch the artifact to `~/.cache/pi/downloads` with cache locking.
+4.  **Install**: Extract into `~/.cache/pi/pkgs/<name-version-os-arch>` (atomic tmp dir).
+5.  **Prepare**: Build symlink map and env for the cave.
+6.  **Run**: For `cave run/enter`, launch bubblewrap with binds and env.
