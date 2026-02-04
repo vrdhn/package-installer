@@ -23,11 +23,19 @@ type PackageDefinition struct {
 	Symlinks      map[string]string
 }
 
+// DiscoveryContext provides the environment for recipe execution.
+type DiscoveryContext struct {
+	Config       config.ReadOnly
+	PkgName      string
+	VersionQuery string
+	Download     func(url string) ([]byte, error)
+	AddVersion   func(p PackageDefinition)
+}
+
 // Recipe defines how to discover and resolve packages for an ecosystem.
 type Recipe interface {
 	GetName() string
-	Discover(cfg config.ReadOnly, pkgName string, versionQuery string) (url string, method string, err error)
-	Parse(cfg config.ReadOnly, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error)
+	Execute(ctx *DiscoveryContext) ([]PackageDefinition, error)
 }
 
 // GoRecipe is the legacy Go-based implementation
@@ -39,10 +47,11 @@ type GoRecipe struct {
 }
 
 func (r *GoRecipe) GetName() string { return r.Name }
-func (r *GoRecipe) Discover(cfg config.ReadOnly, pkgName string, versionQuery string) (string, string, error) {
-	return r.DiscoveryURL, "GET", nil
-}
-func (r *GoRecipe) Parse(cfg config.ReadOnly, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error) {
+func (r *GoRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, error) {
+	data, err := ctx.Download(r.DiscoveryURL)
+	if err != nil {
+		return nil, err
+	}
 	return r.Parser(data)
 }
 

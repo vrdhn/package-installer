@@ -1,11 +1,17 @@
 package recipe
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"pi/pkg/archive"
+	"io"
+	"os"
+	"path/filepath"
 	"pi/pkg/config"
+	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/itchyny/gojq"
@@ -20,10 +26,18 @@ type StarlarkRecipe struct {
 	Source  string
 	thread  *starlark.Thread
 	globals starlark.StringDict
+
+	registry       map[string]starlark.Callable
+	regexCache     map[string]*regexp.Regexp
+	registryLoaded bool
+	legacy         bool
+	legacyPkgs     []PackageDefinition
+
+	currentCtx *DiscoveryContext
 }
 
 func NewStarlarkRecipe(name, source string, printFunc func(string)) (*StarlarkRecipe, error) {
-	sr := &StarlarkRecipe{
+	return &StarlarkRecipe{
 		Name:   name,
 		Source: source,
 		thread: &starlark.Thread{
@@ -36,23 +50,102 @@ func NewStarlarkRecipe(name, source string, printFunc func(string)) (*StarlarkRe
 				}
 			},
 		},
+	}, nil
+}
+
+func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("missing discovery context")
 	}
 
-	// Define built-ins
-	builtins := starlark.StringDict{
-		"struct": starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"json":   starlarkstruct.FromStringDict(starlark.String("json"), jsonBuiltins()),
-		"html":   starlarkstruct.FromStringDict(starlark.String("html"), htmlBuiltins()),
-		"jq":     starlarkstruct.FromStringDict(starlark.String("jq"), jqBuiltins()),
+	var pkgs []PackageDefinition
+
+	// Local add_version to collect results while also calling the context's callback
+	ctxWrapper := *ctx
+	ctxWrapper.AddVersion = func(p PackageDefinition) {
+		pkgs = append(pkgs, p)
+		if ctx.AddVersion != nil {
+			ctx.AddVersion(p)
+		}
 	}
 
-	globals, err := starlark.ExecFile(sr.thread, name+".star", source, builtins)
+	sr.currentCtx = &ctxWrapper
+
+	if !sr.registryLoaded {
+		if err := sr.loadRegistry(); err != nil {
+			return nil, err
+		}
+		if len(sr.registry) == 0 {
+			sr.legacy = true
+			sr.legacyPkgs = pkgs
+			return pkgs, nil
+		}
+	}
+
+	if sr.legacy {
+		return sr.legacyPkgs, nil
+	}
+
+	pi := ctx.PkgName
+	pi := ctx.PkgName
+	handler, regexKey, err := sr.matchHandler(pi)
 	if err != nil {
 		return nil, err
 	}
-	sr.globals = globals
+	if handler == nil {
+		return nil, fmt.Errorf("recipe not applicable: %s", sr.Name)
+	}
 
-	return sr, nil
+	if ctx.Config != nil {
+		if cached, ok, err := sr.loadHandlerCache(ctx, regexKey); err != nil {
+			return nil, err
+		} else if ok {
+			return cached, nil
+		}
+	}
+
+	_, err = starlark.Call(sr.thread, handler, starlark.Tuple{
+		starlark.String(ctx.PkgName),
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("recipe handler error: %s %w", sr.Name, err)
+	}
+
+	if ctx.Config != nil {
+		if err := sr.storeHandlerCache(ctx, regexKey, pkgs); err != nil {
+			return nil, err
+		}
+	}
+
+	return pkgs, nil
+}
+
+// Registry returns registered regex patterns and whether the recipe is legacy.
+func (sr *StarlarkRecipe) Registry(cfg config.ReadOnly) ([]string, bool, error) {
+	ctx := &DiscoveryContext{
+		Config:       cfg,
+		PkgName:      "",
+		VersionQuery: "",
+		Download: func(url string) ([]byte, error) {
+			return nil, fmt.Errorf("download disabled in index mode")
+		},
+	}
+	sr.currentCtx = ctx
+	if !sr.registryLoaded {
+		if err := sr.loadRegistry(); err != nil {
+			return nil, false, err
+		}
+		if len(sr.registry) == 0 {
+			sr.legacy = true
+		}
+	}
+
+	var keys []string
+	for k := range sr.registry {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys, sr.legacy, nil
 }
 
 func jsonBuiltins() starlark.StringDict {
@@ -339,140 +432,132 @@ func toStarlark(v any) starlark.Value {
 	}
 }
 
-func (sr *StarlarkRecipe) Discover(cfg config.ReadOnly, pkgName string, versionQuery string) (string, string, error) {
-	discover, ok := sr.globals["discover"]
-	if !ok {
-		return "", "", fmt.Errorf("discover function not found in recipe %s", sr.Name)
+func (sr *StarlarkRecipe) loadRegistry() error {
+	sr.registry = make(map[string]starlark.Callable)
+	sr.regexCache = make(map[string]*regexp.Regexp)
+
+	builtins := starlark.StringDict{
+		"struct":        starlark.NewBuiltin("struct", starlarkstruct.Make),
+		"json":          starlarkstruct.FromStringDict(starlark.String("json"), jsonBuiltins()),
+		"html":          starlarkstruct.FromStringDict(starlark.String("html"), htmlBuiltins()),
+		"jq":            starlarkstruct.FromStringDict(starlark.String("jq"), jqBuiltins()),
+		"download":      newDownloadBuiltin(sr),
+		"add_version":   newAddVersionBuiltin(sr),
+		"add_ecosystem": newAddEcosystemBuiltin(sr),
+		"add_pkgdef":    newAddPkgdefBuiltin(sr),
 	}
 
-	exts := archive.Extensions(cfg.GetOS())
-	starlarkExts := starlark.NewList(nil)
-	for _, ext := range exts {
-		starlarkExts.Append(starlark.String(ext))
-	}
-
-	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
-		"os":         starlark.String(cfg.GetOS().String()),
-		"arch":       starlark.String(cfg.GetArch().String()),
-		"extensions": starlarkExts,
-	})
-
-	res, err := starlark.Call(sr.thread, discover, starlark.Tuple{starlark.String(pkgName), starlark.String(versionQuery), ctx}, nil)
+	globals, err := starlark.ExecFile(sr.thread, sr.Name+".star", sr.Source, builtins)
 	if err != nil {
-		return "", "", err
+		return err
 	}
-
-	dict, ok := res.(*starlark.Dict)
-	if !ok {
-		return "", "", fmt.Errorf("discover must return a dict")
-	}
-
-	urlVal, ok, err := dict.Get(starlark.String("url"))
-	if err != nil || !ok {
-		return "", "", fmt.Errorf("discover result missing 'url'")
-	}
-
-	methodVal, ok, err := dict.Get(starlark.String("method"))
-	method := "GET"
-	if ok && methodVal != nil {
-		method = methodVal.(starlark.String).GoString()
-	}
-
-	return urlVal.(starlark.String).GoString(), method, nil
+	sr.globals = globals
+	sr.registryLoaded = true
+	return nil
 }
 
-func (sr *StarlarkRecipe) Parse(cfg config.ReadOnly, pkgName string, data []byte, versionQuery string) ([]PackageDefinition, error) {
-	parse, ok := sr.globals["parse"]
-	if !ok {
-		return nil, fmt.Errorf("parse function not found in recipe %s", sr.Name)
+
+func (sr *StarlarkRecipe) matchHandler(pi string) (starlark.Callable, string, error) {
+	if len(sr.registry) == 0 {
+		return nil, "", nil
 	}
-
-	exts := archive.Extensions(cfg.GetOS())
-	starlarkExts := starlark.NewList(nil)
-	for _, ext := range exts {
-		starlarkExts.Append(starlark.String(ext))
+	var keys []string
+	for k := range sr.registry {
+		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
-	ctx := starlarkstruct.FromStringDict(starlark.String("context"), starlark.StringDict{
-		"os":         starlark.String(cfg.GetOS().String()),
-		"arch":       starlark.String(cfg.GetArch().String()),
-		"extensions": starlarkExts,
-	})
-
-	res, err := starlark.Call(sr.thread, parse, starlark.Tuple{starlark.String(pkgName), starlark.String(string(data)), starlark.String(versionQuery), ctx}, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	list, ok := res.(*starlark.List)
-	if !ok {
-		return nil, fmt.Errorf("parse must return a list")
-	}
-
-	var pkgs []PackageDefinition
-	for i := 0; i < list.Len(); i++ {
-		item := list.Index(i)
-		dict, ok := item.(*starlark.Dict)
+	for _, key := range keys {
+		re, ok := sr.regexCache[key]
 		if !ok {
-			continue
-		}
-
-		pkg := PackageDefinition{}
-		pkg.Name = getString(dict, "name")
-		pkg.Version = getString(dict, "version")
-		pkg.ReleaseStatus = getString(dict, "release_status")
-		pkg.URL = getString(dict, "url")
-		pkg.Filename = getString(dict, "filename")
-		pkg.Checksum = getString(dict, "checksum")
-
-		// Parse Env
-		if envVal, ok, _ := dict.Get(starlark.String("env")); ok {
-			if envDict, ok := envVal.(*starlark.Dict); ok {
-				pkg.Env = make(map[string]string)
-				for _, k := range envDict.Keys() {
-					if ks, ok := k.(starlark.String); ok {
-						val, _, _ := envDict.Get(k)
-						if vs, ok := val.(starlark.String); ok {
-							pkg.Env[ks.GoString()] = vs.GoString()
-						}
-					}
-				}
+			anchored := key
+			if !strings.HasPrefix(anchored, "^") {
+				anchored = "^" + anchored
 			}
-		}
-
-		// Parse Symlinks
-		if symVal, ok, _ := dict.Get(starlark.String("symlinks")); ok {
-			if symDict, ok := symVal.(*starlark.Dict); ok {
-				pkg.Symlinks = make(map[string]string)
-				for _, k := range symDict.Keys() {
-					if ks, ok := k.(starlark.String); ok {
-						val, _, _ := symDict.Get(k)
-						if vs, ok := val.(starlark.String); ok {
-							pkg.Symlinks[ks.GoString()] = vs.GoString()
-						}
-					}
-				}
+			if !strings.HasSuffix(anchored, "$") {
+				anchored = anchored + "$"
 			}
+			var err error
+			re, err = regexp.Compile(anchored)
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid regex '%s' in recipe %s: %w", key, sr.Name, err)
+			}
+			sr.regexCache[key] = re
 		}
-
-		osStr := getString(dict, "os")
-		archStr := getString(dict, "arch")
-
-		pkg.OS, _ = config.ParseOS(osStr)
-		pkg.Arch, _ = config.ParseArch(archStr)
-
-		pkgs = append(pkgs, pkg)
+		if re.MatchString(pi) {
+			return sr.registry[key], key, nil
+		}
 	}
+	return nil, "", nil
+}
 
-	return pkgs, nil
+func (sr *StarlarkRecipe) handlerCachePath(ctx *DiscoveryContext, regexKey string) (string, error) {
+	if ctx == nil || ctx.Config == nil {
+		return "", fmt.Errorf("missing config for cache path")
+	}
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%s", sr.Name, regexKey, ctx.PkgName, ctx.VersionQuery, ctx.Config.GetOS(), ctx.Config.GetArch())
+	sum := sha256.Sum256([]byte(key))
+	fileName := fmt.Sprintf("handler_%x.json", sum[:])
+	return filepath.Join(ctx.Config.GetDiscoveryDir(), fileName), nil
+}
+
+func (sr *StarlarkRecipe) loadHandlerCache(ctx *DiscoveryContext, regexKey string) ([]PackageDefinition, bool, error) {
+	path, err := sr.handlerCachePath(ctx, regexKey)
+	if err != nil {
+		return nil, false, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if time.Since(info.ModTime()) > time.Hour {
+		return nil, false, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, false, err
+	}
+	var pkgs []PackageDefinition
+	if err := json.Unmarshal(data, &pkgs); err != nil {
+		return nil, false, err
+	}
+	return pkgs, true, nil
+}
+
+func (sr *StarlarkRecipe) storeHandlerCache(ctx *DiscoveryContext, regexKey string, pkgs []PackageDefinition) error {
+	path, err := sr.handlerCachePath(ctx, regexKey)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(ctx.Config.GetDiscoveryDir(), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(pkgs, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func getString(dict *starlark.Dict, key string) string {
-	val, ok, _ := dict.Get(starlark.String(key))
-	if ok {
-		if s, ok := val.(starlark.String); ok {
-			return s.GoString()
-		}
+	val, ok, err := dict.Get(starlark.String(key))
+	if err != nil || !ok || val == nil {
+		return ""
 	}
-	return ""
+
+	str, ok := val.(starlark.String)
+	if !ok {
+		return ""
+	}
+
+	return str.GoString()
 }

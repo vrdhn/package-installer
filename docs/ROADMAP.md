@@ -8,10 +8,11 @@
 *   [x] Custom CLI engine with prefix matching.
 
 ## Phase 2: Ecosystems & Repositories (Current)
-*   [ ] Implement `pi remote` command suite for decentralized recipes.
+*   [~] `pi remote` commands exist but are placeholders (no actual repo support yet).
+*   [x] Built-in recipes for Node.js, Go, OpenJDK, and Foojay distributions.
 *   [ ] Expand standard library of recipes (Rust, Python, Haskell).
 *   [ ] Add support for "bootstrapping" managers (e.g., `rustup`).
-*   [ ] Optimize Starlark discovery caching.
+*   [x] Starlark discovery caching (1-hour TTL).
 
 ## Phase 3: Advanced Sandboxing & UI (Upcoming)
 *   [ ] Networking control (HTTP/DBus proxies) inside Caves.

@@ -19,6 +19,13 @@ type Manager struct {
 	SysConfig sysconfig.ReadOnly
 }
 
+// IndexEntry represents a lazy recipe registration entry.
+type IndexEntry struct {
+	Recipe   string
+	Patterns []string
+	Legacy   bool
+}
+
 func NewManager(repo *repository.Manager, disp display.Display, sysCfg sysconfig.ReadOnly) *Manager {
 	return &Manager{
 		Repo:      repo,
@@ -57,7 +64,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 		}
 
 		// Resolve
-		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, recipeObj, p.Name, p.Version, task)
+		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, recipeObj, p.Ecosystem, p.Name, p.Version, task)
 		if err != nil {
 			task.Done()
 			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
@@ -126,7 +133,34 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 		return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 	}
 
-	pkgs, err := resolver.List(ctx, m.SysConfig, recipeObj, p.Name, p.Version, task)
+	pkgs, err := resolver.List(ctx, m.SysConfig, recipeObj, p.Ecosystem, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
+}
+
+// ListIndex returns the registered package definitions for all recipes without executing handlers.
+func (m *Manager) ListIndex(ctx context.Context) ([]IndexEntry, error) {
+	var entries []IndexEntry
+	for _, name := range m.Repo.ListRecipes() {
+		src, err := m.Repo.GetRecipe(name)
+		if err != nil {
+			return nil, err
+		}
+		recipeObj, err := recipe.NewStarlarkRecipe(name, src, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		patterns, legacy, err := recipeObj.Registry(m.SysConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, IndexEntry{
+			Recipe:   name,
+			Patterns: patterns,
+			Legacy:   legacy,
+		})
+	}
+	return entries, nil
 }

@@ -15,14 +15,14 @@ type Engine struct {
 	GlobalFlags []*Flag
 	Commands    []*Command
 	Topics      []*Topic
-	Handlers    map[string]Handler
+	Binder      func(inv *Invocation, global *GlobalFlags) (Action, error)
 	Theme       *Theme
 }
 
-func NewEngine(dsl string) (*Engine, error) {
+func MakeEngine() (*Engine, error) {
+	dsl := DefaultDSL
 	e := &Engine{
-		Handlers: make(map[string]Handler),
-		Theme:    DefaultTheme(),
+		Theme: DefaultTheme(),
 	}
 	if err := e.parseDSL(dsl); err != nil {
 		return nil, err
@@ -33,41 +33,30 @@ func NewEngine(dsl string) (*Engine, error) {
 	})
 	return e, nil
 }
-func (e *Engine) Register(cmdPath string, h Handler) {
-	e.Handlers[cmdPath] = h
-}
-func (e *Engine) parseDSL(dsl string) error {
-	p := newParser(dsl, e)
-	return p.parse()
-}
 
 type ParseResult struct {
-	Invocation *Invocation
-	Help       bool
-	HelpArgs   []string
-	Error      error
+	GlobalFlags *GlobalFlags
+	Action      Action
+	Command     *Command // Metadata
+	Help        bool
+	HelpArgs    []string
+	Error       error
 }
 
 func (e *Engine) Run(ctx context.Context, args []string) (*ExecutionResult, error) {
-	res := e.Parse(args)
-	if res.Error != nil {
-		return nil, res.Error
-	}
-	if res.Help {
-		e.PrintHelp(res.HelpArgs...)
-		return &ExecutionResult{ExitCode: 0}, nil
-	}
-	return e.Execute(ctx, res.Invocation)
+	panic("Run is deprecated, use Parse and then Execute the action")
 }
 
 func (e *Engine) Parse(args []string) *ParseResult {
 	res := &ParseResult{
-		Invocation: &Invocation{
-			Args:   make(map[string]string),
-			Flags:  make(map[string]any),
-			Global: make(map[string]any),
-		},
+		GlobalFlags: &GlobalFlags{},
 	}
+	inv := &Invocation{
+		Args:   make(map[string]string),
+		Flags:  make(map[string]any),
+		Global: make(map[string]any),
+	}
+
 	var remaining []string
 	// Parse global flags and help
 	for i := 0; i < len(args); i++ {
@@ -80,10 +69,16 @@ func (e *Engine) Parse(args []string) *ParseResult {
 		for _, gf := range e.GlobalFlags {
 			if arg == "--"+gf.Name || arg == "-"+gf.Short {
 				if gf.Type == "bool" {
-					res.Invocation.Global[gf.Name] = true
+					inv.Global[gf.Name] = true
+					if gf.Name == "verbose" {
+						res.GlobalFlags.Verbose = true
+					}
 					found = true
 				} else if gf.Type == "string" && i+1 < len(args) {
-					res.Invocation.Global[gf.Name] = args[i+1]
+					inv.Global[gf.Name] = args[i+1]
+					if gf.Name == "config" {
+						res.GlobalFlags.Config = args[i+1]
+					}
 					i++
 					found = true
 				}
@@ -104,21 +99,28 @@ func (e *Engine) Parse(args []string) *ParseResult {
 		return res
 	}
 
-	inv, err := e.resolve(res.Invocation, e.Commands, remaining)
+	finalInv, err := e.resolve(inv, e.Commands, remaining)
 	if err != nil {
 		res.Error = err
 		return res
 	}
-	res.Invocation = inv
+	res.Command = finalInv.Command
+
+	if e.Binder != nil {
+		action, err := e.Binder(finalInv, res.GlobalFlags)
+		if err != nil {
+			res.Error = err
+			return res
+		}
+		res.Action = action
+	}
+
 	return res
 }
 
-func (e *Engine) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
-	path := getCmdPath(inv.Command)
-	if h, ok := e.Handlers[path]; ok {
-		return h.Execute(ctx, inv)
-	}
-	return nil, fmt.Errorf("no handler registered for command: %s", path)
+func (e *Engine) parseDSL(dsl string) error {
+	p := newParser(dsl, e)
+	return p.parse()
 }
 
 func (e *Engine) resolve(inv *Invocation, cmds []*Command, args []string) (*Invocation, error) {
@@ -238,6 +240,14 @@ func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) error
 
 	// Check for missing required arguments
 	if argIdx < len(cmd.Args) {
+		// Allow pkg list --index without a package argument
+		if len(cmd.Args) == 1 && cmd.Parent != nil && cmd.Parent.Name == "pkg" && cmd.Name == "list" {
+			if v, ok := inv.Flags["index"]; ok {
+				if b, ok := v.(bool); ok && b {
+					return nil
+				}
+			}
+		}
 		return fmt.Errorf("argument %s is missing", cmd.Args[argIdx].Name)
 	}
 	return nil

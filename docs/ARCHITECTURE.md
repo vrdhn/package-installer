@@ -5,30 +5,33 @@
 ## Core Patterns
 
 ### Immutability
-To ensure predictability, core structures use a `ReadOnly`/`Writable` interface pattern.
-*   **ReadOnly**: Provides getters and a `Checkout()` method.
-*   **Writable**: Extends ReadOnly with setters and a `Freeze()` method.
-*   **Safety**: Attempting to modify a frozen structure or checking out a writable version twice results in a panic.
+The `config` package uses a `ReadOnly`/`Writable` interface pattern to protect base paths and system info.
+*   **ReadOnly**: Getters + `Checkout()`.
+*   **Writable**: Setters + `Freeze()`.
+*   **Safety**: Mutating a frozen config or checking out twice panics.
 
 ### Starlark Recipe Engine
-`pi` uses **Starlark** for its recipe engine. Recipes are pure, declarative, and isolated from I/O.
-1.  **Discovery**: A recipe returns a `DiscoveryRequest` (URLs, methods).
-2.  **Resolution**: The `pi` host performs the network I/O.
-3.  **Parsing**: The host passes raw data back to the recipe's `parse` function to produce `PackageDefinition` structs.
+`pi` executes **Starlark** recipes with a small set of strict built-ins. Recipes are declarative and do not perform arbitrary I/O.
+1.  **Register**: Recipes call `add_pkgdef(regex, handler)` at load time to register lazy handlers.
+2.  **Download**: Handlers call `download(url=...)` which uses host-side caching and HTTP.
+3.  **Parse**: Handlers parse data using `json`, `html`, or `jq` helpers.
+4.  **Emit**: Handlers register versions with `add_version(...)` (OS, arch, URL, filename, etc.).
 
 ### Sandboxing (Caves)
 Caves provide isolation using Linux `bubblewrap`.
-*   **Filesystem**: Restricts access to the workspace and a dedicated isolated HOME.
-*   **Symlink Forest**: Installed packages are bind-mounted read-only, with symlinks provided in the cave's `.local/bin`.
+*   **Filesystem**: System directories are mounted read-only (`/usr`, `/lib`, `/etc`, etc.). The workspace is mounted read-write at its real path.
+*   **Home**: The cave home is bind-mounted onto the user's real `HOME` path inside the sandbox.
+*   **Symlink Forest**: Package binaries are exposed via `.local/bin` in the cave home.
+*   **Devices/Agents**: `XDG_RUNTIME_DIR`, Wayland/DBus, and SSH agent are optionally passed through.
 
 ### CLI Execution Flow
 The CLI follows a strict multi-stage initialization:
 1.  **Parse DSL**: Load command definitions from `cli.def`.
-2.  **Early Parse**: Parse arguments without executing logic.
-3.  **Restriction Check**: Validate `SafeInCave` if `PI_CAVENAME` is set.
-4.  **Display Init**: Setup console, verbosity, and theme.
-5.  **Error Handling**: Process any parsing errors or help requests.
-6.  **Execute**: Run the command handler.
+2.  **Parse Args**: Parse global flags, then resolve commands and parameters.
+3.  **Restriction Check**: If `PI_CAVENAME` is set, only `safe` commands may run.
+4.  **Display Init**: Setup Bubble Tea console and verbosity.
+5.  **Help/Error Handling**: Render help or return parse errors.
+6.  **Execute**: Run the bound command handler.
 
 ### Build Information
 `pi` embeds build metadata using linker flags:
@@ -36,7 +39,8 @@ The CLI follows a strict multi-stage initialization:
 *   `BuildTimestamp`: UTC build time.
 
 ## Pipeline
-1.  **Resolve**: Map package name/version to a specific artifact via Starlark recipes.
-2.  **Download**: Fetch the artifact (HTTP/HTTPS) to a shared cache.
-3.  **Install**: Extract the artifact to a version-specific directory in `~/.cache/pi/pkgs`.
-4.  **Reify**: Update the symlink forest in the Cave Home to include the active packages.
+1.  **Resolve**: Run Starlark recipes and filter by OS/arch/version/extension.
+2.  **Download**: Fetch the artifact to `~/.cache/pi/downloads` with cache locking.
+3.  **Install**: Extract into `~/.cache/pi/pkgs/<name-version-os-arch>` (atomic tmp dir).
+4.  **Prepare**: Build symlink map and env for the cave.
+5.  **Run**: For `cave run/enter`, launch bubblewrap with binds and env.

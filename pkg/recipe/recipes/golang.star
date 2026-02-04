@@ -1,27 +1,31 @@
-def discover(pkg_name, version_query, context):
-    return {
-        "url": "https://go.dev/dl/?mode=json&include=all",
-        "method": "GET"
-    }
-
-def parse(pkg_name, data, version_query, context):
+def resolve_golang(pkg_name):
+    data = download(url = "https://go.dev/dl/?mode=json&include=all")
     releases = json.decode(data)
-    pkgs = []
+
+    #  {
+    #  "version": "go1.26rc2",
+    #  "stable": false,
+    #  "files": [
+    #   {
+    #    "filename": "go1.26rc2.src.tar.gz",
+    #    "os": "",
+    #    "arch": "",
+    #    "version": "go1.26rc2",
+    #    "sha256": "e25cc8c5ffe1241a5d87199209243d70c24847260fb1ea7b163a95b537de65ac",
+    #    "size": 34091929,
+    #    "kind": "source"
+    #   },
+    #
 
     for release in releases:
         # release["version"] is like "go1.21.6"
         version_str = release["version"]
         if version_str.startswith("go"):
             version_str = version_str[2:]
-        
+
         status = "unstable"
         if release.get("stable", False):
             status = "stable"
-        
-        # We ignore version_query filtering here and return everything
-        # The resolver will filter by version if needed.
-        # Note: 'stable' query logic is lost if we don't filter here, 
-        # but the instruction was "return every version".
 
         for file in release["files"]:
             if file.get("kind") != "archive":
@@ -36,7 +40,7 @@ def parse(pkg_name, data, version_query, context):
                 os_type = "darwin"
             elif go_os == "windows":
                 os_type = "windows"
-            
+
             # Map Arch
             go_arch = file["arch"]
             arch_type = "unknown"
@@ -44,23 +48,25 @@ def parse(pkg_name, data, version_query, context):
                 arch_type = "x64"
             elif go_arch == "arm64":
                 arch_type = "arm64"
-            
+
             filename = file["filename"]
-            
-            pkgs.append({
-                "name": "golang",
-                "version": version_str,
-                "release_status": status,
-                "os": os_type,
-                "arch": arch_type,
-                "url": "https://go.dev/dl/" + filename,
-                "filename": filename,
-                "env": {
+
+            add_version(
+                name = "golang",
+                version = version_str,
+                release_status = status,
+                os = os_type,
+                arch = arch_type,
+                url = "https://go.dev/dl/" + filename,
+                checksum = "sha256:" + file["sha256"],
+                filename = filename,
+                env = {
                     "GOROOT": "${PI_PKG_ROOT}",
+                    "GOPATH": "~/go"
                 },
-                "symlinks": {
+                symlinks = {
                     "go/bin/*": ".local/bin"
                 }
-            })
+            )
 
-    return pkgs
+add_pkgdef("golang", resolve_golang)

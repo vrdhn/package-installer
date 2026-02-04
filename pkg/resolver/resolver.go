@@ -17,26 +17,28 @@ import (
 )
 
 // List returns all available packages for the given recipe and version query.
-func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
+func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, ecosystem string, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
 	task.SetStage("List", r.GetName())
 
-	url, method, data, err := fetchDiscoveryData(ctx, cfg, r, pkgName, version, task)
-	if err != nil {
-		return nil, err
+	fullName := pkgName
+	if ecosystem != "" {
+		fullName = ecosystem + ":" + pkgName
 	}
-	_ = url
-	_ = method
+	dCtx := &recipe.DiscoveryContext{
+		Config:       cfg,
+		PkgName:      fullName,
+		VersionQuery: version,
+		Download: func(url string) ([]byte, error) {
+			return fetchData(ctx, cfg, url, task)
+		},
+	}
 
-	pkgs, err := r.Parse(cfg, pkgName, data, version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse discovery data: %w", err)
-	}
-	return pkgs, nil
+	return r.Execute(dCtx)
 }
 
 // Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
-	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
+func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, ecosystem string, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+	pkgs, err := List(ctx, cfg, r, ecosystem, pkgName, version, task)
 	if err != nil {
 		return nil, err
 	}
@@ -94,15 +96,10 @@ func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName 
 	return bestMatch, nil
 }
 
-func fetchDiscoveryData(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, versionQuery string, task display.Task) (string, string, []byte, error) {
-	url, method, err := r.Discover(cfg, pkgName, versionQuery)
-	if err != nil {
-		return "", "", nil, err
-	}
-
+func fetchData(ctx context.Context, cfg config.ReadOnly, url string, task display.Task) ([]byte, error) {
 	// 1. Create discovery directory
 	if err := os.MkdirAll(cfg.GetDiscoveryDir(), 0755); err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
 	// 2. Generate cache filename (sanitized URL)
@@ -113,51 +110,49 @@ func fetchDiscoveryData(ctx context.Context, cfg config.ReadOnly, r recipe.Recip
 	// 3. Check TTL (1 hour)
 	if info, err := os.Stat(cachePath); err == nil {
 		if time.Since(info.ModTime()) < 1*time.Hour {
-			data, err := os.ReadFile(cachePath)
-			return url, method, data, err
+			return os.ReadFile(cachePath)
 		}
 	}
 
 	// 4. Lock and Fetch
 	unlock, err := cache.Lock(cachePath)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 	defer unlock()
 
 	// Re-check after locking
 	if info, err := os.Stat(cachePath); err == nil {
 		if time.Since(info.ModTime()) < 1*time.Hour {
-			data, err := os.ReadFile(cachePath)
-			return url, method, data, err
+			return os.ReadFile(cachePath)
 		}
 	}
 
-	task.Log(fmt.Sprintf("Fetching discovery data from %s", url))
-	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	task.Log(fmt.Sprintf("Fetching data from %s", url))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", nil, fmt.Errorf("failed to fetch discovery data: %s", resp.Status)
+		return nil, fmt.Errorf("failed to fetch data: %s", resp.Status)
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
 	// Write to cache
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
-		return "", "", nil, err
+		return nil, err
 	}
 
-	return url, method, data, nil
+	return data, nil
 }

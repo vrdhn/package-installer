@@ -18,6 +18,7 @@ cmd pkg install "Install a package"
 cmd pkg list "List available versions for a package"
     arg package string "Package name (e.g. go)"
     flag all bool "Show all architectures/OSs" a
+    flag index bool "List registry patterns only" i
     example "pi pkg list go"
 
 cmd cave "Manage the cave (sandbox)"

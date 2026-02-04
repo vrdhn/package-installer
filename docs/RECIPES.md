@@ -1,35 +1,47 @@
 # Recipes & Packages
 
-`pi` uses a decentralized recipe model to support any ecosystem.
+`pi` uses a decentralized recipe model to support any ecosystem. Recipes are Starlark files that emit package versions via `add_version(...)`.
 
 ## Package Identifiers
-Packages follow the format: `[ecosystem:]name[@version]`
+Packages follow the format: `[ecosystem:]name[=version]`
 
-*   `nodejs@20`: Latest 20.x version of Node.js.
+*   `nodejs=20`: Latest 20.x version of Node.js.
 *   `go=stable`: Latest stable Go.
 *   `pip:numpy`: Python package (handled by ecosystem manager).
 
 ## Starlark Recipes
-Recipes are written in Starlark and must implement `discover` and `parse`.
+Recipes are written in Starlark and register package handlers via `add_pkgdef(...)`.
 
-### `discover(pkg_name, version_query, context)`
-Returns a dict with `url` and `method` for version discovery.
+Handlers use this signature:
+`def handler(pkg_name):`
 
-### `parse(pkg_name, data, version_query, context)`
-Parses the discovery response and returns a list of `PackageDefinition` dicts. 
+### Execution Model
+1.  Register handlers with `add_pkgdef(regex, handler)` at module load time.
+2.  When invoked, handlers call `download(url=...)` to fetch discovery data (host-side cached).
+3.  Handlers parse the data with `json`, `html`, or `jq`, then emit versions using `add_version(...)`.
 
-**Note**: Recipes should return *all* available versions, architectures, and operating systems found in the data. The `pi` host handles filtering based on the user's system and version query.
+**Note**: Recipes should emit *all* available versions, architectures, and operating systems. The host filters by OS/arch/version query.
 
-Each package dict should include:
+### Required `add_version(...)` fields
+All fields are required keyword args (use empty strings if unknown):
 - `name`, `version`, `release_status` (stable, lts, current, rc, ea)
-- `os`, `arch`, `url`, `filename`
-- `env` (optional map)
-- `symlinks` (optional map)
-*   `json.decode(data)` / `json.encode(val)`
-*   `html.parse(data)` / `html.to_json(data)`
-*   `jq.query(filter, val)`
+- `os`, `arch`, `url`, `filename`, `checksum`
+- `env` (dict, can be empty)
+- `symlinks` (dict, can be empty)
+
+### Built-ins
+- `download(url=...)`
+- `json.decode(data)` / `json.encode(val)`
+- `html.parse(data)` / `html.to_json(data)`
+- `jq.query(filter, val)`
+- `add_version(...)`
+- `add_pkgdef(regex, handler)`
+- `add_ecosystem(name=...)` (placeholder)
+
+### Context
+Recipes do not receive a context object. They should emit as many versions as possible.
+Filtering is performed by `pi` after discovery.
 
 ## Repositories
-Recipes are collected in repositories (Local, Git, or Archive).
-*   `pi remote add <name> <url>`: Register a new recipe source.
-*   `pi remote list`: View active sources.
+Recipes are currently loaded from built-in Starlark files embedded in the binary.
+Remote repository management commands exist but are placeholders.

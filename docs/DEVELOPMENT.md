@@ -1,10 +1,10 @@
 # Development Guide
 
 ## Coding Standards
-*   **Safety**: Use latest Go features. Avoid `any`. Always include `default: panic` in exhaustive switches.
-*   **Structure**: Keep files < 250 lines. Keep functions < 15 lines. 
-*   **Immutability**: Use ReadOnly/Writable interfaces for core state.
-*   **Packages**: Prefer many small packages over a few large ones.
+*   **Safety**: Prefer explicit types; use `any` sparingly. Use `default: panic` in truly exhaustive switches.
+*   **Structure**: Keep functions small where practical, but no hard limits are enforced.
+*   **Immutability**: The ReadOnly/Writable pattern is used in `config`; other packages are conventional Go structs.
+*   **Packages**: The codebase favors small, focused packages.
 
 ## Module Overview
 | Package | Description |

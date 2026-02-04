@@ -31,18 +31,19 @@ func main() {
 }
 func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) {
 	// 1. Parse cli.def
-	engine, err := cli.NewEngine(cli.DefaultDSL)
+	cliEngine, err := cli.MakeEngine()
 	if err != nil {
-		return nil, fmt.Errorf("error parsing CLI definition: %w", err)
+		return nil, fmt.Errorf("INTERNAL ERROR:  parsing CLI definition: %w", err)
 	}
+	cliEngine.Binder = cli.Binder
 
 	// 2. Parse command line arguments
-	pr := engine.Parse(args)
+	pr := cliEngine.Parse(args)
 
 	// 3. If inside cave, check restrictions
 	if envCave := os.Getenv("PI_CAVENAME"); envCave != "" {
-		if pr.Invocation != nil && pr.Invocation.Command != nil {
-			if !pr.Invocation.Command.SafeInCave {
+		if pr.Command != nil {
+			if !pr.Command.SafeInCave {
 				return nil, fmt.Errorf("already in cave %s", envCave)
 			}
 		}
@@ -52,10 +53,8 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 	disp := display.NewConsole()
 	defer disp.Close()
 
-	if pr.Invocation != nil {
-		if v, ok := pr.Invocation.Global["verbose"].(bool); ok && v {
-			disp.SetVerbose(true)
-		}
+	if pr.GlobalFlags != nil && pr.GlobalFlags.Verbose {
+		disp.SetVerbose(true)
 	}
 
 	// 5. Generate any errors etc for the command line parsing
@@ -63,7 +62,7 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 		return nil, pr.Error
 	}
 	if pr.Help {
-		engine.PrintHelp(pr.HelpArgs...)
+		cliEngine.PrintHelp(pr.HelpArgs...)
 		return &cli.ExecutionResult{ExitCode: 0}, nil
 	}
 
@@ -82,31 +81,18 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 	pkgsMgr := pkgs.NewManager(repo, disp, sysCfg)
 	diskMgr := disk.NewManager(sysCfg)
 
-	handler := &cli.DefaultHandler{
+	managers := &cli.Managers{
 		Repo:    repo,
 		Disp:    disp,
 		CaveMgr: caveMgr,
 		PkgsMgr: pkgsMgr,
 		DiskMgr: diskMgr,
 		SysCfg:  sysCfg,
-		Theme:   engine.Theme,
 	}
 
-	// Register the same handler for all paths, it internally switches
-	registerAll(engine, engine.Commands, handler)
+	if pr.Action == nil {
+		return nil, fmt.Errorf("no action defined for command")
+	}
 
-	return engine.Execute(ctx, pr.Invocation)
-}
-func registerAll(e *cli.Engine, cmds []*cli.Command, h cli.Handler) {
-	for _, c := range cmds {
-		path := getCmdPath(c)
-		e.Register(path, h)
-		registerAll(e, c.Subs, h)
-	}
-}
-func getCmdPath(c *cli.Command) string {
-	if c.Parent == nil {
-		return c.Name
-	}
-	return getCmdPath(c.Parent) + "/" + c.Name
+	return pr.Action(ctx, managers)
 }

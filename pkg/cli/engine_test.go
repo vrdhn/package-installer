@@ -7,12 +7,8 @@ import (
 	"testing"
 )
 
-type mockHandler struct {
+type mockAction struct {
 	err error
-}
-
-func (m *mockHandler) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
-	return nil, m.err
 }
 
 func TestEngineErrorPropagation(t *testing.T) {
@@ -21,21 +17,22 @@ cmd parent "Parent command"
 cmd parent child "Child command"
     arg required string "Required argument"
 `
-	engine, err := NewEngine(dsl)
+	engine, err := MakeEngine(dsl)
 	if err != nil {
 		t.Fatalf("NewEngine failed: %v", err)
 	}
 
-	// Register a handler that returns a validation error
-	engine.Register("parent/child", &mockHandler{
-		err: fmt.Errorf("argument required is missing"),
-	})
+	engine.Binder = func(inv *Invocation, global *GlobalFlags) (Action, error) {
+		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+			return nil, fmt.Errorf("action error")
+		}, nil
+	}
 
 	// Invoke: pi parent child
-	// Should fail with "argument required is missing"
+	// Should fail with "argument required is missing" during Parse
 	pr := engine.Parse([]string{"parent", "child"})
 	if pr.Error == nil {
-		t.Fatal("Expected error, got nil")
+		t.Fatal("Expected error during Parse, got nil")
 	}
 
 	if !strings.Contains(pr.Error.Error(), "argument required is missing") {
@@ -48,7 +45,7 @@ func TestEngineUnknownCommand(t *testing.T) {
 cmd parent "Parent command"
 cmd parent child "Child command"
 `
-	engine, err := NewEngine(dsl)
+	engine, err := MakeEngine(dsl)
 	if err != nil {
 		t.Fatalf("NewEngine failed: %v", err)
 	}
