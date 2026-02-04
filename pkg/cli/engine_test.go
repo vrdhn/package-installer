@@ -33,15 +33,13 @@ cmd parent child "Child command"
 
 	// Invoke: pi parent child
 	// Should fail with "argument required is missing"
-	// Before fix: would show help for "parent" and return nil error (or exit code 0)
-
-	_, err = engine.Run(context.Background(), []string{"parent", "child"})
-	if err == nil {
+	pr := engine.Parse([]string{"parent", "child"})
+	if pr.Error == nil {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "argument required is missing") {
-		t.Errorf("Expected error 'argument required is missing', got: %v", err)
+	if !strings.Contains(pr.Error.Error(), "argument required is missing") {
+		t.Errorf("Expected error 'argument required is missing', got: %v", pr.Error)
 	}
 }
 
@@ -56,14 +54,11 @@ cmd parent child "Child command"
 	}
 
 	// Invoke: pi parent unknown
-	// Should fall back to showing help for parent (which returns nil error in Run logic currently)
-	// Actually Run() returns {ExitCode:0}, nil if help is printed.
-
-	res, err := engine.Run(context.Background(), []string{"parent", "unknown"})
-	if err != nil {
-		t.Fatalf("Expected nil error (help shown), got: %v", err)
+	pr := engine.Parse([]string{"parent", "unknown"})
+	if pr.Error == nil {
+		t.Fatal("Expected error for unknown subcommand, got nil")
 	}
-	if res.ExitCode != 0 {
-		t.Errorf("Expected exit code 0, got %d", res.ExitCode)
+	if !strings.Contains(pr.Error.Error(), "unknown command") {
+		t.Errorf("Expected unknown command error, got: %v", pr.Error)
 	}
 }

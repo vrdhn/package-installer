@@ -4,6 +4,9 @@ global
     flag config string "Path to config file" c
 
 # Commands
+cmd version "Show version information"
+    safe
+
 cmd pkg "Manage packages"
 
 cmd pkg install "Install a package"
@@ -20,6 +23,7 @@ cmd pkg list "List available versions for a package"
 cmd cave "Manage the cave (sandbox)"
 
 cmd cave info "Display information about the current cave"
+    safe
     example "pi cave info"
 
 cmd cave list "List all registered caves and their variants"

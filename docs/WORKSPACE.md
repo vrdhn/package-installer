@@ -7,17 +7,26 @@ The manifest defines the requirements for a workspace.
 
 ```json
 {
-  "cave": {
-    "packages": ["nodejs@20", "go@1.22"],
-    "env": { "DEBUG": "1" }
-  },
+  "name": "myproject",
+  "workspace": "/home/user/Projects/myproject",
+  "home": "myproject",
   "variants": {
+    "": {
+      "pkgs": ["nodejs@20", "go@1.22"],
+      "env": { "DEBUG": "1" }
+    },
     "legacy": {
-      "packages": ["nodejs@18"]
+      "pkgs": ["nodejs@18"]
     }
   }
 }
 ```
+
+## Environment Variables
+`pi` uses environment variables to manage and discover active caves:
+
+*   `PI_WORKSPACE`: Overrides the workspace root discovery.
+*   `PI_CAVENAME`: Set inside a cave to `name:variant`. When set on the host, `pi` restricts execution to safe commands only to prevent nesting.
 
 ## The Symlink Forest
 To avoid PATH pollution, `pi` populates a "Symlink Forest" inside the Cave's private HOME (`~/.local/state/pi/homes/<id>`).

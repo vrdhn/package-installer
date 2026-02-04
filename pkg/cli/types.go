@@ -23,13 +23,14 @@ type Arg struct {
 
 // Immutable
 type Command struct {
-	Name     string
-	Desc     string
-	Args     []*Arg
-	Flags    []*Flag
-	Subs     []*Command
-	Parent   *Command
-	Examples []string
+	Name       string
+	Desc       string
+	SafeInCave bool
+	Args       []*Arg
+	Flags      []*Flag
+	Subs       []*Command
+	Parent     *Command
+	Examples   []string
 }
 
 // Immutable

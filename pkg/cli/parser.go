@@ -63,6 +63,13 @@ func (p *parser) parseStatement() error {
 		return p.parseTopic()
 	case "text":
 		return p.parseText()
+	case "safe":
+		if p.lastCmd == nil {
+			return fmt.Errorf("line %d: 'safe' must follow a 'cmd'", p.tok.line)
+		}
+		p.lastCmd.SafeInCave = true
+		p.next()
+		return nil
 	default:
 		panic("unreachable")
 	}

@@ -16,9 +16,15 @@ Recipes are written in Starlark and must implement `discover` and `parse`.
 Returns a dict with `url` and `method` for version discovery.
 
 ### `parse(pkg_name, data, version_query, context)`
-Parses the discovery response and returns a list of `PackageDefinition` dicts.
+Parses the discovery response and returns a list of `PackageDefinition` dicts. 
 
-### Built-in Helpers
+**Note**: Recipes should return *all* available versions, architectures, and operating systems found in the data. The `pi` host handles filtering based on the user's system and version query.
+
+Each package dict should include:
+- `name`, `version`, `release_status` (stable, lts, current, rc, ea)
+- `os`, `arch`, `url`, `filename`
+- `env` (optional map)
+- `symlinks` (optional map)
 *   `json.decode(data)` / `json.encode(val)`
 *   `html.parse(data)` / `html.to_json(data)`
 *   `jq.query(filter, val)`

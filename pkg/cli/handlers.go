@@ -32,14 +32,9 @@ func (h *DefaultHandler) Execute(ctx context.Context, inv *Invocation) (*Executi
 	}
 	path := getCmdPath(inv.Command)
 
-	// Restriction: if already in a cave, only allow 'cave info'
-	if envCave := os.Getenv("PI_CAVENAME"); envCave != "" {
-		if path != "cave/info" {
-			return nil, fmt.Errorf("already in cave %s", envCave)
-		}
-	}
-
 	switch path {
+	case "version":
+		fmt.Println(config.GetBuildInfo())
 	case "pkg/install":
 		return h.runInstall(ctx, inv)
 	case "pkg/list":

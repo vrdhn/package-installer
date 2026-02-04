@@ -40,29 +40,50 @@ func (e *Engine) parseDSL(dsl string) error {
 	p := newParser(dsl, e)
 	return p.parse()
 }
+
+type ParseResult struct {
+	Invocation *Invocation
+	Help       bool
+	HelpArgs   []string
+	Error      error
+}
+
 func (e *Engine) Run(ctx context.Context, args []string) (*ExecutionResult, error) {
-	inv := &Invocation{
-		Args:   make(map[string]string),
-		Flags:  make(map[string]any),
-		Global: make(map[string]any),
+	res := e.Parse(args)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.Help {
+		e.PrintHelp(res.HelpArgs...)
+		return &ExecutionResult{ExitCode: 0}, nil
+	}
+	return e.Execute(ctx, res.Invocation)
+}
+
+func (e *Engine) Parse(args []string) *ParseResult {
+	res := &ParseResult{
+		Invocation: &Invocation{
+			Args:   make(map[string]string),
+			Flags:  make(map[string]any),
+			Global: make(map[string]any),
+		},
 	}
 	var remaining []string
-	helpRequested := false
 	// Parse global flags and help
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--help" || arg == "-h" {
-			helpRequested = true
+			res.Help = true
 			continue
 		}
 		found := false
 		for _, gf := range e.GlobalFlags {
 			if arg == "--"+gf.Name || arg == "-"+gf.Short {
 				if gf.Type == "bool" {
-					inv.Global[gf.Name] = true
+					res.Invocation.Global[gf.Name] = true
 					found = true
 				} else if gf.Type == "string" && i+1 < len(args) {
-					inv.Global[gf.Name] = args[i+1]
+					res.Invocation.Global[gf.Name] = args[i+1]
 					i++
 					found = true
 				}
@@ -72,17 +93,35 @@ func (e *Engine) Run(ctx context.Context, args []string) (*ExecutionResult, erro
 			remaining = append(remaining, arg)
 		}
 	}
-	if helpRequested {
-		e.PrintHelp(remaining...)
-		return &ExecutionResult{ExitCode: 0}, nil
+
+	if res.Help {
+		res.HelpArgs = remaining
+		return res
 	}
+
 	if len(remaining) == 0 {
-		e.PrintHelp()
-		return &ExecutionResult{ExitCode: 0}, nil
+		res.Help = true
+		return res
 	}
-	return e.dispatch(ctx, inv, e.Commands, remaining)
+
+	inv, err := e.resolve(res.Invocation, e.Commands, remaining)
+	if err != nil {
+		res.Error = err
+		return res
+	}
+	res.Invocation = inv
+	return res
 }
-func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command, args []string) (*ExecutionResult, error) {
+
+func (e *Engine) Execute(ctx context.Context, inv *Invocation) (*ExecutionResult, error) {
+	path := getCmdPath(inv.Command)
+	if h, ok := e.Handlers[path]; ok {
+		return h.Execute(ctx, inv)
+	}
+	return nil, fmt.Errorf("no handler registered for command: %s", path)
+}
+
+func (e *Engine) resolve(inv *Invocation, cmds []*Command, args []string) (*Invocation, error) {
 	word := args[0]
 	// Command match
 	var matches []*Command
@@ -106,38 +145,35 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 		cmd := matches[0]
 		// Special case for built-in help
 		if cmd.Name == "help" {
-			e.PrintHelp(args[1:]...)
-			return &ExecutionResult{ExitCode: 0}, nil
+			// This is a hack because our parser returns help requested
+			return nil, fmt.Errorf("help requested")
 		}
 		currArgs := args[1:]
 		// If help requested for this command
 		if len(currArgs) > 0 && (currArgs[0] == "--help" || currArgs[0] == "-h") {
-			e.PrintCommandHelp(cmd)
-			return &ExecutionResult{ExitCode: 0}, nil
+			return nil, fmt.Errorf("help requested for %s", cmd.Name)
 		}
 		// Recurse to subcommands if possible
 		if len(currArgs) > 0 && len(cmd.Subs) > 0 {
-			res, err := e.dispatch(ctx, inv, cmd.Subs, currArgs)
+			subInv, err := e.resolve(inv, cmd.Subs, currArgs)
 			if err == nil {
-				return res, nil
+				return subInv, nil
 			}
-			// Propagate error unless it's "unknown command", which means we should fallback to this command's help
+			// Propagate error unless it's "unknown command"
 			if !strings.HasPrefix(err.Error(), "unknown command") {
 				return nil, err
 			}
 		}
-		// If no subcommands matched but command has subcommands, show help
+		// If no subcommands matched but command has subcommands, it's an error in this new flow
+		// because we want precise parsing. Actually, if we want help, we should handle it.
 		if len(cmd.Subs) > 0 {
-			e.PrintCommandHelp(cmd)
-			return &ExecutionResult{ExitCode: 0}, nil
+			return nil, fmt.Errorf("unknown command: %s %s", cmd.Name, currArgs[0])
 		}
 		inv.Command = cmd
-		e.parseParams(inv, cmd, currArgs)
-		path := getCmdPath(cmd)
-		if h, ok := e.Handlers[path]; ok {
-			return h.Execute(ctx, inv)
+		if err := e.parseParams(inv, cmd, currArgs); err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("no handler registered for command: %s", path)
+		return inv, nil
 	}
 	// Omitted parent support
 	if len(cmds) == len(e.Commands) {
@@ -159,16 +195,15 @@ func (e *Engine) dispatch(ctx context.Context, inv *Invocation, cmds []*Command,
 		if len(subMatches) == 1 {
 			s := subMatches[0]
 			inv.Command = s
-			e.parseParams(inv, s, args[1:])
-			path := getCmdPath(s)
-			if h, ok := e.Handlers[path]; ok {
-				return h.Execute(ctx, inv)
+			if err := e.parseParams(inv, s, args[1:]); err != nil {
+				return nil, err
 			}
+			return inv, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown command: %s", word)
 }
-func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) {
+func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) error {
 	argIdx := 0
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -200,6 +235,12 @@ func (e *Engine) parseParams(inv *Invocation, cmd *Command, args []string) {
 			}
 		}
 	}
+
+	// Check for missing required arguments
+	if argIdx < len(cmd.Args) {
+		return fmt.Errorf("argument %s is missing", cmd.Args[argIdx].Name)
+	}
+	return nil
 }
 func (e *Engine) PrintHelp(args ...string) {
 	t := e.Theme

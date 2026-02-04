@@ -21,6 +21,20 @@ Caves provide isolation using Linux `bubblewrap`.
 *   **Filesystem**: Restricts access to the workspace and a dedicated isolated HOME.
 *   **Symlink Forest**: Installed packages are bind-mounted read-only, with symlinks provided in the cave's `.local/bin`.
 
+### CLI Execution Flow
+The CLI follows a strict multi-stage initialization:
+1.  **Parse DSL**: Load command definitions from `cli.def`.
+2.  **Early Parse**: Parse arguments without executing logic.
+3.  **Restriction Check**: Validate `SafeInCave` if `PI_CAVENAME` is set.
+4.  **Display Init**: Setup console, verbosity, and theme.
+5.  **Error Handling**: Process any parsing errors or help requests.
+6.  **Execute**: Run the command handler.
+
+### Build Information
+`pi` embeds build metadata using linker flags:
+*   `BuildVersion`: Git tag or commit hash.
+*   `BuildTimestamp`: UTC build time.
+
 ## Pipeline
 1.  **Resolve**: Map package name/version to a specific artifact via Starlark recipes.
 2.  **Download**: Fetch the artifact (HTTP/HTTPS) to a shared cache.
