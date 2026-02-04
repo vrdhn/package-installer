@@ -57,7 +57,15 @@ func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName 
 		}
 
 		// Basic filtering
-		if version != "latest" && version != "stable" && version != "" && !strings.HasPrefix(p.Version, version) {
+		if version == "stable" {
+			if p.ReleaseStatus != "stable" && p.ReleaseStatus != "lts" {
+				continue
+			}
+		} else if version == "lts" {
+			if p.ReleaseStatus != "lts" {
+				continue
+			}
+		} else if version != "latest" && version != "" && !strings.HasPrefix(p.Version, version) {
 			continue
 		}
 
