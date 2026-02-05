@@ -7,8 +7,8 @@
 pi [global flags] <command> [command flags] <subcommand> [subcommand flags] [args]
 ```
 
-*   **Prefix Matching**: `pi rem` matches `pi remote` if unambiguous.
-*   **Command Omission**: `pi list` resolves to `pi remote list` if `list` is unique among all subcommands.
+*   **Prefix Matching**: `pi rep` matches `pi repo` if unambiguous.
+*   **Command Omission**: `pi list` resolves to `pi repo list` if `list` is unique among all subcommands.
 *   **Position Independence**: Command flags can be interleaved with args after the command is resolved.
 *   **Global Flags**: Global flags are parsed anywhere in the argument list.
 *   **Config Flag**: `--config/-c` is parsed but not yet wired to config loading.
@@ -38,4 +38,4 @@ The CLI structure is defined in `pkg/cli/cli.def` using a simple DSL:
 *   `cave sync`: Placeholder (currently prints a message).
 *   `cave run <cmd>`: Executes a command inside the sandbox.
 *   `cave enter`: Shortcut for `cave run` with `/bin/bash`.
-*   `remote list` / `remote add`: Placeholders (currently print messages).
+*   `repo list` / `repo add`: Placeholders (currently print messages).

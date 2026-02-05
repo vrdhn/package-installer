@@ -8,7 +8,7 @@
 *   [x] Custom CLI engine with prefix matching.
 
 ## Phase 2: Ecosystems & Repositories (Current)
-*   [~] `pi remote` commands exist but are placeholders (no actual repo support yet).
+*   [~] `pi repo` commands exist but are placeholders (no actual repo support yet).
 *   [x] Built-in recipes for Node.js, Go, OpenJDK, and Foojay distributions.
 *   [ ] Expand standard library of recipes (Rust, Python, Haskell).
 *   [ ] Add support for "bootstrapping" managers (e.g., `rustup`).

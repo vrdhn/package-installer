@@ -73,16 +73,16 @@ cmd disk uninstall "Wipe all pi data (cache, state, and config)"
     flag force bool "Skip confirmation prompt" f
     example "pi disk uninstall"
 
-cmd remote "Manage remote repositories"
+cmd repo "Manage repositories"
 
-cmd remote list "List all remote repositories"
-    example "pi remote list"
+cmd repo list "List all repositories"
+    example "pi repo list"
     example "pi list"
 
-cmd remote add "Add a new remote repository"
+cmd repo add "Add a new repository"
     arg name string "Name of the repository"
     arg url string "URL of the repository"
-    example "pi remote add official https://github.com/google/pi-recipes"
+    example "pi repo add official https://github.com/google/pi-recipes"
 
 # Help Topics
 topic about "Overview"

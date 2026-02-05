@@ -30,43 +30,17 @@ func main() {
 	os.Exit(res.ExitCode)
 }
 func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) {
-	// 1. Parse cli.def
-	cliEngine, err := cli.MakeEngine()
+	// 1. Parse command line arguments
+	action, err := cli.Parse(&cli.DefaultHandlers{}, args)
 	if err != nil {
-		return nil, fmt.Errorf("INTERNAL ERROR:  parsing CLI definition: %w", err)
-	}
-	cliEngine.Binder = cli.Binder
-
-	// 2. Parse command line arguments
-	pr := cliEngine.Parse(args)
-
-	// 3. If inside cave, check restrictions
-	if envCave := os.Getenv("PI_CAVENAME"); envCave != "" {
-		if pr.Command != nil {
-			if !pr.Command.SafeInCave {
-				return nil, fmt.Errorf("already in cave %s", envCave)
-			}
-		}
+		return nil, err
 	}
 
-	// 4. Initialize console, setup verbosity, theme etc.
+	// 2. Initialize console, setup verbosity, theme etc.
 	disp := display.NewConsole()
 	defer disp.Close()
 
-	if pr.GlobalFlags != nil && pr.GlobalFlags.Verbose {
-		disp.SetVerbose(true)
-	}
-
-	// 5. Generate any errors etc for the command line parsing
-	if pr.Error != nil {
-		return nil, pr.Error
-	}
-	if pr.Help {
-		cliEngine.PrintHelp(pr.HelpArgs...)
-		return &cli.ExecutionResult{ExitCode: 0}, nil
-	}
-
-	// 6. Execute commands
+	// 3. Execute commands
 	sysCfg, err := config.Init()
 	if err != nil {
 		return nil, fmt.Errorf("error initializing config: %w", err)
@@ -90,9 +64,9 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 		SysCfg:  sysCfg,
 	}
 
-	if pr.Action == nil {
+	if action == nil {
 		return nil, fmt.Errorf("no action defined for command")
 	}
 
-	return pr.Action(ctx, managers)
+	return action(ctx, managers)
 }

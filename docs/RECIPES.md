@@ -63,4 +63,4 @@ Commands:
 
 ## Repositories
 Recipes are currently loaded from built-in Starlark files embedded in the binary.
-Remote repository management commands exist but are placeholders.
+Repository management commands exist but are placeholders.
