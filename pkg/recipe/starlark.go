@@ -505,15 +505,8 @@ func (sr *StarlarkRecipe) matchHandler(pi string) (starlark.Callable, string, er
 	for _, key := range keys {
 		re, ok := sr.regexCache[key]
 		if !ok {
-			anchored := key
-			if !strings.HasPrefix(anchored, "^") {
-				anchored = "^" + anchored
-			}
-			if !strings.HasSuffix(anchored, "$") {
-				anchored = anchored + "$"
-			}
 			var err error
-			re, err = regexp.Compile(anchored)
+			re, err = CompileAnchored(key)
 			if err != nil {
 				return nil, "", fmt.Errorf("invalid regex '%s' in recipe %s: %w", key, sr.Name, err)
 			}

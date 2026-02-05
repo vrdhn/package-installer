@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"pi/pkg/config"
 	"pi/pkg/display"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -91,7 +90,7 @@ func (m *Manager) Resolve(pkgName string, cfg config.ReadOnly) (string, string, 
 			continue
 		}
 		for _, pattern := range patterns {
-			re, err := compileAnchored(pattern)
+			re, err := recipe.CompileAnchored(pattern)
 			if err != nil {
 				return "", "", fmt.Errorf("invalid regex '%s' in recipe %s: %w", pattern, recipeName, err)
 			}
@@ -126,15 +125,4 @@ func (m *Manager) Resolve(pkgName string, cfg config.ReadOnly) (string, string, 
 	}
 
 	return matches[0].recipe, matches[0].regex, nil
-}
-
-func compileAnchored(pattern string) (*regexp.Regexp, error) {
-	anchored := pattern
-	if !strings.HasPrefix(anchored, "^") {
-		anchored = "^" + anchored
-	}
-	if !strings.HasSuffix(anchored, "$") {
-		anchored = anchored + "$"
-	}
-	return regexp.Compile(anchored)
 }

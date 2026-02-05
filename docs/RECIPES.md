@@ -45,6 +45,20 @@ Filtering is performed by `pi` after discovery.
 
 If multiple recipe regexes match a requested package, `pi` prints the matching repository/regex list and exits.
 
+## Recipe REPL
+Use the REPL to iterate on Starlark recipes locally:
+
+```sh
+pi recipe repl ./recipes/nodejs.star
+```
+
+Commands:
+- `show` / `patterns`: list registered regex patterns
+- `run <pkg>`: execute the matching handler and summarize results
+- `run-regex <regex> <pkg>`: run a specific regex when multiple match
+- `reload`: reload the recipe file
+- `exit` / `quit`: leave the REPL
+
 ## Repositories
 Recipes are currently loaded from built-in Starlark files embedded in the binary.
 Remote repository management commands exist but are placeholders.

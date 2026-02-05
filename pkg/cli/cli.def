@@ -21,6 +21,12 @@ cmd pkg list "List available versions for a package"
     flag index bool "List registry patterns only" i
     example "pi pkg list go"
 
+cmd recipe "Recipe development"
+
+cmd recipe repl "Run the recipe development REPL"
+    arg file string "Path to recipe file"
+    example "pi recipe repl ./recipes/nodejs.star"
+
 cmd cave "Manage the cave (sandbox)"
 
 cmd cave info "Display information about the current cave"

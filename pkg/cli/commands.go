@@ -17,6 +17,11 @@ type PkgListFlags struct {
 	Index bool
 }
 
+// RecipeRepl
+type RecipeReplArgs struct {
+	File string
+}
+
 // CaveUse
 type CaveUseArgs struct {
 	Cave string

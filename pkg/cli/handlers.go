@@ -62,6 +62,11 @@ func Binder(inv *Invocation, global *GlobalFlags) (Action, error) {
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 			return runPkgList(ctx, m, args, flags)
 		}, nil
+	case "recipe/repl":
+		args := &RecipeReplArgs{File: inv.Args["file"]}
+		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+			return runRecipeRepl(ctx, m, args)
+		}, nil
 
 	case "cave/info":
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
