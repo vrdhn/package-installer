@@ -10,8 +10,8 @@ import (
 
 type genData struct {
 	Pkg         string
-	GlobalFlags []*flag
-	Topics      []*topic
+	GlobalFlags []flag
+	Topics      []topic
 	Commands    []*command
 	AllCommands []*command
 	Leafs       []*command

@@ -88,7 +88,7 @@ func (p *parser) parseFlag() error {
 	}
 	desc := p.tok.value
 	p.next()
-	f := &flag{Name: name, Type: fType, Desc: desc}
+	f := flag{Name: name, Type: fType, Desc: desc}
 	if p.tok.kind == tokIdentifier {
 		f.Short = p.tok.value
 		p.next()
@@ -166,7 +166,7 @@ func (p *parser) parseArg() error {
 	}
 	desc := p.tok.value
 	p.next()
-	p.lastCmd.Args = append(p.lastCmd.Args, &arg{Name: name, Type: aType, Desc: desc})
+	p.lastCmd.Args = append(p.lastCmd.Args, arg{Name: name, Type: aType, Desc: desc})
 	return nil
 }
 
@@ -260,9 +260,9 @@ func (p *parser) parseTopic() error {
 	}
 	desc := p.tok.value
 	p.next()
-	t := &topic{Name: name, Desc: desc}
+	t := topic{Name: name, Desc: desc}
 	p.def.Topics = append(p.def.Topics, t)
-	p.lastTopic = t
+	p.lastTopic = &p.def.Topics[len(p.def.Topics)-1]
 	return nil
 }
 

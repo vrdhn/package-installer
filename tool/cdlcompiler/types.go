@@ -8,10 +8,10 @@ import (
 )
 
 type cdlTop struct {
-	GlobalFlags  []*flag
+	GlobalFlags  []flag
 	GlobalParams map[string]value
 	Commands     []*command
-	Topics       []*topic
+	Topics       []topic
 	AppName      string
 	Tagline      string
 }
@@ -33,8 +33,8 @@ type command struct {
 	Name     string
 	Desc     string
 	Params   map[string]value
-	Args     []*arg
-	Flags    []*flag
+	Args     []arg
+	Flags    []flag
 	Subs     []*command
 	Parent   *command
 	Examples []string
