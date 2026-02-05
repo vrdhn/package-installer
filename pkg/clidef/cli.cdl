@@ -1,0 +1,142 @@
+# Global flags
+global
+    name "pi" "Universal package installer for isolated workspaces"
+    flag verbose bool "Enable verbose output" v
+    flag config string "Path to config file" c
+    param safe = false
+
+# Commands
+cmd version "Show version information"
+    param safe = true
+
+cmd pkg "Manage packages"
+
+cmd pkg install "Install a package"
+    arg package string "Package name and version (e.g., nodejs@20)"
+    flag force bool "Force reinstallation" f
+    example "pi pkg install nodejs@20"
+    example "pi pkg i nodejs@latest"
+
+cmd pkg list "List available versions for a package"
+    arg package string "Package name (e.g. go)"
+    flag all bool "Show all architectures/OSs" a
+    flag index bool "List registry patterns only" i
+    example "pi pkg list go"
+
+cmd recipe "Recipe development"
+
+cmd recipe repl "Run the recipe development REPL"
+    arg file string "Path to recipe file"
+    example "pi recipe repl ./recipes/nodejs.star"
+
+cmd cave "Manage the cave (sandbox)"
+
+cmd cave info "Display information about the current cave"
+    param safe = true
+    example "pi cave info"
+
+cmd cave list "List all registered caves and their variants"
+    example "pi cave list"
+
+cmd cave use "Start a cave by name from any directory"
+    arg cave string "Cave name and optional variant (e.g., project:dev)"
+    example "pi cave use myproject"
+    example "pi cave use myproject:dev"
+
+cmd cave run "Run a command inside the cave"
+    arg command string "Command to run"
+    flag variant string "Variant to use" v
+    example "pi cave run ls"
+    example "pi cave run -v test go test ./..."
+
+cmd cave sync "Sync all packages in pi.cave.json"
+    example "pi cave sync"
+
+cmd cave init "Initialize a new workspace"
+    example "pi cave init"
+
+cmd cave addpkg "Add a package to the cave configuration"
+    arg package string "Package name and version (e.g., go=stable)"
+    example "pi cave addpkg go=stable"
+
+cmd cave enter "Enter the sandbox shell"
+    example "pi cave enter"
+    example "pi enter"
+
+cmd disk "Manage local storage"
+
+cmd disk info "Show disk usage summary"
+    example "pi disk info"
+
+cmd disk clean "Remove all cached data (packages, downloads, discovery cache)"
+    example "pi disk clean"
+
+cmd disk uninstall "Wipe all pi data (cache, state, and config)"
+    flag force bool "Skip confirmation prompt" f
+    example "pi disk uninstall"
+
+cmd repo "Manage repositories"
+
+cmd repo list "List all repositories"
+    example "pi repo list"
+    example "pi list"
+
+cmd repo add "Add a new repository"
+    arg name string "Name of the repository"
+    arg url string "URL of the repository"
+    example "pi repo add official https://github.com/google/pi-recipes"
+
+# Help Topics
+topic about "Overview"
+    text """
+    pi is a universal, workspace-based package installer that manages dependencies
+    across multiple ecosystems (Node.js, Go, Java, etc.) using isolated sandboxes.
+    It ensures deterministic environments without polluting your host system.
+    """
+
+topic architecture "Architecture & Patterns"
+    text """
+    pi is built for safety and speed using the following patterns:
+    - Immutability: Core structures use ReadOnly/Writable interfaces to prevent accidental mutation.
+    - Pipeline: Installation follows a strict Resolve -> Download -> Install -> Reify flow.
+    - Concurrency: Go's goroutines are used for parallel downloads and extractions.
+    """
+
+topic caves "The Cave Sandbox"
+    text """
+    A 'Cave' is an isolated environment powered by Linux bubblewrap.
+    - Isolation: Restricts filesystem access to the workspace and a private HOME.
+    - Zero Pollution: Tools installed for one project do not affect the host or other projects.
+    - Redirected Home: Environment variables (GOPATH, CARGO_HOME) are redirected into the Cave.
+    """
+
+topic workspace "Workspace & Manifests"
+    text """
+    Workspaces are managed via the 'pi.cave.json' manifest.
+    - Symlink Forest: pi populates .local/bin in the Cave Home with symlinks to the package cache.
+    - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing')
+    within the same workspace.
+    """
+
+topic versions "Version Formats & Queries"
+    text """
+    pi supports flexible versioning schemes and semantic keywords for package resolution.
+
+    Keywords:
+    - latest:  (Default) Resolves to the most recent version available.
+    - stable:  Resolves to the latest release marked as stable by the upstream provider.
+    - lts:     (Node.js/Java) Resolves to the latest Long Term Support release.
+
+    Formats:
+    - exact:   pi pkg install nodejs@20.11.0
+    - prefix:  pi pkg install nodejs@20 (matches 20.*)
+    - ecosys:  pi pkg install npm:typescript@latest (explicit ecosystem)
+    """
+
+topic recipes "Starlark Recipes"
+    text """
+    Recipes describe how packages are discovered and installed.
+    - Language: Written in Starlark (a Python dialect).
+    - Pure: Recipes are declarative and perform no direct I/O.
+    - Discovery: Recipes return a 'DiscoveryRequest' for the host to fetch, then parse the response.
+    """

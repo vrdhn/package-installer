@@ -1,0 +1,14 @@
+global
+    name "example" "Minimal CLI sample"
+    flag verbose bool "Enable verbose output" v
+
+cmd user "Manage users"
+
+cmd user add "Add a user"
+    arg name string "User name"
+    example "app user add alice"
+
+cmd project "Manage projects"
+cmd project init "Initialize a project"
+    arg path string "Project path"
+    example "app project init ./demo"

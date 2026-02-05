@@ -58,6 +58,8 @@ func (p *parser) parseStatement() error {
 		return p.parseArg()
 	case "param":
 		return p.parseParam()
+	case "name":
+		return p.parseName()
 	case "example":
 		return p.parseExample()
 	case "topic":
@@ -212,6 +214,24 @@ func (p *parser) parseParam() error {
 		p.lastCmd.Params = map[string]value{}
 	}
 	p.lastCmd.Params[name] = val
+	return nil
+}
+
+func (p *parser) parseName() error {
+	if p.lastCmd != nil {
+		return fmt.Errorf("line %d: 'name' must be under 'global'", p.tok.line)
+	}
+	p.next()
+	if p.tok.kind != tokString {
+		return fmt.Errorf("line %d: expected binary name string", p.tok.line)
+	}
+	p.def.AppName = p.tok.value
+	p.next()
+	if p.tok.kind != tokString {
+		return fmt.Errorf("line %d: expected tagline string", p.tok.line)
+	}
+	p.def.Tagline = p.tok.value
+	p.next()
 	return nil
 }
 

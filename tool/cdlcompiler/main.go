@@ -35,25 +35,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	outPath := strings.TrimSuffix(inPath, ".cdl") + ".go"
+	baseName := strings.TrimSuffix(filepath.Base(inPath), ".cdl")
+	outPath := filepath.Join(filepath.Dir(inPath), baseName+".go")
+	supPath := filepath.Join(filepath.Dir(inPath), baseName+"_support.go")
 	outAbs, err := filepath.Abs(outPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "abs path for %s: %v\n", outPath, err)
 		os.Exit(1)
 	}
 	fmt.Printf("Writing %s\n", outAbs)
+	supAbs, err := filepath.Abs(supPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "abs path for %s: %v\n", supPath, err)
+		os.Exit(1)
+	}
+	fmt.Printf("Writing %s\n", supAbs)
+
 	if !isValidIdent(pkgName) {
 		fmt.Fprintf(os.Stderr, "invalid package name %q\n", pkgName)
 		os.Exit(1)
 	}
 
-	src, err := generate(cdl, pkgName)
+	src, sup, err := generate(cdl, pkgName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "generate: %v\n", err)
 		os.Exit(1)
 	}
 	if err := os.WriteFile(outPath, src, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", outPath, err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(supPath, sup, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "write %s: %v\n", supPath, err)
 		os.Exit(1)
 	}
 }

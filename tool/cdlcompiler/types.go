@@ -12,6 +12,8 @@ type cdlTop struct {
 	GlobalParams map[string]value
 	Commands     []*command
 	Topics       []*topic
+	AppName      string
+	Tagline      string
 }
 
 type flag struct {
