@@ -3,9 +3,10 @@
 package cli
 
 import (
-	"context"
 	"fmt"
+	"os"
 	"strings"
+	"text/template"
 )
 
 type flagDef struct {
@@ -36,10 +37,6 @@ type topicDef struct {
 	Name string
 	Desc string
 	Text string
-}
-
-func (c *commandDef) IsSafe() bool {
-	return c.Safe
 }
 
 type globalFlags struct {
@@ -265,10 +262,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/enter":
 		params := &caveEnterParams{}
 		params.globalFlags = gf
@@ -276,10 +270,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/info":
 		params := &caveInfoParams{}
 		params.globalFlags = gf
@@ -287,10 +278,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/init":
 		params := &caveInitParams{}
 		params.globalFlags = gf
@@ -298,10 +286,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/list":
 		params := &caveListParams{}
 		params.globalFlags = gf
@@ -309,10 +294,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/run":
 		params := &caveRunParams{}
 		params.Command = finalInv.Args["command"]
@@ -322,10 +304,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/sync":
 		params := &caveSyncParams{}
 		params.globalFlags = gf
@@ -333,10 +312,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "cave/use":
 		params := &caveUseParams{}
 		params.Cave = finalInv.Args["cave"]
@@ -345,10 +321,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "disk/clean":
 		params := &diskCleanParams{}
 		params.globalFlags = gf
@@ -356,10 +329,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "disk/info":
 		params := &diskInfoParams{}
 		params.globalFlags = gf
@@ -367,10 +337,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "disk/uninstall":
 		params := &diskUninstallParams{}
 		params.globalFlags = gf
@@ -379,10 +346,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "pkg/install":
 		params := &pkgInstallParams{}
 		params.Package = finalInv.Args["package"]
@@ -392,10 +356,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "pkg/list":
 		params := &pkgListParams{}
 		params.Package = finalInv.Args["package"]
@@ -406,10 +367,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "recipe/repl":
 		params := &recipeReplParams{}
 		params.File = finalInv.Args["file"]
@@ -418,10 +376,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "repo/add":
 		params := &repoAddParams{}
 		params.Name = finalInv.Args["name"]
@@ -431,10 +386,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "repo/list":
 		params := &repoListParams{}
 		params.globalFlags = gf
@@ -442,10 +394,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "version":
 		params := &versionParams{}
 		params.globalFlags = gf
@@ -453,10 +402,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 		if action == nil {
 			return nil, fmt.Errorf("no handler for command: %s", path)
 		}
-		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &params.globalFlags)
-			return action(ctx, m)
-		}, nil
+		return action, nil
 	case "help":
 		return helpAction(nil), nil
 	default:
@@ -465,7 +411,7 @@ func Parse(h Handlers, args []string) (Action, error) {
 }
 
 func helpAction(args []string) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+	return func() (*ExecutionResult, error) {
 		printHelp(args...)
 		return &ExecutionResult{ExitCode: 0}, nil
 	}
@@ -481,12 +427,6 @@ func applyGlobalFlag(g *globalFlags, name string, val any) {
 		if s, ok := val.(string); ok {
 			g.Config = s
 		}
-	}
-}
-
-func applyGlobalFlags(m *Managers, g *globalFlags) {
-	if g.Verbose {
-		m.Disp.SetVerbose(true)
 	}
 }
 
@@ -624,13 +564,34 @@ func parseParams(inv *invocation, cmd *commandDef, args []string) error {
 	return nil
 }
 
+type helpData struct {
+	Topic       *topicDef
+	Command     *commandDef
+	Root        *rootHelpData
+	CommandPath string
+}
+
+type rootHelpData struct {
+	GlobalFlags []*flagDef
+	Topics      []*topicDef
+	Categories  []categoryDef
+}
+
+type categoryDef struct {
+	Name string
+	Cmds []cmdItem
+}
+
+type cmdItem struct {
+	Cmd *commandDef
+}
+
 func printHelp(args ...string) {
-	t := DefaultTheme()
 	if len(args) > 0 {
 		subject := args[0]
 		for _, topic := range cliTopics {
 			if topic.Name == subject || strings.HasPrefix(topic.Name, subject) {
-				printTopicHelp(t, topic)
+				renderHelp(&helpData{Topic: topic})
 				return
 			}
 		}
@@ -651,150 +612,64 @@ func printHelp(args ...string) {
 			curr = match.Subs
 		}
 		if found != nil {
-			printCommandHelp(t, found)
+			renderHelp(&helpData{Command: found, CommandPath: getCmdPath(found)})
 			return
 		}
 	}
-	fmt.Printf("%s\n", t.Styled(t.Cyan.Copy().Bold(true), "pi - Universal Package Installer"))
-	fmt.Printf("\n%s\n", t.Styled(t.Bold, "Usage:"))
-	fmt.Printf("  pi %s\n", t.Styled(t.Yellow, "[flags] <command>"))
-	fmt.Printf("\n%s\n", t.Styled(t.Bold, "Global Flags:"))
-	fmt.Printf("  %-12s %s\n", t.Styled(t.Cyan, "--help, -h"), t.Styled(t.Dim, "Show help [command | topic]"))
-	for _, f := range cliGlobalFlags {
-		short := ""
-		if f.Short != "" {
-			short = ", -" + f.Short
-		}
-		fmt.Printf("  %-12s %s\n", t.Styled(t.Cyan, "--"+f.Name+short), t.Styled(t.Dim, f.Desc))
-	}
+
+	// Root help
 	categories := []struct {
 		name string
-		icon string
 		cmds []string
 	}{
-		{"PACKAGE", t.IconPkg, []string{"pkg"}},
-		{"CAVE", t.IconCave, []string{"cave"}},
-		{"DISK", t.IconDisk, []string{"disk"}},
-		{"REPO", t.IconWorld, []string{"repo"}},
+		{"PACKAGE", []string{"pkg"}},
+		{"CAVE", []string{"cave"}},
+		{"DISK", []string{"disk"}},
+		{"REPO", []string{"repo"}},
 	}
+
+	var cats []categoryDef
 	shown := make(map[string]bool)
-	fmt.Println()
+
 	for _, cat := range categories {
+		var items []cmdItem
 		for _, name := range cat.cmds {
 			for _, c := range cliCommands {
 				if c.Name == name {
-					printCommandTree(t, c, "", true, cat.icon)
-					fmt.Println()
+					items = append(items, cmdItem{Cmd: c})
 					shown[c.Name] = true
 				}
 			}
 		}
+		if len(items) > 0 {
+			cats = append(cats, categoryDef{Name: cat.name, Cmds: items})
+		}
 	}
-	var misc []*commandDef
+
+	var misc []cmdItem
 	for _, c := range cliCommands {
 		if !shown[c.Name] && c.Name != "help" {
-			misc = append(misc, c)
+			misc = append(misc, cmdItem{Cmd: c})
 		}
 	}
 	if len(misc) > 0 {
-		fmt.Printf("%s %s\n", t.Bullet, t.Styled(t.Bold, "MISC"))
-		for i, c := range misc {
-			printCommandTree(t, c, "", i == len(misc)-1, "")
-		}
-		fmt.Println()
+		cats = append(cats, categoryDef{Name: "MISC", Cmds: misc})
 	}
-	fmt.Printf("%s %s\n", t.IconHelp, t.Styled(t.Bold, "Topics:"))
-	for _, topic := range cliTopics {
-		name := t.Styled(t.Cyan, topic.Name)
-		padding := getPadding(t, topic.Name, 20)
-		fmt.Printf("  %s %s %s\n", name, padding, t.Styled(t.Dim, topic.Desc))
-	}
-	fmt.Printf("\nType '%s' for more details.\n", t.Styled(t.Yellow, "pi help <command>"))
+
+	renderHelp(&helpData{Root: &rootHelpData{
+		GlobalFlags: cliGlobalFlags,
+		Topics:      cliTopics,
+		Categories:  cats,
+	}})
 }
 
-func printCommandHelp(t *Theme, c *commandDef) {
-	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Command:"), t.Styled(t.Cyan, getCmdPath(c)))
-	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, c.Desc))
-	fmt.Println()
-	if len(c.Subs) > 0 {
-		fmt.Printf("%s\n", t.Styled(t.Bold, "Subcommands:"))
-		for i, s := range c.Subs {
-			prefix := t.BoxTree
-			if i == len(c.Subs)-1 {
-				prefix = t.BoxLast
-			}
-			fmt.Printf("  %s %-12s %s\n", prefix, t.Styled(t.Cyan, s.Name), t.Styled(t.Dim, s.Desc))
-		}
-		fmt.Println()
-	}
-	if len(c.Args) > 0 {
-		fmt.Printf("%s\n", t.Styled(t.Bold, "Arguments:"))
-		for _, a := range c.Args {
-			fmt.Printf("  %-15s %s\n", t.Styled(t.Yellow, "<"+a.Name+">"), t.Styled(t.Dim, a.Desc))
-		}
-		fmt.Println()
-	}
-	if len(c.Flags) > 0 {
-		fmt.Printf("%s\n", t.Styled(t.Bold, "Flags:"))
-		for _, f := range c.Flags {
-			short := ""
-			if f.Short != "" {
-				short = ", -" + f.Short
-			}
-			fmt.Printf("  %-15s %s\n", t.Styled(t.Cyan, "--"+f.Name+short), t.Styled(t.Dim, f.Desc))
-		}
-		fmt.Println()
-	}
-	if len(c.Examples) > 0 {
-		fmt.Printf("%s\n", t.Styled(t.Bold, "Examples:"))
-		for _, ex := range c.Examples {
-			fmt.Printf("  %s %s\n", t.Styled(t.Green, "$"), ex)
-		}
-		fmt.Println()
-	}
-}
+const helpTemplate = "{{ if .Topic }}\nTopic: {{ .Topic.Name }}\nDescription: {{ .Topic.Desc }}\n\n{{ .Topic.Text }}\n{{ else if .Command }}\nCommand: {{ .CommandPath }}\nDescription: {{ .Command.Desc }}\n\n{{ if .Command.Subs }}\nSubcommands:\n{{ range .Command.Subs }}\n  {{ .Name }}    {{ .Desc }}\n{{ end }}\n{{ end }}\n\n{{ if .Command.Args }}\nArguments:\n{{ range .Command.Args }}\n  <{{ .Name }}>    {{ .Desc }}\n{{ end }}\n{{ end }}\n\n{{ if .Command.Flags }}\nFlags:\n{{ range .Command.Flags }}\n  --{{ .Name }}{{ if .Short }}, -{{ .Short }}{{ end }}    {{ .Desc }}\n{{ end }}\n{{ end }}\n\n{{ if .Command.Examples }}\nExamples:\n{{ range .Command.Examples }}\n  $ {{ . }}\n{{ end }}\n{{ end }}\n\n{{ else }}\npi - Universal Package Installer\n\nUsage:\n  pi [flags] <command>\n\nGlobal Flags:\n  --help, -h    Show help [command | topic]\n{{ range .Root.GlobalFlags }}\n  --{{ .Name }}{{ if .Short }}, -{{ .Short }}{{ end }}    {{ .Desc }}\n{{ end }}\n\nCommands:\n{{ range .Root.Categories }}\n  {{ .Name }}:\n{{ range .Cmds }}\n    {{ .Cmd.Name }}    {{ .Cmd.Desc }}\n{{ end }}\n{{ end }}\n\nTopics:\n{{ range .Root.Topics }}\n  {{ .Name }}    {{ .Desc }}\n{{ end }}\n\nType 'pi help <command>' for more details.\n{{ end }}\n"
 
-func printTopicHelp(t *Theme, topic *topicDef) {
-	fmt.Printf("\n%s %s\n", t.Styled(t.Bold, "Topic:"), t.Styled(t.Cyan, topic.Name))
-	fmt.Printf("%s %s\n", t.Styled(t.Bold, "Description:"), t.Styled(t.Dim, topic.Desc))
-	fmt.Println()
-	fmt.Printf("%s\n\n", topic.Text)
-}
-
-func getPadding(t *Theme, name string, target int) string {
-	dots := target - len(name)
-	if dots < 2 {
-		dots = 2
-	}
-	return t.Styled(t.Dim, strings.Repeat(".", dots))
-}
-
-func printCommandTree(t *Theme, c *commandDef, indent string, isLast bool, icon string) {
-	prefix := t.BoxTree
-	if isLast {
-		prefix = t.BoxLast
-	}
-	namePart := indent + prefix + " "
-	if icon != "" {
-		namePart += icon + " "
-	}
-	namePart += t.Styled(t.Cyan, c.Name)
-	visualLen := len(indent) + 4
-	if icon != "" {
-		visualLen += 3
-	}
-	visualLen += len(c.Name)
-	padding := getPadding(t, strings.Repeat(" ", visualLen), 30)
-	line := fmt.Sprintf("%s %s %s", namePart, padding, t.Styled(t.Dim, c.Desc))
-	fmt.Println(line)
-	newIndent := indent
-	if isLast {
-		newIndent += "    "
-	} else {
-		newIndent += t.BoxItem + " "
-	}
-	for i, s := range c.Subs {
-		printCommandTree(t, s, newIndent, i == len(c.Subs)-1, "")
+func renderHelp(data *helpData) {
+	tmpl := template.New("help")
+	template.Must(tmpl.Parse(helpTemplate))
+	if err := tmpl.Execute(os.Stdout, data); err != nil {
+		fmt.Fprintf(os.Stderr, "help render error: %v\n", err)
 	}
 }
 

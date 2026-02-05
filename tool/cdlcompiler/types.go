@@ -7,51 +7,51 @@ import (
 	"strings"
 )
 
-type defFile struct {
-	GlobalFlags  []*defFlag
-	GlobalParams map[string]paramValue
-	Commands     []*defCommand
-	Topics       []*defTopic
+type cdlTop struct {
+	GlobalFlags  []*flag
+	GlobalParams map[string]value
+	Commands     []*command
+	Topics       []*topic
 }
 
-type defFlag struct {
+type flag struct {
 	Name  string
 	Short string
 	Type  string
 	Desc  string
 }
 
-type defArg struct {
+type arg struct {
 	Name string
 	Type string
 	Desc string
 }
 
-type defCommand struct {
+type command struct {
 	Name     string
 	Desc     string
-	Params   map[string]paramValue
-	Args     []*defArg
-	Flags    []*defFlag
-	Subs     []*defCommand
-	Parent   *defCommand
+	Params   map[string]value
+	Args     []*arg
+	Flags    []*flag
+	Subs     []*command
+	Parent   *command
 	Examples []string
 }
 
-type defTopic struct {
+type topic struct {
 	Name string
 	Desc string
 	Text string
 }
 
-type paramValue struct {
+type value struct {
 	Kind string
 	Bool bool
 	Str  string
 	Int  int
 }
 
-type paramDef struct {
+type param struct {
 	Name string
 	Kind string
 }
@@ -84,9 +84,9 @@ func goTypeForParam(kind string) string {
 	}
 }
 
-func collectLeafCommands(cmds []*defCommand) []*defCommand {
-	var out []*defCommand
-	walkCommands(cmds, func(c *defCommand) {
+func collectLeafCommands(cmds []*command) []*command {
+	var out []*command
+	walkCommands(cmds, func(c *command) {
 		if len(c.Subs) == 0 {
 			out = append(out, c)
 		}
@@ -94,7 +94,7 @@ func collectLeafCommands(cmds []*defCommand) []*defCommand {
 	return out
 }
 
-func walkCommands(cmds []*defCommand, fn func(*defCommand)) {
+func walkCommands(cmds []*command, fn func(*command)) {
 	for _, c := range cmds {
 		fn(c)
 		if len(c.Subs) > 0 {
@@ -103,7 +103,7 @@ func walkCommands(cmds []*defCommand, fn func(*defCommand)) {
 	}
 }
 
-func cmdPath(c *defCommand) string {
+func cmdPath(c *command) string {
 	if c.Parent == nil {
 		return c.Name
 	}
@@ -173,13 +173,13 @@ func isValidIdent(s string) bool {
 	return true
 }
 
-func collectParamDefs(def *defFile) ([]paramDef, error) {
+func collectParams(cdl *cdlTop) ([]param, error) {
 	kinds := map[string]string{}
-	for name, pv := range def.GlobalParams {
+	for name, pv := range cdl.GlobalParams {
 		kinds[name] = pv.Kind
 	}
-	var walk func(cmds []*defCommand) error
-	walk = func(cmds []*defCommand) error {
+	var walk func(cmds []*command) error
+	walk = func(cmds []*command) error {
 		for _, c := range cmds {
 			for name, pv := range c.Params {
 				if existing, ok := kinds[name]; ok && existing != pv.Kind {
@@ -195,7 +195,7 @@ func collectParamDefs(def *defFile) ([]paramDef, error) {
 		}
 		return nil
 	}
-	if err := walk(def.Commands); err != nil {
+	if err := walk(cdl.Commands); err != nil {
 		return nil, err
 	}
 	if len(kinds) == 0 {
@@ -206,15 +206,15 @@ func collectParamDefs(def *defFile) ([]paramDef, error) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	out := make([]paramDef, 0, len(keys))
+	out := make([]param, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, paramDef{Name: k, Kind: kinds[k]})
+		out = append(out, param{Name: k, Kind: kinds[k]})
 	}
 	return out, nil
 }
 
-func hasParam(defs []paramDef, name string) bool {
-	for _, d := range defs {
+func hasParam(params []param, name string) bool {
+	for _, d := range params {
 		if d.Name == name {
 			return true
 		}
@@ -222,21 +222,21 @@ func hasParam(defs []paramDef, name string) bool {
 	return false
 }
 
-func resolveParam(def *defFile, cmd *defCommand, name string) (paramValue, bool) {
+func resolveParam(cdl *cdlTop, cmd *command, name string) (value, bool) {
 	if cmd != nil && cmd.Params != nil {
 		if v, ok := cmd.Params[name]; ok {
 			return v, true
 		}
 	}
-	if def != nil && def.GlobalParams != nil {
-		if v, ok := def.GlobalParams[name]; ok {
+	if cdl != nil && cdl.GlobalParams != nil {
+		if v, ok := cdl.GlobalParams[name]; ok {
 			return v, true
 		}
 	}
-	return paramValue{}, false
+	return value{}, false
 }
 
-func emitParamLiteral(v paramValue, kind string) string {
+func emitParamLiteral(v value, kind string) string {
 	switch kind {
 	case "bool":
 		if v.Kind == "bool" {

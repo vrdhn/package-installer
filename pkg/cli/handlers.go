@@ -19,108 +19,111 @@ var (
 	infoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 )
 
-type DefaultHandlers struct{}
+type DefaultHandlers struct {
+	Ctx context.Context
+	Mgr *Managers
+}
 
 func (h *DefaultHandlers) Version(params *versionParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+	return func() (*ExecutionResult, error) {
 		fmt.Println(config.GetBuildInfo())
 		return &ExecutionResult{ExitCode: 0}, nil
 	}
 }
 
 func (h *DefaultHandlers) PkgInstall(params *pkgInstallParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runInstall(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runInstall(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) PkgList(params *pkgListParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runPkgList(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runPkgList(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) RecipeRepl(params *recipeReplParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runRecipeRepl(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runRecipeRepl(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) CaveInfo(params *caveInfoParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runInfo(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runInfo(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) CaveList(params *caveListParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runCaveList(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runCaveList(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) CaveUse(params *caveUseParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runCaveUse(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runCaveUse(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) CaveRun(params *caveRunParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runCaveCommand(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runCaveCommand(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) CaveEnter(params *caveEnterParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runCaveCommand(ctx, m, &caveRunParams{globalFlags: params.globalFlags, Command: ""})
+	return func() (*ExecutionResult, error) {
+		return runCaveCommand(h.Ctx, h.Mgr, &caveRunParams{globalFlags: params.globalFlags, Command: ""})
 	}
 }
 
 func (h *DefaultHandlers) CaveInit(params *caveInitParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runInit(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runInit(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) CaveSync(params *caveSyncParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+	return func() (*ExecutionResult, error) {
 		fmt.Println("Syncing workspace...")
 		return &ExecutionResult{ExitCode: 0}, nil
 	}
 }
 
 func (h *DefaultHandlers) CaveAddpkg(params *caveAddpkgParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runAddPkg(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runAddPkg(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) DiskInfo(params *diskInfoParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runDiskInfo(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runDiskInfo(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) DiskClean(params *diskCleanParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runDiskClean(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runDiskClean(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) DiskUninstall(params *diskUninstallParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runDiskUninstall(ctx, m, params)
+	return func() (*ExecutionResult, error) {
+		return runDiskUninstall(h.Ctx, h.Mgr, params)
 	}
 }
 
 func (h *DefaultHandlers) RepoList(params *repoListParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-		return runRepoList(ctx, m)
+	return func() (*ExecutionResult, error) {
+		return runRepoList(h.Ctx, h.Mgr)
 	}
 }
 
 func (h *DefaultHandlers) RepoAdd(params *repoAddParams) Action {
-	return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+	return func() (*ExecutionResult, error) {
 		fmt.Printf("Adding repo %s: %s\n", params.Name, params.Url)
 		return &ExecutionResult{ExitCode: 0}, nil
 	}

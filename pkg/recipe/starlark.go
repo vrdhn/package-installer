@@ -473,15 +473,15 @@ func (sr *StarlarkRecipe) loadRegistry() error {
 	sr.regexCache = make(map[string]*regexp.Regexp)
 
 	builtins := starlark.StringDict{
-		"struct":        starlark.NewBuiltin("struct", starlarkstruct.Make),
-		"json":          starlarkstruct.FromStringDict(starlark.String("json"), jsonBuiltins()),
-		"html":          starlarkstruct.FromStringDict(starlark.String("html"), htmlBuiltins()),
-		"jq":            starlarkstruct.FromStringDict(starlark.String("jq"), jqBuiltins()),
-		"download":      newDownloadBuiltin(sr),
+		"struct":                   starlark.NewBuiltin("struct", starlarkstruct.Make),
+		"json":                     starlarkstruct.FromStringDict(starlark.String("json"), jsonBuiltins()),
+		"html":                     starlarkstruct.FromStringDict(starlark.String("html"), htmlBuiltins()),
+		"jq":                       starlarkstruct.FromStringDict(starlark.String("jq"), jqBuiltins()),
+		"download":                 newDownloadBuiltin(sr),
 		"download_github_releases": newDownloadGitHubReleasesBuiltin(sr),
-		"add_version":   newAddVersionBuiltin(sr),
-		"add_ecosystem": newAddEcosystemBuiltin(sr),
-		"add_pkgdef":    newAddPkgdefBuiltin(sr),
+		"add_version":              newAddVersionBuiltin(sr),
+		"add_ecosystem":            newAddEcosystemBuiltin(sr),
+		"add_pkgdef":               newAddPkgdefBuiltin(sr),
 	}
 
 	globals, err := starlark.ExecFile(sr.thread, sr.Name+".star", sr.Source, builtins)

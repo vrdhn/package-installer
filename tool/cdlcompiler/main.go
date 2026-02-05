@@ -9,7 +9,7 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: cligen <path/to/file.def> <package>")
+		fmt.Fprintln(os.Stderr, "usage: cligen <path/to/file.cdl> <package>")
 		os.Exit(2)
 	}
 	inPath := os.Args[1]
@@ -20,8 +20,8 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("Processing %s\n", inAbs)
-	if filepath.Ext(inPath) != ".def" {
-		fmt.Fprintf(os.Stderr, "input must be a .def file: %s\n", inPath)
+	if filepath.Ext(inPath) != ".cdl" {
+		fmt.Fprintf(os.Stderr, "input must be a .cdl file: %s\n", inPath)
 		os.Exit(2)
 	}
 	content, err := os.ReadFile(inPath)
@@ -29,13 +29,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "read %s: %v\n", inPath, err)
 		os.Exit(1)
 	}
-	def, err := parseDef(string(content))
+	cdl, err := parseDef(string(content))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "parse %s: %v\n", inPath, err)
 		os.Exit(1)
 	}
 
-	outPath := strings.TrimSuffix(inPath, ".def") + ".go"
+	outPath := strings.TrimSuffix(inPath, ".cdl") + ".go"
 	outAbs, err := filepath.Abs(outPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "abs path for %s: %v\n", outPath, err)
@@ -47,7 +47,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	src, err := generate(def, pkgName)
+	src, err := generate(cdl, pkgName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "generate: %v\n", err)
 		os.Exit(1)

@@ -8,14 +8,14 @@ import (
 type parser struct {
 	lex       *lexer
 	tok       token
-	def       *defFile
-	lastCmd   *defCommand
-	lastTopic *defTopic
+	def       *cdlTop
+	lastCmd   *command
+	lastTopic *topic
 	pathBuf   [8]string
 }
 
-func parseDef(dsl string) (*defFile, error) {
-	p := &parser{lex: newLexer(dsl), def: &defFile{GlobalParams: map[string]paramValue{}}}
+func parseDef(dsl string) (*cdlTop, error) {
+	p := &parser{lex: newLexer(dsl), def: &cdlTop{GlobalParams: map[string]value{}}}
 	p.next()
 	if err := p.parse(); err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (p *parser) parseFlag() error {
 	}
 	desc := p.tok.value
 	p.next()
-	f := &defFlag{Name: name, Type: fType, Desc: desc}
+	f := &flag{Name: name, Type: fType, Desc: desc}
 	if p.tok.kind == tokIdentifier {
 		f.Short = p.tok.value
 		p.next()
@@ -114,10 +114,10 @@ func (p *parser) parseCommand() error {
 		desc = p.tok.value
 		p.next()
 	}
-	var parent *defCommand
-	var current *defCommand
+	var parent *command
+	var current *command
 	for i, name := range path {
-		var list *[]*defCommand
+		var list *[]*command
 		if parent == nil {
 			list = &p.def.Commands
 		} else {
@@ -132,7 +132,7 @@ func (p *parser) parseCommand() error {
 			}
 		}
 		if !found {
-			current = &defCommand{Name: name, Parent: parent}
+			current = &command{Name: name, Parent: parent}
 			*list = append(*list, current)
 		}
 		if i == len(path)-1 && desc != "" {
@@ -164,7 +164,7 @@ func (p *parser) parseArg() error {
 	}
 	desc := p.tok.value
 	p.next()
-	p.lastCmd.Args = append(p.lastCmd.Args, &defArg{Name: name, Type: aType, Desc: desc})
+	p.lastCmd.Args = append(p.lastCmd.Args, &arg{Name: name, Type: aType, Desc: desc})
 	return nil
 }
 
@@ -180,13 +180,13 @@ func (p *parser) parseParam() error {
 	}
 	p.next()
 
-	var val paramValue
+	var val value
 	switch p.tok.kind {
 	case tokString:
-		val = paramValue{Kind: "string", Str: p.tok.value}
+		val = value{Kind: "string", Str: p.tok.value}
 	case tokIdentifier:
 		if p.tok.value == "true" || p.tok.value == "false" {
-			val = paramValue{Kind: "bool", Bool: p.tok.value == "true"}
+			val = value{Kind: "bool", Bool: p.tok.value == "true"}
 		} else {
 			return fmt.Errorf("line %d: expected bool or string param value", p.tok.line)
 		}
@@ -195,7 +195,7 @@ func (p *parser) parseParam() error {
 		if err != nil {
 			return fmt.Errorf("line %d: invalid number %q", p.tok.line, p.tok.value)
 		}
-		val = paramValue{Kind: "int", Int: n}
+		val = value{Kind: "int", Int: n}
 	default:
 		return fmt.Errorf("line %d: expected param value", p.tok.line)
 	}
@@ -203,13 +203,13 @@ func (p *parser) parseParam() error {
 
 	if p.lastCmd == nil {
 		if p.def.GlobalParams == nil {
-			p.def.GlobalParams = map[string]paramValue{}
+			p.def.GlobalParams = map[string]value{}
 		}
 		p.def.GlobalParams[name] = val
 		return nil
 	}
 	if p.lastCmd.Params == nil {
-		p.lastCmd.Params = map[string]paramValue{}
+		p.lastCmd.Params = map[string]value{}
 	}
 	p.lastCmd.Params[name] = val
 	return nil
@@ -240,7 +240,7 @@ func (p *parser) parseTopic() error {
 	}
 	desc := p.tok.value
 	p.next()
-	t := &defTopic{Name: name, Desc: desc}
+	t := &topic{Name: name, Desc: desc}
 	p.def.Topics = append(p.def.Topics, t)
 	p.lastTopic = t
 	return nil

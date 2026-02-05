@@ -1,3 +1,3 @@
 package cli
 
-//go:generate go run ../../tool/cligen ./cli.def cli
+//go:generate go run ../../tool/cdlcompiler ./cli.cdl cli

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"pi/pkg/cave"
 	"pi/pkg/config"
 	"pi/pkg/disk"
@@ -21,10 +20,11 @@ type Managers struct {
 	SysCfg  config.ReadOnly
 }
 
-// Action is a lambda that executes a command using the provided managers.
+// Action is a lambda that executes a command.
 // The structs for global flags, cmd flags and cmd arguments have already
-// been captured in this lamda.
-type Action func(ctx context.Context, m *Managers) (*ExecutionResult, error)
+// been captured in this lamda. Context and Managers should be captured
+// by the handler creating this Action.
+type Action func() (*ExecutionResult, error)
 
 // Mutable
 // Returned at top level, to figure out if to execute bwrap

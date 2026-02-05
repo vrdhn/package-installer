@@ -120,12 +120,12 @@ topic workspace "Workspace & Manifests"
 topic versions "Version Formats & Queries"
     text """
     pi supports flexible versioning schemes and semantic keywords for package resolution.
-    
+
     Keywords:
     - latest:  (Default) Resolves to the most recent version available.
     - stable:  Resolves to the latest release marked as stable by the upstream provider.
     - lts:     (Node.js/Java) Resolves to the latest Long Term Support release.
-    
+
     Formats:
     - exact:   pi pkg install nodejs@20.11.0
     - prefix:  pi pkg install nodejs@20 (matches 20.*)

@@ -26,7 +26,7 @@ Caves provide isolation using Linux `bubblewrap`.
 
 ### CLI Execution Flow
 The CLI follows a strict multi-stage initialization:
-1.  **Parse DSL**: Load command definitions from `cli.def`.
+1.  **Parse DSL**: Load command definitions from `cli.cdl`.
 2.  **Parse Args**: Parse global flags, then resolve commands and parameters.
 3.  **Restriction Check**: If `PI_CAVENAME` is set, only `safe` commands may run.
 4.  **Display Init**: Setup Bubble Tea console and verbosity.

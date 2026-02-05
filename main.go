@@ -30,13 +30,16 @@ func main() {
 	os.Exit(res.ExitCode)
 }
 func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) {
+	// Initialize handlers with context (Managers populated later)
+	handlers := &cli.DefaultHandlers{Ctx: ctx}
+
 	// 1. Parse command line arguments
-	action, err := cli.Parse(&cli.DefaultHandlers{}, args)
+	action, err := cli.Parse(handlers, args)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Initialize console, setup verbosity, theme etc.
+	// 2. Initialize console, setup verbosity, etc.
 	disp := display.NewConsole()
 	defer disp.Close()
 
@@ -64,9 +67,12 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 		SysCfg:  sysCfg,
 	}
 
+	// Update handlers with managers
+	handlers.Mgr = managers
+
 	if action == nil {
 		return nil, fmt.Errorf("no action defined for command")
 	}
 
-	return action(ctx, managers)
+	return action()
 }
