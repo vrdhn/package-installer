@@ -34,8 +34,8 @@ type recipeRepl struct {
 	legacy   bool
 }
 
-func runRecipeRepl(ctx context.Context, m *Managers, args *recipeReplArgs) (*ExecutionResult, error) {
-	if args.File == "" {
+func runRecipeRepl(ctx context.Context, m *Managers, params *recipeReplParams) (*ExecutionResult, error) {
+	if params.File == "" {
 		return nil, fmt.Errorf("recipe file required")
 	}
 
@@ -44,7 +44,7 @@ func runRecipeRepl(ctx context.Context, m *Managers, args *recipeReplArgs) (*Exe
 		out:  os.Stdout,
 		err:  os.Stderr,
 		cfg:  m.SysCfg,
-		path: args.File,
+		path: params.File,
 	}
 
 	if err := repl.Run(ctx); err != nil {

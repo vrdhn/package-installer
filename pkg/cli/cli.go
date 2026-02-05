@@ -5,7 +5,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -23,14 +22,14 @@ type argDef struct {
 }
 
 type commandDef struct {
-	Name       string
-	Desc       string
-	SafeInCave bool
-	Args       []*argDef
-	Flags      []*flagDef
-	Subs       []*commandDef
-	Parent     *commandDef
-	Examples   []string
+	Name     string
+	Desc     string
+	Safe     bool
+	Args     []*argDef
+	Flags    []*flagDef
+	Subs     []*commandDef
+	Parent   *commandDef
+	Examples []string
 }
 
 type topicDef struct {
@@ -39,184 +38,123 @@ type topicDef struct {
 	Text string
 }
 
+func (c *commandDef) IsSafe() bool {
+	return c.Safe
+}
+
 type globalFlags struct {
 	Verbose bool
 	Config  string
 }
 
-type caveAddpkgArgs struct {
+type caveAddpkgParams struct {
+	globalFlags
 	Package string
 }
 
-type caveAddpkgFlags struct {
+type caveEnterParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type caveEnterArgs struct {
-	_ struct{}
-}
-
-type caveEnterFlags struct {
+type caveInfoParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type caveInfoArgs struct {
-	_ struct{}
-}
-
-type caveInfoFlags struct {
+type caveInitParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type caveInitArgs struct {
-	_ struct{}
-}
-
-type caveInitFlags struct {
+type caveListParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type caveListArgs struct {
-	_ struct{}
-}
-
-type caveListFlags struct {
+type caveRunParams struct {
 	globalFlags
-	_ struct{}
-}
-
-type caveRunArgs struct {
 	Command string
-}
-
-type caveRunFlags struct {
-	globalFlags
 	Variant string
 }
 
-type caveSyncArgs struct {
-	_ struct{}
-}
-
-type caveSyncFlags struct {
+type caveSyncParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type caveUseArgs struct {
+type caveUseParams struct {
+	globalFlags
 	Cave string
 }
 
-type caveUseFlags struct {
+type diskCleanParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type diskCleanArgs struct {
-	_ struct{}
-}
-
-type diskCleanFlags struct {
+type diskInfoParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type diskInfoArgs struct {
-	_ struct{}
-}
-
-type diskInfoFlags struct {
-	globalFlags
-	_ struct{}
-}
-
-type diskUninstallArgs struct {
-	_ struct{}
-}
-
-type diskUninstallFlags struct {
+type diskUninstallParams struct {
 	globalFlags
 	Force bool
 }
 
-type pkgInstallArgs struct {
-	Package string
-}
-
-type pkgInstallFlags struct {
+type pkgInstallParams struct {
 	globalFlags
-	Force bool
-}
-
-type pkgListArgs struct {
 	Package string
+	Force   bool
 }
 
-type pkgListFlags struct {
+type pkgListParams struct {
 	globalFlags
-	All   bool
-	Index bool
+	Package string
+	All     bool
+	Index   bool
 }
 
-type recipeReplArgs struct {
+type recipeReplParams struct {
+	globalFlags
 	File string
 }
 
-type recipeReplFlags struct {
+type repoAddParams struct {
 	globalFlags
-	_ struct{}
-}
-
-type repoAddArgs struct {
 	Name string
 	Url  string
 }
 
-type repoAddFlags struct {
+type repoListParams struct {
 	globalFlags
 	_ struct{}
 }
 
-type repoListArgs struct {
-	_ struct{}
-}
-
-type repoListFlags struct {
-	globalFlags
-	_ struct{}
-}
-
-type versionArgs struct {
-	_ struct{}
-}
-
-type versionFlags struct {
+type versionParams struct {
 	globalFlags
 	_ struct{}
 }
 
 type Handlers interface {
-	CaveAddpkg(ctx context.Context, m *Managers, args *caveAddpkgArgs, flags *caveAddpkgFlags) (*ExecutionResult, error)
-	CaveEnter(ctx context.Context, m *Managers, args *caveEnterArgs, flags *caveEnterFlags) (*ExecutionResult, error)
-	CaveInfo(ctx context.Context, m *Managers, args *caveInfoArgs, flags *caveInfoFlags) (*ExecutionResult, error)
-	CaveInit(ctx context.Context, m *Managers, args *caveInitArgs, flags *caveInitFlags) (*ExecutionResult, error)
-	CaveList(ctx context.Context, m *Managers, args *caveListArgs, flags *caveListFlags) (*ExecutionResult, error)
-	CaveRun(ctx context.Context, m *Managers, args *caveRunArgs, flags *caveRunFlags) (*ExecutionResult, error)
-	CaveSync(ctx context.Context, m *Managers, args *caveSyncArgs, flags *caveSyncFlags) (*ExecutionResult, error)
-	CaveUse(ctx context.Context, m *Managers, args *caveUseArgs, flags *caveUseFlags) (*ExecutionResult, error)
-	DiskClean(ctx context.Context, m *Managers, args *diskCleanArgs, flags *diskCleanFlags) (*ExecutionResult, error)
-	DiskInfo(ctx context.Context, m *Managers, args *diskInfoArgs, flags *diskInfoFlags) (*ExecutionResult, error)
-	DiskUninstall(ctx context.Context, m *Managers, args *diskUninstallArgs, flags *diskUninstallFlags) (*ExecutionResult, error)
-	PkgInstall(ctx context.Context, m *Managers, args *pkgInstallArgs, flags *pkgInstallFlags) (*ExecutionResult, error)
-	PkgList(ctx context.Context, m *Managers, args *pkgListArgs, flags *pkgListFlags) (*ExecutionResult, error)
-	RecipeRepl(ctx context.Context, m *Managers, args *recipeReplArgs, flags *recipeReplFlags) (*ExecutionResult, error)
-	RepoAdd(ctx context.Context, m *Managers, args *repoAddArgs, flags *repoAddFlags) (*ExecutionResult, error)
-	RepoList(ctx context.Context, m *Managers, args *repoListArgs, flags *repoListFlags) (*ExecutionResult, error)
-	Version(ctx context.Context, m *Managers, args *versionArgs, flags *versionFlags) (*ExecutionResult, error)
+	CaveAddpkg(params *caveAddpkgParams) Action
+	CaveEnter(params *caveEnterParams) Action
+	CaveInfo(params *caveInfoParams) Action
+	CaveInit(params *caveInitParams) Action
+	CaveList(params *caveListParams) Action
+	CaveRun(params *caveRunParams) Action
+	CaveSync(params *caveSyncParams) Action
+	CaveUse(params *caveUseParams) Action
+	DiskClean(params *diskCleanParams) Action
+	DiskInfo(params *diskInfoParams) Action
+	DiskUninstall(params *diskUninstallParams) Action
+	PkgInstall(params *pkgInstallParams) Action
+	PkgList(params *pkgListParams) Action
+	RecipeRepl(params *recipeReplParams) Action
+	RepoAdd(params *repoAddParams) Action
+	RepoList(params *repoListParams) Action
+	Version(params *versionParams) Action
 }
 
 var cliGlobalFlags = []*flagDef{
@@ -236,34 +174,35 @@ var cliTopics = []*topicDef{
 var cliCommands = buildCommands()
 
 func buildCommands() []*commandDef {
-	cmdVersion := &commandDef{Name: "version", Desc: "Show version information", SafeInCave: true}
-	cmdPkg := &commandDef{Name: "pkg", Desc: "Manage packages", SafeInCave: false}
-	cmdPkgInstall := &commandDef{Name: "install", Desc: "Install a package", SafeInCave: false, Parent: cmdPkg, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name and version (e.g., nodejs@20)"}}, Flags: []*flagDef{{Name: "force", Short: "f", Type: "bool", Desc: "Force reinstallation"}}, Examples: []string{"pi pkg install nodejs@20", "pi pkg i nodejs@latest"}}
-	cmdPkgList := &commandDef{Name: "list", Desc: "List available versions for a package", SafeInCave: false, Parent: cmdPkg, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name (e.g. go)"}}, Flags: []*flagDef{{Name: "all", Short: "a", Type: "bool", Desc: "Show all architectures/OSs"}, {Name: "index", Short: "i", Type: "bool", Desc: "List registry patterns only"}}, Examples: []string{"pi pkg list go"}}
-	cmdRecipe := &commandDef{Name: "recipe", Desc: "Recipe development", SafeInCave: false}
-	cmdRecipeRepl := &commandDef{Name: "repl", Desc: "Run the recipe development REPL", SafeInCave: false, Parent: cmdRecipe, Args: []*argDef{{Name: "file", Type: "string", Desc: "Path to recipe file"}}, Examples: []string{"pi recipe repl ./recipes/nodejs.star"}}
-	cmdCave := &commandDef{Name: "cave", Desc: "Manage the cave (sandbox)", SafeInCave: false}
-	cmdCaveInfo := &commandDef{Name: "info", Desc: "Display information about the current cave", SafeInCave: true, Parent: cmdCave, Examples: []string{"pi cave info"}}
-	cmdCaveList := &commandDef{Name: "list", Desc: "List all registered caves and their variants", SafeInCave: false, Parent: cmdCave, Examples: []string{"pi cave list"}}
-	cmdCaveUse := &commandDef{Name: "use", Desc: "Start a cave by name from any directory", SafeInCave: false, Parent: cmdCave, Args: []*argDef{{Name: "cave", Type: "string", Desc: "Cave name and optional variant (e.g., project:dev)"}}, Examples: []string{"pi cave use myproject", "pi cave use myproject:dev"}}
-	cmdCaveRun := &commandDef{Name: "run", Desc: "Run a command inside the cave", SafeInCave: false, Parent: cmdCave, Args: []*argDef{{Name: "command", Type: "string", Desc: "Command to run"}}, Flags: []*flagDef{{Name: "variant", Short: "v", Type: "string", Desc: "Variant to use"}}, Examples: []string{"pi cave run ls", "pi cave run -v test go test ./..."}}
-	cmdCaveSync := &commandDef{Name: "sync", Desc: "Sync all packages in pi.cave.json", SafeInCave: false, Parent: cmdCave, Examples: []string{"pi cave sync"}}
-	cmdCaveInit := &commandDef{Name: "init", Desc: "Initialize a new workspace", SafeInCave: false, Parent: cmdCave, Examples: []string{"pi cave init"}}
-	cmdCaveAddpkg := &commandDef{Name: "addpkg", Desc: "Add a package to the cave configuration", SafeInCave: false, Parent: cmdCave, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name and version (e.g., go=stable)"}}, Examples: []string{"pi cave addpkg go=stable"}}
-	cmdCaveEnter := &commandDef{Name: "enter", Desc: "Enter the sandbox shell", SafeInCave: false, Parent: cmdCave, Examples: []string{"pi cave enter", "pi enter"}}
-	cmdDisk := &commandDef{Name: "disk", Desc: "Manage local storage", SafeInCave: false}
-	cmdDiskInfo := &commandDef{Name: "info", Desc: "Show disk usage summary", SafeInCave: false, Parent: cmdDisk, Examples: []string{"pi disk info"}}
-	cmdDiskClean := &commandDef{Name: "clean", Desc: "Remove all cached data (packages, downloads, discovery cache)", SafeInCave: false, Parent: cmdDisk, Examples: []string{"pi disk clean"}}
-	cmdDiskUninstall := &commandDef{Name: "uninstall", Desc: "Wipe all pi data (cache, state, and config)", SafeInCave: false, Parent: cmdDisk, Flags: []*flagDef{{Name: "force", Short: "f", Type: "bool", Desc: "Skip confirmation prompt"}}, Examples: []string{"pi disk uninstall"}}
-	cmdRepo := &commandDef{Name: "repo", Desc: "Manage repositories", SafeInCave: false}
-	cmdRepoList := &commandDef{Name: "list", Desc: "List all repositories", SafeInCave: false, Parent: cmdRepo, Examples: []string{"pi repo list", "pi list"}}
-	cmdRepoAdd := &commandDef{Name: "add", Desc: "Add a new repository", SafeInCave: false, Parent: cmdRepo, Args: []*argDef{{Name: "name", Type: "string", Desc: "Name of the repository"}, {Name: "url", Type: "string", Desc: "URL of the repository"}}, Examples: []string{"pi repo add official https://github.com/google/pi-recipes"}}
-	cmdHelp := &commandDef{Name: "help", Desc: "Show help information", SafeInCave: true}
+	cmdVersion := &commandDef{Name: "version", Desc: "Show version information", Safe: true}
+	cmdPkg := &commandDef{Name: "pkg", Desc: "Manage packages", Safe: false}
+	cmdPkgInstall := &commandDef{Name: "install", Desc: "Install a package", Parent: cmdPkg, Safe: false, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name and version (e.g., nodejs@20)"}}, Flags: []*flagDef{{Name: "force", Short: "f", Type: "bool", Desc: "Force reinstallation"}}, Examples: []string{"pi pkg install nodejs@20", "pi pkg i nodejs@latest"}}
+	cmdPkgList := &commandDef{Name: "list", Desc: "List available versions for a package", Parent: cmdPkg, Safe: false, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name (e.g. go)"}}, Flags: []*flagDef{{Name: "all", Short: "a", Type: "bool", Desc: "Show all architectures/OSs"}, {Name: "index", Short: "i", Type: "bool", Desc: "List registry patterns only"}}, Examples: []string{"pi pkg list go"}}
+	cmdRecipe := &commandDef{Name: "recipe", Desc: "Recipe development", Safe: false}
+	cmdRecipeRepl := &commandDef{Name: "repl", Desc: "Run the recipe development REPL", Parent: cmdRecipe, Safe: false, Args: []*argDef{{Name: "file", Type: "string", Desc: "Path to recipe file"}}, Examples: []string{"pi recipe repl ./recipes/nodejs.star"}}
+	cmdCave := &commandDef{Name: "cave", Desc: "Manage the cave (sandbox)", Safe: false}
+	cmdCaveInfo := &commandDef{Name: "info", Desc: "Display information about the current cave", Parent: cmdCave, Safe: true, Examples: []string{"pi cave info"}}
+	cmdCaveList := &commandDef{Name: "list", Desc: "List all registered caves and their variants", Parent: cmdCave, Safe: false, Examples: []string{"pi cave list"}}
+	cmdCaveUse := &commandDef{Name: "use", Desc: "Start a cave by name from any directory", Parent: cmdCave, Safe: false, Args: []*argDef{{Name: "cave", Type: "string", Desc: "Cave name and optional variant (e.g., project:dev)"}}, Examples: []string{"pi cave use myproject", "pi cave use myproject:dev"}}
+	cmdCaveRun := &commandDef{Name: "run", Desc: "Run a command inside the cave", Parent: cmdCave, Safe: false, Args: []*argDef{{Name: "command", Type: "string", Desc: "Command to run"}}, Flags: []*flagDef{{Name: "variant", Short: "v", Type: "string", Desc: "Variant to use"}}, Examples: []string{"pi cave run ls", "pi cave run -v test go test ./..."}}
+	cmdCaveSync := &commandDef{Name: "sync", Desc: "Sync all packages in pi.cave.json", Parent: cmdCave, Safe: false, Examples: []string{"pi cave sync"}}
+	cmdCaveInit := &commandDef{Name: "init", Desc: "Initialize a new workspace", Parent: cmdCave, Safe: false, Examples: []string{"pi cave init"}}
+	cmdCaveAddpkg := &commandDef{Name: "addpkg", Desc: "Add a package to the cave configuration", Parent: cmdCave, Safe: false, Args: []*argDef{{Name: "package", Type: "string", Desc: "Package name and version (e.g., go=stable)"}}, Examples: []string{"pi cave addpkg go=stable"}}
+	cmdCaveEnter := &commandDef{Name: "enter", Desc: "Enter the sandbox shell", Parent: cmdCave, Safe: false, Examples: []string{"pi cave enter", "pi enter"}}
+	cmdDisk := &commandDef{Name: "disk", Desc: "Manage local storage", Safe: false}
+	cmdDiskInfo := &commandDef{Name: "info", Desc: "Show disk usage summary", Parent: cmdDisk, Safe: false, Examples: []string{"pi disk info"}}
+	cmdDiskClean := &commandDef{Name: "clean", Desc: "Remove all cached data (packages, downloads, discovery cache)", Parent: cmdDisk, Safe: false, Examples: []string{"pi disk clean"}}
+	cmdDiskUninstall := &commandDef{Name: "uninstall", Desc: "Wipe all pi data (cache, state, and config)", Parent: cmdDisk, Safe: false, Flags: []*flagDef{{Name: "force", Short: "f", Type: "bool", Desc: "Skip confirmation prompt"}}, Examples: []string{"pi disk uninstall"}}
+	cmdRepo := &commandDef{Name: "repo", Desc: "Manage repositories", Safe: false}
+	cmdRepoList := &commandDef{Name: "list", Desc: "List all repositories", Parent: cmdRepo, Safe: false, Examples: []string{"pi repo list", "pi list"}}
+	cmdRepoAdd := &commandDef{Name: "add", Desc: "Add a new repository", Parent: cmdRepo, Safe: false, Args: []*argDef{{Name: "name", Type: "string", Desc: "Name of the repository"}, {Name: "url", Type: "string", Desc: "URL of the repository"}}, Examples: []string{"pi repo add official https://github.com/google/pi-recipes"}}
+	cmdHelp := &commandDef{Name: "help", Desc: "Show help information", Safe: true}
 	cmdPkg.Subs = []*commandDef{cmdPkgInstall, cmdPkgList}
 	cmdRecipe.Subs = []*commandDef{cmdRecipeRepl}
 	cmdCave.Subs = []*commandDef{cmdCaveInfo, cmdCaveList, cmdCaveUse, cmdCaveRun, cmdCaveSync, cmdCaveInit, cmdCaveAddpkg, cmdCaveEnter}
 	cmdDisk.Subs = []*commandDef{cmdDiskInfo, cmdDiskClean, cmdDiskUninstall}
 	cmdRepo.Subs = []*commandDef{cmdRepoList, cmdRepoAdd}
+
 	return []*commandDef{cmdVersion, cmdPkg, cmdRecipe, cmdCave, cmdDisk, cmdRepo, cmdHelp}
 }
 
@@ -316,159 +255,207 @@ func Parse(h Handlers, args []string) (Action, error) {
 	if finalInv == nil || finalInv.Command == nil {
 		return nil, fmt.Errorf("no command resolved")
 	}
-	if env := os.Getenv("PI_CAVENAME"); env != "" && !finalInv.Command.SafeInCave {
-		return nil, fmt.Errorf("already in cave %s", env)
-	}
 	path := getCmdPath(finalInv.Command)
 	switch path {
 	case "cave/addpkg":
-		args := &caveAddpkgArgs{}
-		args.Package = finalInv.Args["package"]
-		flags := &caveAddpkgFlags{}
-		flags.globalFlags = gf
+		params := &caveAddpkgParams{}
+		params.Package = finalInv.Args["package"]
+		params.globalFlags = gf
+		action := h.CaveAddpkg(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveAddpkg(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/enter":
-		args := &caveEnterArgs{}
-		flags := &caveEnterFlags{}
-		flags.globalFlags = gf
+		params := &caveEnterParams{}
+		params.globalFlags = gf
+		action := h.CaveEnter(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveEnter(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/info":
-		args := &caveInfoArgs{}
-		flags := &caveInfoFlags{}
-		flags.globalFlags = gf
+		params := &caveInfoParams{}
+		params.globalFlags = gf
+		action := h.CaveInfo(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveInfo(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/init":
-		args := &caveInitArgs{}
-		flags := &caveInitFlags{}
-		flags.globalFlags = gf
+		params := &caveInitParams{}
+		params.globalFlags = gf
+		action := h.CaveInit(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveInit(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/list":
-		args := &caveListArgs{}
-		flags := &caveListFlags{}
-		flags.globalFlags = gf
+		params := &caveListParams{}
+		params.globalFlags = gf
+		action := h.CaveList(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveList(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/run":
-		args := &caveRunArgs{}
-		args.Command = finalInv.Args["command"]
-		flags := &caveRunFlags{}
-		flags.globalFlags = gf
-		flags.Variant = stringFlag(finalInv.Flags, "variant")
+		params := &caveRunParams{}
+		params.Command = finalInv.Args["command"]
+		params.globalFlags = gf
+		params.Variant = stringFlag(finalInv.Flags, "variant")
+		action := h.CaveRun(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveRun(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/sync":
-		args := &caveSyncArgs{}
-		flags := &caveSyncFlags{}
-		flags.globalFlags = gf
+		params := &caveSyncParams{}
+		params.globalFlags = gf
+		action := h.CaveSync(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveSync(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "cave/use":
-		args := &caveUseArgs{}
-		args.Cave = finalInv.Args["cave"]
-		flags := &caveUseFlags{}
-		flags.globalFlags = gf
+		params := &caveUseParams{}
+		params.Cave = finalInv.Args["cave"]
+		params.globalFlags = gf
+		action := h.CaveUse(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.CaveUse(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "disk/clean":
-		args := &diskCleanArgs{}
-		flags := &diskCleanFlags{}
-		flags.globalFlags = gf
+		params := &diskCleanParams{}
+		params.globalFlags = gf
+		action := h.DiskClean(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.DiskClean(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "disk/info":
-		args := &diskInfoArgs{}
-		flags := &diskInfoFlags{}
-		flags.globalFlags = gf
+		params := &diskInfoParams{}
+		params.globalFlags = gf
+		action := h.DiskInfo(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.DiskInfo(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "disk/uninstall":
-		args := &diskUninstallArgs{}
-		flags := &diskUninstallFlags{}
-		flags.globalFlags = gf
-		flags.Force = boolFlag(finalInv.Flags, "force")
+		params := &diskUninstallParams{}
+		params.globalFlags = gf
+		params.Force = boolFlag(finalInv.Flags, "force")
+		action := h.DiskUninstall(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.DiskUninstall(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "pkg/install":
-		args := &pkgInstallArgs{}
-		args.Package = finalInv.Args["package"]
-		flags := &pkgInstallFlags{}
-		flags.globalFlags = gf
-		flags.Force = boolFlag(finalInv.Flags, "force")
+		params := &pkgInstallParams{}
+		params.Package = finalInv.Args["package"]
+		params.globalFlags = gf
+		params.Force = boolFlag(finalInv.Flags, "force")
+		action := h.PkgInstall(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.PkgInstall(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "pkg/list":
-		args := &pkgListArgs{}
-		args.Package = finalInv.Args["package"]
-		flags := &pkgListFlags{}
-		flags.globalFlags = gf
-		flags.All = boolFlag(finalInv.Flags, "all")
-		flags.Index = boolFlag(finalInv.Flags, "index")
+		params := &pkgListParams{}
+		params.Package = finalInv.Args["package"]
+		params.globalFlags = gf
+		params.All = boolFlag(finalInv.Flags, "all")
+		params.Index = boolFlag(finalInv.Flags, "index")
+		action := h.PkgList(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.PkgList(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "recipe/repl":
-		args := &recipeReplArgs{}
-		args.File = finalInv.Args["file"]
-		flags := &recipeReplFlags{}
-		flags.globalFlags = gf
+		params := &recipeReplParams{}
+		params.File = finalInv.Args["file"]
+		params.globalFlags = gf
+		action := h.RecipeRepl(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.RecipeRepl(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "repo/add":
-		args := &repoAddArgs{}
-		args.Name = finalInv.Args["name"]
-		args.Url = finalInv.Args["url"]
-		flags := &repoAddFlags{}
-		flags.globalFlags = gf
+		params := &repoAddParams{}
+		params.Name = finalInv.Args["name"]
+		params.Url = finalInv.Args["url"]
+		params.globalFlags = gf
+		action := h.RepoAdd(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.RepoAdd(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "repo/list":
-		args := &repoListArgs{}
-		flags := &repoListFlags{}
-		flags.globalFlags = gf
+		params := &repoListParams{}
+		params.globalFlags = gf
+		action := h.RepoList(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.RepoList(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "version":
-		args := &versionArgs{}
-		flags := &versionFlags{}
-		flags.globalFlags = gf
+		params := &versionParams{}
+		params.globalFlags = gf
+		action := h.Version(params)
+		if action == nil {
+			return nil, fmt.Errorf("no handler for command: %s", path)
+		}
 		return func(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-			applyGlobalFlags(m, &flags.globalFlags)
-			return h.Version(ctx, m, args, flags)
+			applyGlobalFlags(m, &params.globalFlags)
+			return action(ctx, m)
 		}, nil
 	case "help":
 		return helpAction(nil), nil

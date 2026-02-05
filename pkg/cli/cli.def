@@ -2,10 +2,11 @@
 global
     flag verbose bool "Enable verbose output" v
     flag config string "Path to config file" c
+    param safe = false
 
 # Commands
 cmd version "Show version information"
-    safe
+    param safe = true
 
 cmd pkg "Manage packages"
 
@@ -30,7 +31,7 @@ cmd recipe repl "Run the recipe development REPL"
 cmd cave "Manage the cave (sandbox)"
 
 cmd cave info "Display information about the current cave"
-    safe
+    param safe = true
     example "pi cave info"
 
 cmd cave list "List all registered caves and their variants"
