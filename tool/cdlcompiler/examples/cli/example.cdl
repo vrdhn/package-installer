@@ -1,6 +1,7 @@
 global
     name "example" "Minimal CLI sample"
     flag verbose bool "Enable verbose output" v
+    attr dangerous = true
 
 cmd user "Manage users"
 

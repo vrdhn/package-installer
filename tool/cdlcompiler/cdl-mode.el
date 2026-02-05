@@ -3,7 +3,7 @@
 (defvar cdl-highlights
   '(("^#.*" . font-lock-comment-face)
     ("\\b\\(global\\|cmd\\|topic\\)\\b" . font-lock-keyword-face)
-    ("\\b\\(param\\|flag\\|arg\\|example\\|text\\)\\b" . font-lock-builtin-face)
+    ("\\b\\(attr\\|flag\\|arg\\|example\\|text\\)\\b" . font-lock-builtin-face)
     ("\\b\\(bool\\|string\\)\\b" . font-lock-type-face)
     ("cmd\\s-+\\([a-zA-Z0-9_/ ]+\\)\)" 1 font-lock-function-name-face)
     ("\\(?:flag\\|arg\\)\\s-+\\([a-zA-Z0-9_-]+\\)" 1 font-lock-variable-name-face)))
@@ -23,7 +23,7 @@
       (beginning-of-line)
       (cond
        (is-inside-string (setq indent-col 4))
-       ((looking-at "^\\s-*\\(param\\|flag\\|arg\\|example\\|text\\)\\b")
+       ((looking-at "^\\s-*\\(attr\\|flag\\|arg\\|example\\|text\\)\\b")
         (setq indent-col 4))
        (t (setq indent-col 0))))
     (indent-line-to indent-col)))

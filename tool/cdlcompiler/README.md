@@ -1,57 +1,113 @@
-# Command Line Interface
+# cdlcompiler
 
-This CLI engine supports unique prefix matching and parent command omission.
+`cdlcompiler` is a tool that generates type-safe, generic Go command-line interfaces from a simple CLI Definition Language (`.cdl`). It emphasizes developer productivity by automating boilerplate while providing a powerful and flexible command structure.
 
-## Syntax
-```bash
-<program> [global flags] <command> [command flags] <subcommand> [subcommand flags] [args]
+## Key Features
+
+- **Generics**: The generated parser is generic over the execution result type.
+- **Unique Prefix Matching**: Users can type `app rep` instead of `app repository` if it's unambiguous.
+- **Command Omission**: Deeply nested subcommands can be invoked directly if their name is unique (e.g., `app list` instead of `app user list`).
+- **Type-Safe Params**: Commands receive a dedicated struct containing all parsed flags and arguments with correct Go types.
+- **Automatic Help**: Generates comprehensive help screens for the root, individual commands, and custom documentation topics.
+- **Attributes**: Attach custom metadata (bool, string, int) to commands for use in your implementation.
+
+## Usage
+
+1.  Define your CLI in a `.cdl` file.
+2.  Run the compiler:
+    ```bash
+    go run github.com/username/package-installer/tool/cdlcompiler <file.cdl> <package_name>
+    ```
+3.  Implement the required `Handlers[T]` interface and your result type `T` in your Go package.
+
+## CLI Definition Language (.cdl) Syntax
+
+### Global Section
+The `global` keyword starts the global configuration.
+- `name "app" "tagline"`: Sets the binary name and a short description.
+- `flag <name> <type> "description" [<short>]`: Defines a global flag available to all commands.
+- `attr <name> = <value>`: Defines a global attribute inherited by all commands.
+
+### Commands
+- `cmd <path> "description"`: Defines a command or subcommand. Paths use spaces (e.g., `cmd user add`).
+- `flag <name> <type> "description" [<short>]`: Defines a flag for the preceding command.
+- `arg <name> <type> "description"`: Defines a positional argument for the preceding command.
+- `example "command string"`: Adds a usage example to the help output.
+- `attr <name> = <value>`: Sets or overrides an attribute for the preceding command.
+
+### Documentation Topics
+- `topic <name> "description"`: Defines a standalone help topic.
+- `text "content"` or `text """multiline content"""`: Sets the body of the topic.
+
+### Supported Types
+- `bool`: Parsed as a boolean flag.
+- `string`: Parsed as a string.
+- `int`: (Attributes only) Parsed as an integer.
+
+## Go Integration Conventions
+
+The compiler generates two files in the specified package:
+1. `<basename>.go`: Contains the CLI definitions and internal parsing logic.
+2. `<basename>_support.go`: Contains helper functions for flag retrieval and resolution.
+
+### What You Must Implement
+
+In your application, you must define a result type (e.g., `ExecutionResult`) and implement the generated `Handlers[T]` interface.
+
+#### 1. ExecutionResult
+```go
+type ExecutionResult struct {
+    ExitCode int
+}
 ```
 
-*   **Prefix Matching**: `<program> rep` matches `<program> repo` if unambiguous.
-*   **Command Omission**: `<program> list` resolves to `<program> repo list` if `list` is unique among all subcommands.
-*   **Position Independence**: Command flags can be interleaved with args after the command is resolved.
-*   **Global Flags**: Global flags are parsed anywhere in the argument list.
-*   **Config Flag**: `--config/-c` is parsed but not yet wired to config loading.
+#### 2. Handlers Interface
+The compiler generates a `Handlers[T]` interface. You must implement `Help` and a `Run<Command>` method for every leaf command.
 
-## CLI Definition Language (.cdl)
-The CLI structure is defined in a `.cdl` file using a simple DSL:
+```go
+import "yourpackage/cli"
 
-| Keyword | Description |
-| :--- | :--- |
-| `global` | Marks the global flags section. |
-| `flag` | Defines a global or command-specific flag (`bool` or `string`). |
-| `cmd` | Defines a command or subcommand path. |
-| `arg` | Defines a positional argument for the preceding command. |
-| `safe` | Marks a command as safe to execute in restricted mode. |
-| `example` | Adds a usage example. |
-| `topic` | Defines a help topic. |
-| `text` | Adds documentation to a topic (supports `"""` for multiline). |
-| `name` | Sets the binary name and punch line for the CLI help. |
+type myHandlers struct {}
 
-## Example
-`examples/example.cdl`:
-```text
-global
-    name "example" "Minimal CLI sample"
-    flag verbose bool "Enable verbose output"
+func (h *myHandlers) Help(args []string) (*ExecutionResult, error) {
+    cli.PrintHelp(args...)
+    return &ExecutionResult{ExitCode: 0}, nil
+}
 
-cmd user "Manage users"
-flag all bool "Show all users"
-cmd user add "Add a user"
-arg name string "User name"
-example "app user add alice"
-
-cmd project "Manage projects"
-cmd project init "Initialize a project"
-arg path string "Project path"
-example "app project init ./demo"
+func (h *myHandlers) RunUserAdd(params *cli.UserAddParams) (*ExecutionResult, error) {
+    // Your logic here
+    return &ExecutionResult{ExitCode: 0}, nil
+}
 ```
 
-This example defines 2 top-level commands (`user`, `project`) and 2 subcommands
-(`user add`, `project init`).
+### The Parse Function
 
-## Generation
-`cdlcompiler` embeds the fixed Go support template under `examples/support.tmpl`.
-When you run `cligen <file>.cdl <package>`, the generated CLI is written back to the
-same directory as `<file>_support.go`, and the support template is reused for every
-definition.
+The generated `cli.Parse[T](h Handlers[T], args []string)` function is the entry point. It returns a `cli.Action[T]` (a function that executes the command) and the resolved `*cli.CommandDef`.
+
+#### Entry Point Example
+```go
+func main() {
+    h := &myHandlers{}
+    
+    // Parse os.Args[1:] with generics
+    action, cmd, err := cli.Parse[ExecutionResult](h, os.Args[1:])
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+        os.Exit(1)
+    }
+    
+    // Inspect resolved command and its attributes
+    if cmd != nil && cmd.Dangerous {
+        fmt.Println("Warning: This is a dangerous command!")
+    }
+
+    // Execute the action
+    res, err := action()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+        os.Exit(1)
+    }
+    
+    os.Exit(res.ExitCode)
+}
+```

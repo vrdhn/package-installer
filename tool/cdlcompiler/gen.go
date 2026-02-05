@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"go/format"
 	"sort"
 	"text/template"
@@ -15,14 +16,14 @@ type genData struct {
 	Commands    []*command
 	AllCommands []*command
 	Leafs       []*command
-	ParamDefs   []param
+	AttrDefs    []attr
 	CmdVarName  map[*command]string
 	AppName     string
 	Tagline     string
 }
 
 func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
-	params, err := collectParams(cdl)
+	attrs, err := collectAttrs(cdl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,12 +37,9 @@ func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
 		all = append(all, c)
 	})
 
-	helpCmd := &command{
-		Name:   "help",
-		Desc:   "Show help information",
-		Params: map[string]value{"safe": {Kind: "bool", Bool: true}}}
-	topCommands := append(append([]*command{}, cdl.Commands...), helpCmd)
-	all = append(all, helpCmd)
+	allGlobalFlags := append([]flag{
+		{Name: "help", Short: "h", Type: "bool", Desc: "Show help information"},
+	}, cdl.GlobalFlags...)
 
 	for _, c := range all {
 		cmdVars[c] = "cmd" + goNameForPath(cmdPath(c))
@@ -49,31 +47,45 @@ func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
 
 	data := genData{
 		Pkg:         pkgName,
-		GlobalFlags: cdl.GlobalFlags,
+		GlobalFlags: allGlobalFlags,
 		Topics:      cdl.Topics,
-		Commands:    topCommands,
+		Commands:    cdl.Commands,
 		AllCommands: all,
 		Leafs:       leafs,
-		ParamDefs:   params,
+		AttrDefs:    attrs,
 		CmdVarName:  cmdVars,
 		AppName:     cdl.AppName,
 		Tagline:     cdl.Tagline,
 	}
 
 	funcs := template.FuncMap{
-		"goFieldName":    goFieldName,
-		"goTypeForParam": goTypeForParam,
-		"goTypeForFlag":  goTypeForFlag,
-		"goTypeForArg":   goTypeForArg,
-		"lowerFirst":     lowerFirst,
-		"goNameForPath":  goNameForPath,
-		"cmdPath":        cmdPath,
+		"goFieldName":   goFieldName,
+		"goTypeForAttr": goTypeForAttr,
+		"goTypeForFlag": goTypeForFlag,
+		"goTypeForArg":  goTypeForArg,
+		"lowerFirst":    lowerFirst,
+		"goNameForPath": goNameForPath,
+		"cmdPath":       cmdPath,
 		"cmdVar": func(c *command) string {
 			return cmdVars[c]
 		},
-		"paramLiteral": func(cmd *command, name string, kind string) string {
-			val, _ := resolveParam(cdl, cmd, name)
-			return emitParamLiteral(val, kind)
+		"attrLiteral": func(cmd *command, name string, kind string) string {
+			val, _ := resolveAttr(cdl, cmd, name)
+			return emitAttrLiteral(val, kind)
+		},
+		"dict": func(values ...interface{}) (map[string]interface{}, error) {
+			if len(values)%2 != 0 {
+				return nil, fmt.Errorf("invalid dict call")
+			}
+			dict := make(map[string]interface{}, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict keys must be strings")
+				}
+				dict[key] = values[i+1]
+			}
+			return dict, nil
 		},
 	}
 
@@ -96,7 +108,6 @@ func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 
 	var buf1 bytes.Buffer
 	if err := sup.Execute(&buf1, data); err != nil {

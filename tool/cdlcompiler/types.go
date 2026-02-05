@@ -8,12 +8,12 @@ import (
 )
 
 type cdlTop struct {
-	GlobalFlags  []flag
-	GlobalParams map[string]value
-	Commands     []*command
-	Topics       []topic
-	AppName      string
-	Tagline      string
+	GlobalFlags []flag
+	GlobalAttrs map[string]value
+	Commands    []*command
+	Topics      []topic
+	AppName     string
+	Tagline     string
 }
 
 type flag struct {
@@ -32,7 +32,7 @@ type arg struct {
 type command struct {
 	Name     string
 	Desc     string
-	Params   map[string]value
+	Attrs    map[string]value
 	Args     []arg
 	Flags    []flag
 	Subs     []*command
@@ -53,7 +53,7 @@ type value struct {
 	Int  int
 }
 
-type param struct {
+type attr struct {
 	Name string
 	Kind string
 }
@@ -73,7 +73,7 @@ func goTypeForArg(t string) string {
 	return "string"
 }
 
-func goTypeForParam(kind string) string {
+func goTypeForAttr(kind string) string {
 	switch kind {
 	case "bool":
 		return "bool"
@@ -175,17 +175,17 @@ func isValidIdent(s string) bool {
 	return true
 }
 
-func collectParams(cdl *cdlTop) ([]param, error) {
+func collectAttrs(cdl *cdlTop) ([]attr, error) {
 	kinds := map[string]string{}
-	for name, pv := range cdl.GlobalParams {
+	for name, pv := range cdl.GlobalAttrs {
 		kinds[name] = pv.Kind
 	}
 	var walk func(cmds []*command) error
 	walk = func(cmds []*command) error {
 		for _, c := range cmds {
-			for name, pv := range c.Params {
+			for name, pv := range c.Attrs {
 				if existing, ok := kinds[name]; ok && existing != pv.Kind {
-					return fmt.Errorf("param %q has conflicting kinds: %s vs %s", name, existing, pv.Kind)
+					return fmt.Errorf("attr %q has conflicting kinds: %s vs %s", name, existing, pv.Kind)
 				}
 				kinds[name] = pv.Kind
 			}
@@ -208,15 +208,15 @@ func collectParams(cdl *cdlTop) ([]param, error) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	out := make([]param, 0, len(keys))
+	out := make([]attr, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, param{Name: k, Kind: kinds[k]})
+		out = append(out, attr{Name: k, Kind: kinds[k]})
 	}
 	return out, nil
 }
 
-func hasParam(params []param, name string) bool {
-	for _, d := range params {
+func hasAttr(attrs []attr, name string) bool {
+	for _, d := range attrs {
 		if d.Name == name {
 			return true
 		}
@@ -224,21 +224,21 @@ func hasParam(params []param, name string) bool {
 	return false
 }
 
-func resolveParam(cdl *cdlTop, cmd *command, name string) (value, bool) {
-	if cmd != nil && cmd.Params != nil {
-		if v, ok := cmd.Params[name]; ok {
+func resolveAttr(cdl *cdlTop, cmd *command, name string) (value, bool) {
+	if cmd != nil && cmd.Attrs != nil {
+		if v, ok := cmd.Attrs[name]; ok {
 			return v, true
 		}
 	}
-	if cdl != nil && cdl.GlobalParams != nil {
-		if v, ok := cdl.GlobalParams[name]; ok {
+	if cdl != nil && cdl.GlobalAttrs != nil {
+		if v, ok := cdl.GlobalAttrs[name]; ok {
 			return v, true
 		}
 	}
 	return value{}, false
 }
 
-func emitParamLiteral(v value, kind string) string {
+func emitAttrLiteral(v value, kind string) string {
 	switch kind {
 	case "bool":
 		if v.Kind == "bool" {

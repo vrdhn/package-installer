@@ -6,39 +6,41 @@ import (
 	"fmt"
 )
 
-type flagDef struct {
+type Action[T any] func() (T, error)
+
+type FlagDef struct {
 	Name  string
 	Short string
 	Type  string
 	Desc  string
 }
 
-type argDef struct {
+type ArgDef struct {
 	Name string
 	Type string
 	Desc string
 }
 
-type commandDef struct {
-	Name string
-	Desc string
-{{- range .ParamDefs }}
-	{{ goFieldName .Name }} {{ goTypeForParam .Kind }}
+type CommandDef struct {
+	Name        string
+	FullCommand string
+	Desc        string
+{{- range .AttrDefs }}
+	{{ goFieldName .Name }} {{ goTypeForAttr .Kind }}
 {{- end }}
-	Args     []*argDef
-	Flags    []*flagDef
-	Subs     []*commandDef
-	Parent   *commandDef
+	Args     []ArgDef
+	Flags    []FlagDef
+	Subs     []CommandDef
 	Examples []string
 }
 
-type topicDef struct {
+type TopicDef struct {
 	Name string
 	Desc string
 	Text string
 }
 
-type globalFlags struct {
+type GlobalFlags struct {
 {{- range .GlobalFlags }}
 	{{ goFieldName .Name }} {{ goTypeForFlag .Type }}
 {{- end }}
@@ -48,10 +50,10 @@ type globalFlags struct {
 }
 
 {{- range .Leafs }}
-{{- $base := lowerFirst (goNameForPath (cmdPath .)) }}
+{{- $base := goNameForPath (cmdPath .) }}
 
 type {{ $base }}Params struct {
-	globalFlags
+	GlobalFlags
 {{- if .Args }}
 {{- range .Args }}
 	{{ goFieldName .Name }} {{ goTypeForArg .Type }}
@@ -68,128 +70,121 @@ type {{ $base }}Params struct {
 }
 {{- end }}
 
-type Handlers interface {
+type Handlers[T any] interface {
+	Help(args []string) (T, error)
 {{- range .Leafs }}
-	{{ goNameForPath (cmdPath .) }}(params *{{ lowerFirst (goNameForPath (cmdPath .)) }}Params) Action
+	Run{{ goNameForPath (cmdPath .) }}(params *{{ goNameForPath (cmdPath .) }}Params) (T, error)
 {{- end }}
 }
 
-var cliGlobalFlags = []*flagDef{
+var CliGlobalFlags = []FlagDef{
 {{- range .GlobalFlags }}
 	{Name: {{ printf "%q" .Name }}, Short: {{ printf "%q" .Short }}, Type: {{ printf "%q" .Type }}, Desc: {{ printf "%q" .Desc }}},
 {{- end }}
 }
 
-var cliTopics = []*topicDef{
+var CliTopics = []TopicDef{
 {{- range .Topics }}
 	{Name: {{ printf "%q" .Name }}, Desc: {{ printf "%q" .Desc }}, Text: {{ printf "%q" .Text }}},
 {{- end }}
 }
 
-var cliCommands = buildCommands()
-var cliAppName = {{ printf "%q" .AppName }}
-var cliTagline = {{ printf "%q" .Tagline }}
-
-func buildCommands() []*commandDef {
-{{- range .AllCommands }}
-{{- $c := . }}
-	{{ cmdVar . }} := &commandDef{Name: {{ printf "%q" .Name }}, Desc: {{ printf "%q" .Desc }}{{- if .Parent }}, Parent: {{ cmdVar .Parent }}{{- end }}{{- range $p := $.ParamDefs }}, {{ goFieldName $p.Name }}: {{ paramLiteral $c $p.Name $p.Kind }}{{- end }}{{- if .Args }}, Args: []*argDef{ {{- range .Args }}{Name: {{ printf "%q" .Name }}, Type: {{ printf "%q" .Type }}, Desc: {{ printf "%q" .Desc }}},{{- end }} }{{- end }}{{- if .Flags }}, Flags: []*flagDef{ {{- range .Flags }}{Name: {{ printf "%q" .Name }}, Short: {{ printf "%q" .Short }}, Type: {{ printf "%q" .Type }}, Desc: {{ printf "%q" .Desc }}},{{- end }} }{{- end }}{{- if .Examples }}, Examples: []string{ {{- range .Examples }}{{ printf "%q" . }},{{- end }} }{{- end }} }
+var CliCommands = []CommandDef{
+{{- $root := . }}
+{{- range .Commands }}
+	{{ template "cmd" (dict "Cmd" . "Root" $root) }}
 {{- end }}
-{{- range .AllCommands }}
-{{- if .Subs }}
-	{{ cmdVar . }}.Subs = []*commandDef{ {{- range .Subs }}{{ cmdVar . }},{{- end }} }
-{{- end }}
-{{- end }}
-
-	return []*commandDef{ {{- range .Commands }}{{ cmdVar . }},{{- end }} }
 }
 
-type invocation struct {
-	Command *commandDef
+{{- define "cmd" }}
+{{- $c := .Cmd }}
+{{- $root := .Root }}
+CommandDef{
+	Name: {{ printf "%q" $c.Name }},
+	FullCommand: {{ printf "%q" (cmdPath $c) }},
+	Desc: {{ printf "%q" $c.Desc }},
+{{- range $p := $root.AttrDefs }}
+	{{ goFieldName $p.Name }}: {{ attrLiteral $c $p.Name $p.Kind }},
+{{- end }}
+{{- if $c.Args }}
+	Args: []ArgDef{
+{{- range $c.Args }}
+		{Name: {{ printf "%q" .Name }}, Type: {{ printf "%q" .Type }}, Desc: {{ printf "%q" .Desc }}},
+{{- end }}
+	},
+{{- end }}
+{{- if $c.Flags }}
+	Flags: []FlagDef{
+{{- range $c.Flags }}
+		{Name: {{ printf "%q" .Name }}, Short: {{ printf "%q" .Short }}, Type: {{ printf "%q" .Type }}, Desc: {{ printf "%q" .Desc }}},
+{{- end }}
+	},
+{{- end }}
+{{- if $c.Examples }}
+	Examples: []string{
+{{- range $c.Examples }}
+		{{ printf "%q" . }},
+{{- end }}
+	},
+{{- end }}
+{{- if $c.Subs }}
+	Subs: []CommandDef{
+{{- range $c.Subs }}
+		{{ template "cmd" (dict "Cmd" . "Root" $root) }}
+{{- end }}
+	},
+{{- end }}
+},
+{{- end }}
+
+var CliAppName = {{ printf "%q" .AppName }}
+var CliTagline = {{ printf "%q" .Tagline }}
+
+type Invocation struct {
+	Command *CommandDef
 	Args    map[string]string
 	Flags   map[string]any
 }
 
-func Parse(h Handlers, args []string) (Action, error) {
+func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) {
 	if h == nil {
-		return nil, fmt.Errorf("handlers is nil")
+		return nil, nil, fmt.Errorf("handlers is nil")
 	}
-	var gf globalFlags
-	var remaining []string
-	help := false
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--help" || arg == "-h" {
-			help = true
-			continue
-		}
-		found := false
-		for _, f := range cliGlobalFlags {
-			if arg == "--"+f.Name || (f.Short != "" && arg == "-"+f.Short) {
-				found = true
-				if f.Type == "bool" {
-					applyGlobalFlag(&gf, f.Name, true)
-				} else if f.Type == "string" && i+1 < len(args) {
-					applyGlobalFlag(&gf, f.Name, args[i+1])
-					i++
-				}
-			}
-		}
-		if !found {
-			remaining = append(remaining, arg)
-		}
+	var gf GlobalFlags
+	remaining := ProcessGlobalFlags(args, &gf)
+
+	if len(remaining) > 0 && remaining[0] == "help" {
+		gf.Help = true
+		remaining = remaining[1:]
 	}
-	if help || len(remaining) == 0 {
-		return helpAction(remaining), nil
+
+	if gf.Help || len(remaining) == 0 {
+		return func() (T, error) {
+			return h.Help(remaining)
+		}, nil, nil
 	}
-	if remaining[0] == "help" {
-		return helpAction(remaining[1:]), nil
-	}
-	inv := &invocation{Args: make(map[string]string), Flags: make(map[string]any)}
-	finalInv, err := resolve(inv, cliCommands, remaining)
+
+	resolvedCmd, remArgs, err := Resolve(CliCommands, remaining)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if finalInv == nil || finalInv.Command == nil {
-		return nil, fmt.Errorf("no command resolved")
+
+	inv := &Invocation{Command: resolvedCmd, Args: make(map[string]string), Flags: make(map[string]any)}
+	if err := ParseParams(inv, resolvedCmd, remArgs); err != nil {
+		return nil, resolvedCmd, err
 	}
-	path := getCmdPath(finalInv.Command)
-	switch path {
+
+	switch resolvedCmd.FullCommand {
 {{- range .Leafs }}
 	case {{ printf "%q" (cmdPath .) }}:
-		params := &{{ lowerFirst (goNameForPath (cmdPath .)) }}Params{}
-{{- range .Args }}
-		params.{{ goFieldName .Name }} = finalInv.Args[{{ printf "%q" .Name }}]
+		return handle{{ goNameForPath (cmdPath .) }}(h, inv, gf), resolvedCmd, nil
 {{- end }}
-		params.globalFlags = gf
-{{- range .Flags }}
-{{- if eq .Type "bool" }}
-		params.{{ goFieldName .Name }} = boolFlag(finalInv.Flags, {{ printf "%q" .Name }})
-{{- else if eq .Type "string" }}
-		params.{{ goFieldName .Name }} = stringFlag(finalInv.Flags, {{ printf "%q" .Name }})
-{{- end }}
-{{- end }}
-		action := h.{{ goNameForPath (cmdPath .) }}(params)
-		if action == nil {
-			return nil, fmt.Errorf("no handler for command: %s", path)
-		}
-		return action, nil
-{{- end }}
-	case "help":
-		return helpAction(nil), nil
 	default:
-		return nil, fmt.Errorf("no handler for command: %s", path)
+		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
 }
 
-func helpAction(args []string) Action {
-	return func() (*ExecutionResult, error) {
-		printHelp(args...)
-		return &ExecutionResult{ExitCode: 0}, nil
-	}
-}
-
-func applyGlobalFlag(g *globalFlags, name string, val any) {
+func ApplyGlobalFlag(g *GlobalFlags, name string, val any) {
 	switch name {
 {{- range .GlobalFlags }}
 	case {{ printf "%q" .Name }}:
@@ -205,3 +200,23 @@ func applyGlobalFlag(g *globalFlags, name string, val any) {
 {{- end }}
 	}
 }
+
+{{- range .Leafs }}
+func handle{{ goNameForPath (cmdPath .) }}[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &{{ goNameForPath (cmdPath .) }}Params{}
+	params.GlobalFlags = gf
+{{- range .Args }}
+	params.{{ goFieldName .Name }} = inv.Args[{{ printf "%q" .Name }}]
+{{- end }}
+{{- range .Flags }}
+{{- if eq .Type "bool" }}
+	params.{{ goFieldName .Name }} = BoolFlag(inv.Flags, {{ printf "%q" .Name }})
+{{- else if eq .Type "string" }}
+	params.{{ goFieldName .Name }} = StringFlag(inv.Flags, {{ printf "%q" .Name }})
+{{- end }}
+{{- end }}
+	return func() (T, error) {
+		return h.Run{{ goNameForPath (cmdPath .) }}(params)
+	}
+}
+{{- end }}

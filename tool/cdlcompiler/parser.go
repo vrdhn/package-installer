@@ -15,7 +15,7 @@ type parser struct {
 }
 
 func parseDef(dsl string) (*cdlTop, error) {
-	p := &parser{lex: newLexer(dsl), def: &cdlTop{GlobalParams: map[string]value{}}}
+	p := &parser{lex: newLexer(dsl), def: &cdlTop{GlobalAttrs: map[string]value{}}}
 	p.next()
 	if err := p.parse(); err != nil {
 		return nil, err
@@ -56,8 +56,8 @@ func (p *parser) parseStatement() error {
 		return p.parseFlag()
 	case "arg":
 		return p.parseArg()
-	case "param":
-		return p.parseParam()
+	case "attr":
+		return p.parseAttr()
 	case "name":
 		return p.parseName()
 	case "example":
@@ -170,15 +170,15 @@ func (p *parser) parseArg() error {
 	return nil
 }
 
-func (p *parser) parseParam() error {
+func (p *parser) parseAttr() error {
 	p.next()
 	if p.tok.kind != tokIdentifier {
-		return fmt.Errorf("line %d: expected param name", p.tok.line)
+		return fmt.Errorf("line %d: expected attr name", p.tok.line)
 	}
 	name := p.tok.value
 	p.next()
 	if p.tok.kind != tokEquals {
-		return fmt.Errorf("line %d: expected '=' after param name", p.tok.line)
+		return fmt.Errorf("line %d: expected '=' after attr name", p.tok.line)
 	}
 	p.next()
 
@@ -190,7 +190,7 @@ func (p *parser) parseParam() error {
 		if p.tok.value == "true" || p.tok.value == "false" {
 			val = value{Kind: "bool", Bool: p.tok.value == "true"}
 		} else {
-			return fmt.Errorf("line %d: expected bool or string param value", p.tok.line)
+			return fmt.Errorf("line %d: expected bool or string attr value", p.tok.line)
 		}
 	case tokNumber:
 		n, err := strconv.Atoi(p.tok.value)
@@ -199,21 +199,21 @@ func (p *parser) parseParam() error {
 		}
 		val = value{Kind: "int", Int: n}
 	default:
-		return fmt.Errorf("line %d: expected param value", p.tok.line)
+		return fmt.Errorf("line %d: expected attr value", p.tok.line)
 	}
 	p.next()
 
 	if p.lastCmd == nil {
-		if p.def.GlobalParams == nil {
-			p.def.GlobalParams = map[string]value{}
+		if p.def.GlobalAttrs == nil {
+			p.def.GlobalAttrs = map[string]value{}
 		}
-		p.def.GlobalParams[name] = val
+		p.def.GlobalAttrs[name] = val
 		return nil
 	}
-	if p.lastCmd.Params == nil {
-		p.lastCmd.Params = map[string]value{}
+	if p.lastCmd.Attrs == nil {
+		p.lastCmd.Attrs = map[string]value{}
 	}
-	p.lastCmd.Params[name] = val
+	p.lastCmd.Attrs[name] = val
 	return nil
 }
 
