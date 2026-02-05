@@ -334,14 +334,18 @@ func printPackageSample(w io.Writer, pkgs []recipe.PackageDefinition, limit int)
 	if len(pkgs) < limit {
 		limit = len(pkgs)
 	}
-	fmt.Fprintf(w, "%-20s %-15s %-10s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "OS", "ARCH")
+	fmt.Fprintf(w, "%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
 	for i := 0; i < limit; i++ {
 		p := pkgs[i]
 		status := p.ReleaseStatus
 		if status == "" {
 			status = "unknown"
 		}
-		fmt.Fprintf(w, "%-20s %-15s %-10s %-10s %-10s\n", p.Name, p.Version, status, p.OS, p.Arch)
+		releaseDate := p.ReleaseDate
+		if releaseDate == "" {
+			releaseDate = "-"
+		}
+		fmt.Fprintf(w, "%-20s %-15s %-10s %-12s %-10s %-10s\n", p.Name, p.Version, status, releaseDate, p.OS, p.Arch)
 	}
 	if len(pkgs) > limit {
 		fmt.Fprintf(w, "... (%d more)\n", len(pkgs)-limit)

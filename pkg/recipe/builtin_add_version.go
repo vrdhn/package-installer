@@ -15,6 +15,7 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 			{Name: "name", Type: "string", Desc: "Internal package name (e.g. 'nodejs')"},
 			{Name: "version", Type: "string", Desc: "Version string (e.g. '20.11.0')"},
 			{Name: "release_status", Type: "string", Desc: "Status: 'stable', 'lts', 'current', 'rc', 'ea'"},
+			{Name: "release_date", Type: "string", Desc: "Release date (e.g. '2024-01-12')"},
 			{Name: "os", Type: "string", Desc: "Target OS: 'linux', 'darwin', 'windows'"},
 			{Name: "arch", Type: "string", Desc: "Target Arch: 'x64', 'arm64'"},
 			{Name: "url", Type: "string", Desc: "Download URL for the archive"},
@@ -30,10 +31,30 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 		if ctx == nil || ctx.AddVersion == nil {
 			return nil, fmt.Errorf("add_version called without active context")
 		}
+
+		nonNullable := []string{
+			"name",
+			"version",
+			"release_status",
+			"os",
+			"arch",
+			"url",
+			"filename",
+			"checksum",
+			"env",
+			"symlinks",
+		}
+		for _, key := range nonNullable {
+			if isNone(kwargs[key]) {
+				return nil, fmt.Errorf("%s cannot be None", key)
+			}
+		}
+
 		pkg := PackageDefinition{
 			Name:          asString(kwargs["name"]),
 			Version:       asString(kwargs["version"]),
 			ReleaseStatus: asString(kwargs["release_status"]),
+			ReleaseDate:   asString(kwargs["release_date"]),
 			URL:           asString(kwargs["url"]),
 			Filename:      asString(kwargs["filename"]),
 			Checksum:      asString(kwargs["checksum"]),
@@ -55,6 +76,8 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 			for _, k := range env.Keys() {
 				pkg.Env[asString(k)] = asString(mustGet(env, k))
 			}
+		} else {
+			return nil, fmt.Errorf("env must be a dict")
 		}
 
 		if syms, ok := kwargs["symlinks"].(*starlark.Dict); ok {
@@ -62,6 +85,8 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 			for _, k := range syms.Keys() {
 				pkg.Symlinks[asString(k)] = asString(mustGet(syms, k))
 			}
+		} else {
+			return nil, fmt.Errorf("symlinks must be a dict")
 		}
 
 		ctx.AddVersion(pkg)
@@ -74,10 +99,20 @@ func asString(v starlark.Value) string {
 	if v == nil {
 		return ""
 	}
+	if v == starlark.None {
+		return ""
+	}
 	if s, ok := v.(starlark.String); ok {
 		return s.GoString()
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+func isNone(v starlark.Value) bool {
+	if v == nil {
+		return true
+	}
+	return v == starlark.None
 }
 
 func mustGet(d *starlark.Dict, k starlark.Value) starlark.Value {

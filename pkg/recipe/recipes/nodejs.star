@@ -39,6 +39,7 @@ def resolve_nodejs(pkg_name):
                 name = "nodejs",
                 version = version,
                 release_status = status,
+                release_date = v.get("date", ""),
                 os = os_type,
                 arch = arch_type,
                 url = url,

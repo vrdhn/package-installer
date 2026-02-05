@@ -26,12 +26,14 @@ Handlers use this signature:
 ### Required `add_version(...)` fields
 All fields are required keyword args (use empty strings if unknown):
 - `name`, `version`, `release_status` (stable, lts, current, rc, ea)
+- `release_date` (e.g., 2024-01-12)
 - `os`, `arch`, `url`, `filename`, `checksum`
 - `env` (dict, can be empty)
 - `symlinks` (dict, can be empty)
 
 ### Built-ins
 - `download(url=...)`
+- `download_github_releases(owner=..., repo=...)`
 - `json.decode(data)` / `json.encode(val)`
 - `html.parse(data)` / `html.to_json(data)`
 - `jq.query(filter, val)`

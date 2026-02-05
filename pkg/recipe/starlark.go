@@ -478,6 +478,7 @@ func (sr *StarlarkRecipe) loadRegistry() error {
 		"html":          starlarkstruct.FromStringDict(starlark.String("html"), htmlBuiltins()),
 		"jq":            starlarkstruct.FromStringDict(starlark.String("jq"), jqBuiltins()),
 		"download":      newDownloadBuiltin(sr),
+		"download_github_releases": newDownloadGitHubReleasesBuiltin(sr),
 		"add_version":   newAddVersionBuiltin(sr),
 		"add_ecosystem": newAddEcosystemBuiltin(sr),
 		"add_pkgdef":    newAddPkgdefBuiltin(sr),

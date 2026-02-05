@@ -55,6 +55,7 @@ def resolve_golang(pkg_name):
                 name = "golang",
                 version = version_str,
                 release_status = status,
+                release_date = release.get("time", ""),
                 os = os_type,
                 arch = arch_type,
                 url = "https://go.dev/dl/" + filename,

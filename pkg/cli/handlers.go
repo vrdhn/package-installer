@@ -384,8 +384,8 @@ func runPkgList(ctx context.Context, m *Managers, args *PkgListArgs, flags *PkgL
 
 	m.Disp.Close() // Close TUI to print list to stdout
 
-	fmt.Printf("%-20s %-15s %-10s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "OS", "ARCH")
-	fmt.Println(strings.Repeat("-", 75))
+	fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
+	fmt.Println(strings.Repeat("-", 90))
 
 	myOS := m.SysCfg.GetOS()
 	myArch := m.SysCfg.GetArch()
@@ -400,7 +400,11 @@ func runPkgList(ctx context.Context, m *Managers, args *PkgListArgs, flags *PkgL
 		if status == "" {
 			status = "unknown"
 		}
-		fmt.Printf("%-20s %-15s %-10s %-10s %-10s\n", p.Name, p.Version, status, p.OS, p.Arch)
+		releaseDate := p.ReleaseDate
+		if releaseDate == "" {
+			releaseDate = "-"
+		}
+		fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", p.Name, p.Version, status, releaseDate, p.OS, p.Arch)
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }

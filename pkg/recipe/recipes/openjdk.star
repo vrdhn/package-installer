@@ -70,6 +70,7 @@ def resolve_openjdk(pkg_name):
                     name = "openjdk",
                     version = current_version,
                     release_status = status,
+                    release_date = "",
                     os = url_os,
                     arch = url_arch,
                     url = href,

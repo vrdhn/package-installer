@@ -76,6 +76,7 @@ def handler(pkg_name):
         name = "demo",
         version = "1.0.0",
         release_status = "stable",
+        release_date = "",
         os = "linux",
         arch = "x64",
         url = "https://example.com/demo.tar.gz",

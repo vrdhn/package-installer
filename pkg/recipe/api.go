@@ -14,6 +14,7 @@ type PackageDefinition struct {
 	Name          string
 	Version       string
 	ReleaseStatus string
+	ReleaseDate   string
 	OS            config.OSType
 	Arch          config.ArchType
 	URL           string

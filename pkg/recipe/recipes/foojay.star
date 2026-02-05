@@ -30,6 +30,7 @@ def resolve_foojay(pkg_name):
             name = "java-" + p["distribution"],
             version = version,
             release_status = status,
+            release_date = p.get("release_date", ""),
             os = os_type,
             arch = arch_type,
             url = p["links"]["pkg_download_redirect"],
