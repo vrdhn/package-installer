@@ -158,10 +158,6 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 	if err != nil {
 		return err
 	}
-	fullName := p.Name
-	if p.Ecosystem != "" {
-		fullName = p.Ecosystem + ":" + p.Name
-	}
 
 	sr, err := recipe.NewStarlarkRecipe(r.name, r.source, func(msg string) {
 		fmt.Fprintf(r.out, "[starlark] %s\n", msg)
@@ -177,32 +173,32 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 
 	if legacy {
 		fmt.Fprintln(r.out, "Legacy recipe detected (no regex registry).")
-		return r.executeLegacy(ctx, sr, p, fullName)
+		return r.executeLegacy(ctx, sr, p)
 	}
 
-	regex, err := selectRegex(patterns, fullName, regexOverride)
+	regex, err := selectRegex(patterns, p.Name, regexOverride)
 	if err != nil {
 		return err
 	}
 
 	selected := recipe.NewSelectedRecipe(sr, regex)
-	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, fullName), r.out)
-	pkgs, err := resolver.List(ctx, r.cfg, selected, p.Ecosystem, p.Name, p.Version, task)
+	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, p.Name), r.out)
+	pkgs, err := resolver.List(ctx, r.cfg, selected, p.Name, p.Version, task)
 	if err != nil {
 		return err
 	}
 
-	r.printRunSummary(fullName, p.Name, p.Version, regex, pkgs)
+	r.printRunSummary(p.Name, p.Name, p.Version, regex, pkgs)
 	return nil
 }
 
-func (r *recipeRepl) executeLegacy(ctx context.Context, sr *recipe.StarlarkRecipe, p *pkgs.Package, fullName string) error {
-	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, fullName), r.out)
-	pkgs, err := resolver.List(ctx, r.cfg, sr, p.Ecosystem, p.Name, p.Version, task)
+func (r *recipeRepl) executeLegacy(ctx context.Context, sr *recipe.StarlarkRecipe, p *pkgs.Package) error {
+	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, p.Name), r.out)
+	pkgs, err := resolver.List(ctx, r.cfg, sr, p.Name, p.Version, task)
 	if err != nil {
 		return err
 	}
-	r.printRunSummary(fullName, p.Name, p.Version, "(legacy)", pkgs)
+	r.printRunSummary(p.Name, p.Name, p.Version, "(legacy)", pkgs)
 	return nil
 }
 

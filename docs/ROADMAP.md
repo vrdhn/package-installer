@@ -7,7 +7,7 @@
 *   [x] Workspace management with `pi.cave.json`.
 *   [x] Custom CLI engine with prefix matching.
 
-## Phase 2: Ecosystems & Repositories (Current)
+## Phase 2: Package Sources & Repositories (Current)
 *   [~] `pi repo` commands exist but are placeholders (no actual repo support yet).
 *   [x] Built-in recipes for Node.js, Go, OpenJDK, and Foojay distributions.
 *   [ ] Expand standard library of recipes (Rust, Python, Haskell).

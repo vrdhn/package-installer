@@ -144,6 +144,9 @@ func (sr *StarlarkRecipe) executeHandler(ctx *DiscoveryContext, regexKey string,
 		starlark.String(ctx.PkgName),
 	}, nil)
 	if err != nil {
+		if evalErr, ok := err.(*starlark.EvalError); ok {
+			return nil, fmt.Errorf("recipe handler error in %s:\n%s", sr.Name, evalErr.Backtrace())
+		}
 		return nil, fmt.Errorf("recipe handler error: %s %w", sr.Name, err)
 	}
 
@@ -480,12 +483,14 @@ func (sr *StarlarkRecipe) loadRegistry() error {
 		"download":                 newDownloadBuiltin(sr),
 		"download_github_releases": newDownloadGitHubReleasesBuiltin(sr),
 		"add_version":              newAddVersionBuiltin(sr),
-		"add_ecosystem":            newAddEcosystemBuiltin(sr),
 		"add_pkgdef":               newAddPkgdefBuiltin(sr),
 	}
 
 	globals, err := starlark.ExecFile(sr.thread, sr.Name+".star", sr.Source, builtins)
 	if err != nil {
+		if evalErr, ok := err.(*starlark.EvalError); ok {
+			return fmt.Errorf("failed to load recipe %s:\n%s", sr.Name, evalErr.Backtrace())
+		}
 		return err
 	}
 	sr.globals = globals

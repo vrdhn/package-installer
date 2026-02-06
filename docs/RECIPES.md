@@ -1,20 +1,20 @@
 # Recipes & Packages
 
-`pi` uses a decentralized recipe model to support any ecosystem. Recipes are Starlark files that emit package versions via `add_version(...)`.
+`pi` uses a decentralized recipe model to support various platforms and languages. Recipes are Starlark files that emit package versions via `add_version(...)`.
 
 ## Package Identifiers
-Packages follow the format: `[ecosystem:]name[=version]`
+Packages follow the format: `[prefix:]name[=version]`
 
 *   `nodejs=20`: Latest 20.x version of Node.js.
 *   `go=stable`: Latest stable Go.
-*   `pip:numpy`: Python package (handled by ecosystem manager).
+*   `pip:numpy`: Python package.
 
 ## Starlark Recipes
 Recipes are written in Starlark and register package handlers via `add_pkgdef(...)`.
 
 Handlers use this signature:
 `def handler(pkg_name):`
-`pkg_name` is the full identifier and may include the ecosystem prefix (e.g., `npm:express`).
+`pkg_name` is the full identifier and may include an optional prefix (e.g., `npm:express`).
 
 ### Execution Model
 1.  Register handlers with `add_pkgdef(regex, handler)` at module load time.
@@ -39,7 +39,6 @@ All fields are required keyword args (use empty strings if unknown):
 - `jq.query(filter, val)`
 - `add_version(...)`
 - `add_pkgdef(regex, handler)`
-- `add_ecosystem(name=...)` (placeholder)
 
 ### Context
 Recipes do not receive a context object. They should emit as many versions as possible.

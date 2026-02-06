@@ -51,7 +51,7 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
 
-	repo, err := repository.NewManager(disp)
+	repo, err := repository.NewManager(disp, sysCfg)
 	if err != nil {
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing repository: %w", err)
 	}

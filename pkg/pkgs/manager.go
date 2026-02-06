@@ -45,12 +45,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 			return nil, err
 		}
 
-		fullName := p.Name
-		if p.Ecosystem != "" {
-			fullName = p.Ecosystem + ":" + p.Name
-		}
-
-		recipeName, regexKey, err := m.Repo.Resolve(fullName, m.SysConfig)
+		recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +64,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 		selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
 
 		// Resolve
-		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Ecosystem, p.Name, p.Version, task)
+		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Name, p.Version, task)
 		if err != nil {
 			task.Done()
 			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
@@ -121,12 +116,7 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 		return nil, err
 	}
 
-	fullName := p.Name
-	if p.Ecosystem != "" {
-		fullName = p.Ecosystem + ":" + p.Name
-	}
-
-	recipeName, regexKey, err := m.Repo.Resolve(fullName, m.SysConfig)
+	recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +134,7 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 	}
 
 	selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
-	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Ecosystem, p.Name, p.Version, task)
+	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
 }

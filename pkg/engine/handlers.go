@@ -10,7 +10,6 @@ import (
 	"pi/pkg/cdl"
 	"pi/pkg/config"
 	"pi/pkg/disk"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -153,7 +152,10 @@ func (h *DefaultHandlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResu
 }
 
 func (h *DefaultHandlers) RunRepoAdd(params *cdl.RepoAddParams) (ExecutionResult, error) {
-	fmt.Printf("Adding repo %s: %s\n", params.Name, params.Url)
+	if err := h.Mgr.Repo.AddRepo(params.Name, params.Url); err != nil {
+		return ExecutionResult{}, err
+	}
+	fmt.Printf("Added repository %s: %s\n", params.Name, params.Url)
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -416,24 +418,15 @@ func runPkgList(ctx context.Context, m *Managers, params *cdl.PkgListParams) (*E
 }
 
 func runRepoList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	entries, err := m.PkgsMgr.ListIndex(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	m.Disp.Close()
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Recipe < entries[j].Recipe
-	})
+	fmt.Printf("%-20s %s\n", "NAME", "URL")
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("%-20s %s\n", "builtin", "(embedded)")
 
-	fmt.Println("builtin:")
-	for _, entry := range entries {
-		patterns := entry.Patterns
-		if entry.Legacy || len(patterns) == 0 {
-			patterns = []string{"legacy"}
-		}
-		fmt.Printf("  %s.star(%s)\n", entry.Recipe, strings.Join(patterns, ", "))
+	repos := m.Repo.ListRepos()
+	for _, r := range repos {
+		fmt.Printf("%-20s %s\n", r.Name, r.URL)
 	}
 
 	return &ExecutionResult{ExitCode: 0}, nil

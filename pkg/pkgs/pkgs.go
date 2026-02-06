@@ -11,9 +11,8 @@ import (
 // Package represents a parsed package requirement.
 // Immutable
 type Package struct {
-	Ecosystem string
-	Name      string
-	Version   string
+	Name    string
+	Version string
 }
 
 // Symlink represents a symlink that should be created in the cave.
@@ -32,15 +31,10 @@ type Result struct {
 	CacheDir string
 }
 
-// Parse parses a package string in the format [ecosystem:]name[=version]
+// Parse parses a package string in the format name[=version]
+// Note: name can contain colons (e.g., pip:numpy)
 func Parse(s sysconfig.PkgRef) (*Package, error) {
 	p := &Package{}
-
-	// Extract ecosystem if present
-	if colonIdx := strings.Index(s, ":"); colonIdx != -1 {
-		p.Ecosystem = s[:colonIdx]
-		s = s[colonIdx+1:]
-	}
 
 	// Extract version if present
 	if equalIdx := strings.Index(s, "="); equalIdx != -1 {
@@ -59,11 +53,7 @@ func Parse(s sysconfig.PkgRef) (*Package, error) {
 }
 
 func (p *Package) String() string {
-	res := ""
-	if p.Ecosystem != "" {
-		res += p.Ecosystem + ":"
-	}
-	res += p.Name
+	res := p.Name
 	if p.Version != "" {
 		res += "=" + p.Version
 	}

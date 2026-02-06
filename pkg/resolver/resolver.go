@@ -17,16 +17,12 @@ import (
 )
 
 // List returns all available packages for the given recipe and version query.
-func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, ecosystem string, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
+func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
 	task.SetStage("List", r.GetName())
 
-	fullName := pkgName
-	if ecosystem != "" {
-		fullName = ecosystem + ":" + pkgName
-	}
 	dCtx := &recipe.DiscoveryContext{
 		Config:       cfg,
-		PkgName:      fullName,
+		PkgName:      pkgName,
 		VersionQuery: version,
 		Download: func(url string) ([]byte, error) {
 			return fetchData(ctx, cfg, url, task)
@@ -37,8 +33,8 @@ func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, ecosystem s
 }
 
 // Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, ecosystem string, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
-	pkgs, err := List(ctx, cfg, r, ecosystem, pkgName, version, task)
+func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
 	if err != nil {
 		return nil, err
 	}

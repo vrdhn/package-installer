@@ -90,7 +90,7 @@ cmd repo add "Add a new repository"
 topic about "Overview"
     text """
     pi is a universal, workspace-based package installer that manages dependencies
-    across multiple ecosystems (Node.js, Go, Java, etc.) using isolated sandboxes.
+    across various languages and runtimes (Node.js, Go, Java, etc.) using isolated sandboxes.
     It ensures deterministic environments without polluting your host system.
     """
 
@@ -130,7 +130,7 @@ topic versions "Version Formats & Queries"
     Formats:
     - exact:   pi pkg install nodejs@20.11.0
     - prefix:  pi pkg install nodejs@20 (matches 20.*)
-    - ecosys:  pi pkg install npm:typescript@latest (explicit ecosystem)
+    - names:   pi pkg install npm:typescript@latest (optional prefix)
     """
 
 topic recipes "Starlark Recipes"

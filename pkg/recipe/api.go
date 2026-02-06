@@ -33,7 +33,7 @@ type DiscoveryContext struct {
 	AddVersion   func(p PackageDefinition)
 }
 
-// Recipe defines how to discover and resolve packages for an ecosystem.
+// Recipe defines how to discover and resolve packages.
 type Recipe interface {
 	GetName() string
 	Execute(ctx *DiscoveryContext) ([]PackageDefinition, error)
