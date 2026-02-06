@@ -3,11 +3,11 @@ global
     name "pi" "Universal package installer for isolated workspaces"
     flag verbose bool "Enable verbose output" v
     flag config string "Path to config file" c
-    param safe = false
+    attr safe = false
 
 # Commands
 cmd version "Show version information"
-    param safe = true
+    attr safe = true
 
 cmd pkg "Manage packages"
 
@@ -32,7 +32,7 @@ cmd recipe repl "Run the recipe development REPL"
 cmd cave "Manage the cave (sandbox)"
 
 cmd cave info "Display information about the current cave"
-    param safe = true
+    attr safe = true
     example "pi cave info"
 
 cmd cave list "List all registered caves and their variants"
