@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	cli "pi/pkg/cdl"
+	"pi/pkg/cdl"
 	"pi/pkg/config"
 	"pi/pkg/pkgs"
 	"pi/pkg/recipe"
@@ -35,7 +35,7 @@ type recipeRepl struct {
 	legacy   bool
 }
 
-func runRecipeRepl(ctx context.Context, m *Managers, params *cli.RecipeReplParams) (*ExecutionResult, error) {
+func runRecipeRepl(ctx context.Context, m *Managers, params *cdl.RecipeReplParams) (*ExecutionResult, error) {
 	if params.File == "" {
 		return nil, fmt.Errorf("recipe file required")
 	}

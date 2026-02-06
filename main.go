@@ -36,7 +36,7 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	handlers := &engine.DefaultHandlers{Ctx: ctx}
 
 	// 1. Parse command line arguments with generics
-	action, _, err := cli.Parse[engine.ExecutionResult](handlers, args)
+	action, _, err := cdl.Parse[engine.ExecutionResult](handlers, args)
 	if err != nil {
 		return engine.ExecutionResult{}, err
 	}
