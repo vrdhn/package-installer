@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"pi/pkg/cave"
-	"pi/pkg/cli"
+	"pi/pkg/cdl"
 	"pi/pkg/config"
 	"pi/pkg/disk"
 	"pi/pkg/display"
+	"pi/pkg/engine"
 	"pi/pkg/pkgs"
 	"pi/pkg/repository"
 	"syscall"
@@ -29,14 +30,15 @@ func main() {
 	}
 	os.Exit(res.ExitCode)
 }
-func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) {
-	// Initialize handlers with context (Managers populated later)
-	handlers := &cli.DefaultHandlers{Ctx: ctx}
 
-	// 1. Parse command line arguments
-	action, err := cli.Parse(handlers, args)
+func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error) {
+	// Initialize handlers with context (Managers populated later)
+	handlers := &engine.DefaultHandlers{Ctx: ctx}
+
+	// 1. Parse command line arguments with generics
+	action, _, err := cli.Parse[engine.ExecutionResult](handlers, args)
 	if err != nil {
-		return nil, err
+		return engine.ExecutionResult{}, err
 	}
 
 	// 2. Initialize console, setup verbosity, etc.
@@ -46,19 +48,19 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 	// 3. Execute commands
 	sysCfg, err := config.Init()
 	if err != nil {
-		return nil, fmt.Errorf("error initializing config: %w", err)
+		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
 
 	repo, err := repository.NewManager(disp)
 	if err != nil {
-		return nil, fmt.Errorf("error initializing repository: %w", err)
+		return engine.ExecutionResult{}, fmt.Errorf("error initializing repository: %w", err)
 	}
 
 	caveMgr := cave.NewManager(sysCfg)
 	pkgsMgr := pkgs.NewManager(repo, disp, sysCfg)
 	diskMgr := disk.NewManager(sysCfg)
 
-	managers := &cli.Managers{
+	managers := &engine.Managers{
 		Repo:    repo,
 		Disp:    disp,
 		CaveMgr: caveMgr,
@@ -71,7 +73,7 @@ func PiEngine(ctx context.Context, args []string) (*cli.ExecutionResult, error) 
 	handlers.Mgr = managers
 
 	if action == nil {
-		return nil, fmt.Errorf("no action defined for command")
+		return engine.ExecutionResult{}, fmt.Errorf("no action defined for command")
 	}
 
 	return action()

@@ -16,7 +16,7 @@
 1.  Define your CLI in a `.cdl` file.
 2.  Run the compiler:
     ```bash
-    go run github.com/username/package-installer/tool/cdlcompiler <file.cdl> <package_name>
+    go run pi/tool/cdlcompiler <file.cdl> <package_name>
     ```
 3.  Implement the required `Handlers[T]` interface and your result type `T` in your Go package.
 
@@ -69,14 +69,14 @@ import "yourpackage/cli"
 
 type myHandlers struct {}
 
-func (h *myHandlers) Help(args []string) (*ExecutionResult, error) {
+func (h *myHandlers) Help(args []string) (ExecutionResult, error) {
     cli.PrintHelp(args...)
-    return &ExecutionResult{ExitCode: 0}, nil
+    return ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *myHandlers) RunUserAdd(params *cli.UserAddParams) (*ExecutionResult, error) {
+func (h *myHandlers) RunUserAdd(params *cli.UserAddParams) (ExecutionResult, error) {
     // Your logic here
-    return &ExecutionResult{ExitCode: 0}, nil
+    return ExecutionResult{ExitCode: 0}, nil
 }
 ```
 
@@ -97,8 +97,8 @@ func main() {
     }
     
     // Inspect resolved command and its attributes
-    if cmd != nil && cmd.Dangerous {
-        fmt.Println("Warning: This is a dangerous command!")
+    if cmd != nil && (cmd.Safe == false) {
+        fmt.Println("Warning: This is a potentially dangerous command!")
     }
 
     // Execute the action

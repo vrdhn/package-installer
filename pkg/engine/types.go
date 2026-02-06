@@ -1,4 +1,4 @@
-package cli
+package engine
 
 import (
 	"pi/pkg/cave"
@@ -20,14 +20,7 @@ type Managers struct {
 	SysCfg  config.ReadOnly
 }
 
-// Action is a lambda that executes a command.
-// The structs for global flags, cmd flags and cmd arguments have already
-// been captured in this lamda. Context and Managers should be captured
-// by the handler creating this Action.
-type Action func() (*ExecutionResult, error)
-
-// Mutable
-// Returned at top level, to figure out if to execute bwrap
+// ExecutionResult is returned at top level, to figure out if to execute bwrap
 // or just exit with error code. The curses library should have
 // cleaned up when this is returned, so exec is safe.
 type ExecutionResult struct {
