@@ -335,7 +335,6 @@ func WriteRootHelp(b *strings.Builder, root *RootHelpData) {
 	for _, cmd := range root.Commands {
 		fmt.Fprintf(b, "  %s    %s\n", cmd.Name, cmd.Desc)
 		if len(cmd.Subs) > 0 {
-			b.WriteString("    Subcommands:\n")
 			for _, sub := range cmd.Subs {
 				fmt.Fprintf(b, "      %s    %s\n", sub.Name, sub.Desc)
 			}

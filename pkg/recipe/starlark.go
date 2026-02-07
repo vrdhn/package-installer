@@ -187,6 +187,19 @@ func (sr *StarlarkRecipe) Registry(cfg config.Config) ([]string, bool, error) {
 	return keys, sr.legacy, nil
 }
 
+// GetRegistryInfo returns the registry map with handler names.
+func (sr *StarlarkRecipe) GetRegistryInfo(cfg config.Config) (map[string]string, error) {
+	_, _, err := sr.Registry(cfg)
+	if err != nil {
+		return nil, err
+	}
+	info := make(map[string]string)
+	for k, v := range sr.registry {
+		info[k] = v.Name()
+	}
+	return info, nil
+}
+
 func jsonBuiltins() starlark.StringDict {
 	return starlark.StringDict{
 		"decode": starlark.NewBuiltin("decode", func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

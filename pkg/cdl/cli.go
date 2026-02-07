@@ -118,11 +118,15 @@ type RecipeReplParams struct {
 
 type RepoAddParams struct {
 	GlobalFlags
-	Name string
-	Url  string
+	Path string
 }
 
 type RepoListParams struct {
+	GlobalFlags
+	_ struct{}
+}
+
+type RepoSyncParams struct {
 	GlobalFlags
 	_ struct{}
 }
@@ -155,6 +159,7 @@ type Handlers[T any] interface {
 	RunRecipeRepl(params *RecipeReplParams) (T, error)
 	RunRepoAdd(params *RepoAddParams) (T, error)
 	RunRepoList(params *RepoListParams) (T, error)
+	RunRepoSync(params *RepoSyncParams) (T, error)
 	RunSelfUpdate(params *SelfUpdateParams) (T, error)
 	RunVersion(params *VersionParams) (T, error)
 }
@@ -437,11 +442,20 @@ var CliCommands = []CommandDef{
 				Desc:        "Add a new repository",
 				Safe:        false,
 				Args: []ArgDef{
-					{Name: "name", Type: "string", Desc: "Name of the repository"},
-					{Name: "url", Type: "string", Desc: "URL of the repository"},
+					{Name: "path", Type: "string", Desc: "Path to the repository"},
 				},
 				Examples: []string{
-					"pi repo add official https://github.com/google/pi-recipes",
+					"pi repo add /path/to/recipes",
+				},
+			},
+
+			CommandDef{
+				Name:        "sync",
+				FullCommand: "repo/sync",
+				Desc:        "Regenerate the package index from all repositories",
+				Safe:        false,
+				Examples: []string{
+					"pi repo sync",
 				},
 			},
 		},
@@ -523,11 +537,18 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handleRepoAdd[T](inv, gf), resolvedCmd, nil
 	case "repo/list":
 		return handleRepoList[T](inv, gf), resolvedCmd, nil
+	case "repo/sync":
+		return handleRepoSync[T](inv, gf), resolvedCmd, nil
 	case "self-update":
 		return handleSelfUpdate[T](inv, gf), resolvedCmd, nil
 	case "version":
 		return handleVersion[T](inv, gf), resolvedCmd, nil
 	default:
+		if len(resolvedCmd.Subs) > 0 {
+			return func(h Handlers[T]) (T, error) {
+				return h.Help(remaining)
+			}, resolvedCmd, nil
+		}
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
 }
@@ -660,8 +681,7 @@ func handleRecipeRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 func handleRepoAdd[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &RepoAddParams{}
 	params.GlobalFlags = gf
-	params.Name = inv.Args["name"]
-	params.Url = inv.Args["url"]
+	params.Path = inv.Args["path"]
 	return func(h Handlers[T]) (T, error) {
 		return h.RunRepoAdd(params)
 	}
@@ -671,6 +691,13 @@ func handleRepoList[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params.GlobalFlags = gf
 	return func(h Handlers[T]) (T, error) {
 		return h.RunRepoList(params)
+	}
+}
+func handleRepoSync[T any](inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &RepoSyncParams{}
+	params.GlobalFlags = gf
+	return func(h Handlers[T]) (T, error) {
+		return h.RunRepoSync(params)
 	}
 }
 func handleSelfUpdate[T any](inv *Invocation, gf GlobalFlags) Action[T] {

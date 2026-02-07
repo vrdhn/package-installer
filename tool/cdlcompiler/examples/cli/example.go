@@ -168,6 +168,11 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 	case "user/add":
 		return handleUserAdd[T](inv, gf), resolvedCmd, nil
 	default:
+		if len(resolvedCmd.Subs) > 0 {
+			return func(h Handlers[T]) (T, error) {
+				return h.Help(remaining)
+			}, resolvedCmd, nil
+		}
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
 }

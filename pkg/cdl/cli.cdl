@@ -86,9 +86,11 @@ cmd repo list "List all repositories"
     example "pi list"
 
 cmd repo add "Add a new repository"
-    arg name string "Name of the repository"
-    arg url string "URL of the repository"
-    example "pi repo add official https://github.com/google/pi-recipes"
+    arg path string "Path to the repository"
+    example "pi repo add /path/to/recipes"
+
+cmd repo sync "Regenerate the package index from all repositories"
+    example "pi repo sync"
 
 # Help Topics
 topic about "Overview"

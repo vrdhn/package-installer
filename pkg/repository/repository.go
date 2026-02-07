@@ -1,26 +1,38 @@
 package repository
 
 import (
+	"crypto/rand"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"pi/pkg/config"
 	"pi/pkg/display"
+	"pi/pkg/recipe"
+	"regexp"
 	"sort"
 	"strings"
-
-	"pi/pkg/recipe"
 )
 
 type RepoConfig struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+	UUID string `json:"uuid"`
 }
 
 type repoRegistry struct {
 	Repos []RepoConfig `json:"repos"`
+}
+
+type RegistryEntry struct {
+	RepoUUID   string
+	RepoName   string
+	RecipeName string
+	Pattern    string
+	Handler    string
 }
 
 // Mutable
@@ -30,8 +42,11 @@ type manager struct {
 	disp    display.Display
 	cfg     config.Config
 
+	// In-memory index of all packages
+	index []RegistryEntry
 	// Cache for resolution: pkgName -> {recipeName, regexKey}
-	resolveCache map[string]resolvedRecipe
+	resolveCache     map[string]resolvedRecipe
+	compiledPatterns map[string]*regexp.Regexp
 }
 
 type Manager = *manager
@@ -43,10 +58,11 @@ type resolvedRecipe struct {
 
 func NewManager(disp display.Display, cfg config.Config) (Manager, error) {
 	m := &manager{
-		recipes:      make(map[string]string),
-		resolveCache: make(map[string]resolvedRecipe),
-		disp:         disp,
-		cfg:          cfg,
+		recipes:          make(map[string]string),
+		resolveCache:     make(map[string]resolvedRecipe),
+		compiledPatterns: make(map[string]*regexp.Regexp),
+		disp:             disp,
+		cfg:              cfg,
 	}
 
 	if err := m.loadBuiltins(); err != nil {
@@ -55,6 +71,14 @@ func NewManager(disp display.Display, cfg config.Config) (Manager, error) {
 
 	if err := m.LoadRepos(); err != nil {
 		return nil, err
+	}
+
+	if err := m.LoadIndex(); err != nil {
+		// If loading index fails (e.g. file missing), we'll just have an empty index
+		// and Resolve will fail or fallback if we implement fallback.
+		// For now, we assume index is critical for performance but not strictly fatal for startup if missing (just Resolve will fail).
+		// Ideally we should auto-sync if missing, but we will leave that for 'repo sync' command.
+		m.disp.Log(fmt.Sprintf("Warning: Failed to load package index: %v", err))
 	}
 
 	return m, nil
@@ -124,34 +148,294 @@ func (m *manager) loadLocalRepo(repo RepoConfig) {
 	}
 }
 
-func (m *manager) AddRepo(name, url string) error {
-	for _, r := range m.repos {
-		if r.Name == name {
-			return fmt.Errorf("repository already exists: %s", name)
+func (m *manager) LoadIndex() error {
+	path := filepath.Join(m.cfg.GetConfigDir(), "packages.csv")
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
 		}
-	}
-
-	m.repos = append(m.repos, RepoConfig{Name: name, URL: url})
-	path := filepath.Join(m.cfg.GetConfigDir(), "repos.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
+	defer f.Close()
 
-	data, err := json.MarshalIndent(repoRegistry{Repos: m.repos}, "", "  ")
+	r := csv.NewReader(f)
+	m.index = nil
+
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(record) != 4 {
+			continue
+		}
+
+		uuid := record[0]
+		recipeName := record[1]
+		pattern := record[2]
+		handler := record[3]
+
+		repoName := "unknown"
+		if uuid == "builtin" {
+			repoName = "builtin"
+		} else {
+			for _, repo := range m.repos {
+				if repo.UUID == uuid {
+					repoName = repo.Name
+					break
+				}
+			}
+		}
+
+		m.index = append(m.index, RegistryEntry{
+			RepoUUID:   uuid,
+			RepoName:   repoName,
+			RecipeName: recipeName,
+			Pattern:    pattern,
+			Handler:    handler,
+		})
+	}
+	return nil
+}
+
+func (m *manager) Sync(verbose bool) error {
+	csvPath := filepath.Join(m.cfg.GetConfigDir(), "packages.csv")
+	if verbose {
+		fmt.Printf("Regenerating index at %s\n", csvPath)
+	}
+
+	f, err := os.Create(csvPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+
+	var entries []RegistryEntry
+
+	// 1. Builtins
+	if verbose {
+		fmt.Println("Indexing builtin recipes...")
+	}
+	err = fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".star") {
+			name := strings.TrimSuffix(filepath.Base(path), ".star")
+			content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
+			if err != nil {
+				return err
+			}
+			regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
+			if err != nil {
+				return err
+			}
+			for p, h := range regInfo {
+				if err := w.Write([]string{"builtin", name, p, h}); err != nil {
+					return err
+				}
+				entries = append(entries, RegistryEntry{
+					RepoUUID:   "builtin",
+					RepoName:   "builtin",
+					RecipeName: name,
+					Pattern:    p,
+					Handler:    h,
+				})
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	// 2. Repos
+	for _, repo := range m.repos {
+		if verbose {
+			fmt.Printf("Indexing repo: %s (%s)\n", repo.Name, repo.URL)
+		}
+		err := filepath.Walk(repo.URL, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && strings.HasSuffix(path, ".star") {
+				name := strings.TrimSuffix(filepath.Base(path), ".star")
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
+				if err != nil {
+					return err
+				}
+				for p, h := range regInfo {
+					if err := w.Write([]string{repo.UUID, name, p, h}); err != nil {
+						return err
+					}
+					entries = append(entries, RegistryEntry{
+						RepoUUID:   repo.UUID,
+						RepoName:   repo.Name,
+						RecipeName: name,
+						Pattern:    p,
+						Handler:    h,
+					})
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
 		return err
 	}
 
-	// Try to load it immediately
-	if strings.HasPrefix(url, "/") || strings.HasPrefix(url, "./") {
-		m.loadLocalRepo(RepoConfig{Name: name, URL: url})
+	m.index = entries
+	// Clear caches as patterns might have changed
+	m.compiledPatterns = make(map[string]*regexp.Regexp)
+	m.resolveCache = make(map[string]resolvedRecipe)
+
+	if verbose {
+		fmt.Printf("Sync complete. Indexed %d patterns.\n", len(entries))
+	}
+	return nil
+}
+
+func (m *manager) AddLocalRepo(path string, verbose bool) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	return nil
+	if verbose {
+		fmt.Printf("Statting %s\n", absPath)
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("repository path does not exist: %s", absPath)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("repository path is not a directory: %s", absPath)
+	}
+
+	hasStar := false
+	err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".star") {
+			hasStar = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !hasStar {
+		return fmt.Errorf("no .star files found in %s", absPath)
+	}
+
+	for _, r := range m.repos {
+		if r.URL == absPath {
+			return fmt.Errorf("repository already exists with path: %s", absPath)
+		}
+	}
+
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	uuid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+
+	name := filepath.Base(absPath)
+
+	if verbose {
+		fmt.Printf("Found repository at %s\n", absPath)
+		fmt.Printf("Generated UUID: %s\n", uuid)
+		fmt.Printf("Repo Name: %s\n", name)
+	}
+
+	newRepo := RepoConfig{
+		Name: name,
+		URL:  absPath,
+		UUID: uuid,
+	}
+
+	m.repos = append(m.repos, newRepo)
+	if err := m.saveRepos(verbose); err != nil {
+		return err
+	}
+
+	// Also load it into memory
+	m.loadLocalRepo(newRepo)
+
+	// Update index
+	return m.Sync(verbose)
+}
+
+func (m *manager) saveRepos(verbose bool) error {
+	path := filepath.Join(m.cfg.GetConfigDir(), "repos.json")
+	if verbose {
+		fmt.Printf("Saving repos to %s\n", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(repoRegistry{Repos: m.repos}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (m *manager) GetRecipeRegistryInfo(name, src string) (map[string]string, error) {
+	sr, err := recipe.NewStarlarkRecipe(name, src, nil)
+	if err != nil {
+		return nil, err
+	}
+	return sr.GetRegistryInfo(m.cfg)
+}
+
+func (m *manager) GetFullRegistryInfo(verbose bool) ([]RegistryEntry, error) {
+	// If index is empty, try loading it
+	if len(m.index) == 0 {
+		if err := m.LoadIndex(); err != nil {
+			return nil, err
+		}
+		// If still empty and we have repos/builtins, maybe we need to sync?
+		// For now just return what we have (empty or loaded).
+	}
+
+	// Make a copy to sort
+	entries := make([]RegistryEntry, len(m.index))
+	copy(entries, m.index)
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].RepoName != entries[j].RepoName {
+			return entries[i].RepoName < entries[j].RepoName
+		}
+		if entries[i].RecipeName != entries[j].RecipeName {
+			return entries[i].RecipeName < entries[j].RecipeName
+		}
+		return entries[i].Pattern < entries[j].Pattern
+	})
+
+	return entries, nil
+}
+
+func DisplayRegistryInfo(entries []RegistryEntry) {
+	fmt.Printf("%-15s %-15s %-30s %s\n", "REPO", "RECIPE", "PATTERN", "HANDLER")
+	fmt.Println(strings.Repeat("-", 80))
+	for _, e := range entries {
+		fmt.Printf("%-15s %-15s %-30s %s\n", e.RepoName, e.RecipeName, e.Pattern, e.Handler)
+	}
 }
 
 func (m *manager) ListRepos() []RepoConfig {
@@ -175,7 +459,6 @@ func (m *manager) ListRecipes() []string {
 }
 
 // Resolve selects the single matching recipe/regex for a package identifier.
-// pkgName can be 'name' or 'prefix:name' (no version).
 func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, error) {
 	if res, ok := m.resolveCache[pkgName]; ok {
 		return res.recipeName, res.regexKey, nil
@@ -188,34 +471,26 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 	}
 
 	var matches []match
-	for _, recipeName := range m.ListRecipes() {
-		src, err := m.GetRecipe(recipeName)
-		if err != nil {
-			return "", "", err
-		}
-		sr, err := recipe.NewStarlarkRecipe(recipeName, src, nil)
-		if err != nil {
-			return "", "", err
-		}
-		patterns, legacy, err := sr.Registry(cfg)
-		if err != nil {
-			return "", "", err
-		}
-		if legacy {
-			continue
-		}
-		for _, pattern := range patterns {
-			re, err := recipe.CompileAnchored(pattern)
+
+	// Optimization: Use in-memory index
+	for _, entry := range m.index {
+		re, ok := m.compiledPatterns[entry.Pattern]
+		if !ok {
+			var err error
+			re, err = recipe.CompileAnchored(entry.Pattern)
 			if err != nil {
-				return "", "", fmt.Errorf("invalid regex '%s' in recipe %s: %w", pattern, recipeName, err)
+				// Warn?
+				continue
 			}
-			if re.MatchString(pkgName) {
-				matches = append(matches, match{
-					repo:   "builtin",
-					recipe: recipeName,
-					regex:  pattern,
-				})
-			}
+			m.compiledPatterns[entry.Pattern] = re
+		}
+
+		if re.MatchString(pkgName) {
+			matches = append(matches, match{
+				repo:   entry.RepoName,
+				recipe: entry.RecipeName,
+				regex:  entry.Pattern,
+			})
 		}
 	}
 

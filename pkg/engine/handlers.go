@@ -182,7 +182,7 @@ func (h *Handlers) RunSelfUpdate(params *cdl.SelfUpdateParams) (ExecutionResult,
 }
 
 func (h *Handlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResult, error) {
-	res, err := runRepoList(h.Ctx, h)
+	res, err := runRepoList(h.Ctx, h, params.Verbose)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
@@ -190,10 +190,18 @@ func (h *Handlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResult, err
 }
 
 func (h *Handlers) RunRepoAdd(params *cdl.RepoAddParams) (ExecutionResult, error) {
-	if err := h.RepoMgr.AddRepo(params.Name, params.Url); err != nil {
+	if err := h.RepoMgr.AddLocalRepo(params.Path, params.Verbose); err != nil {
 		return ExecutionResult{}, err
 	}
-	fmt.Printf("Added repository %s: %s\n", params.Name, params.Url)
+	fmt.Printf("Added repository from %s\n", params.Path)
+	return ExecutionResult{ExitCode: 0}, nil
+}
+
+func (h *Handlers) RunRepoSync(params *cdl.RepoSyncParams) (ExecutionResult, error) {
+	if err := h.RepoMgr.Sync(params.Verbose); err != nil {
+		return ExecutionResult{}, err
+	}
+	fmt.Println("Package index synchronized successfully.")
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -455,17 +463,15 @@ func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*E
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runRepoList(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
+func runRepoList(ctx context.Context, h *Handlers, verbose bool) (*ExecutionResult, error) {
 	h.DispMgr.Close()
 
-	fmt.Printf("%-20s %s\n", "NAME", "URL")
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Printf("%-20s %s\n", "builtin", "(embedded)")
-
-	repos := h.RepoMgr.ListRepos()
-	for _, r := range repos {
-		fmt.Printf("%-20s %s\n", r.Name, r.URL)
+	entries, err := h.RepoMgr.GetFullRegistryInfo(verbose)
+	if err != nil {
+		return nil, err
 	}
+
+	repository.DisplayRegistryInfo(entries)
 
 	return &ExecutionResult{ExitCode: 0}, nil
 }

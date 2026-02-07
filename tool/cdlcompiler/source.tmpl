@@ -186,6 +186,11 @@ func Parse[T any]( args []string) (Action[T], *CommandDef, error) {
 		return handle{{ goNameForPath (cmdPath .) }}[T](inv, gf), resolvedCmd, nil
 {{- end }}
 	default:
+		if len(resolvedCmd.Subs) > 0 {
+			return func(h Handlers[T]) (T, error) {
+				return h.Help(remaining)
+			}, resolvedCmd, nil
+		}
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
 }
