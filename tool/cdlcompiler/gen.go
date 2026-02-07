@@ -41,6 +41,15 @@ func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
 		{Name: "help", Short: "h", Type: "bool", Desc: "Show help information"},
 	}, cdl.GlobalFlags...)
 
+	helpCmd := &command{
+		Name: "help",
+		Desc: "Show help information",
+		Attrs: map[string]value{
+			"safe": {Kind: "bool", Bool: true},
+		},
+	}
+	allCommands := append([]*command{helpCmd}, cdl.Commands...)
+
 	for _, c := range all {
 		cmdVars[c] = "cmd" + goNameForPath(cmdPath(c))
 	}
@@ -49,7 +58,7 @@ func generate(cdl *cdlTop, pkgName string) ([]byte, []byte, error) {
 		Pkg:         pkgName,
 		GlobalFlags: allGlobalFlags,
 		Topics:      cdl.Topics,
-		Commands:    cdl.Commands,
+		Commands:    allCommands,
 		AllCommands: all,
 		Leafs:       leafs,
 		AttrDefs:    attrs,

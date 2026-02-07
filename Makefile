@@ -4,14 +4,17 @@ LDFLAGS := -X pi/pkg/config.BuildVersion=$(VERSION) -X pi/pkg/config.BuildTimest
 
 .PHONY: build
 build:
+	go generate ./...
 	go build -ldflags "$(LDFLAGS)" -o pi main.go
 
 .PHONY: install
 install:
+	go generate ./...
 	go install -ldflags "$(LDFLAGS)"
 
 .PHONY: test
 test:
+	go generate ./...
 	go test ./...
 
 .PHONY: clean

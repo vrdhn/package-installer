@@ -69,6 +69,13 @@ var CliTopics = []TopicDef{}
 var CliCommands = []CommandDef{
 
 	CommandDef{
+		Name:        "help",
+		FullCommand: "help",
+		Desc:        "Show help information",
+		Dangerous:   true,
+	},
+
+	CommandDef{
 		Name:        "user",
 		FullCommand: "user",
 		Desc:        "Manage users",
@@ -133,9 +140,16 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 	}
 
 	if gf.Help || len(remaining) == 0 {
+		var helpCmd *CommandDef
+		for i := range CliCommands {
+			if CliCommands[i].Name == "help" {
+				helpCmd = &CliCommands[i]
+				break
+			}
+		}
 		return func(h Handlers[T]) (T, error) {
 			return h.Help(remaining)
-		}, nil, nil
+		}, helpCmd, nil
 	}
 
 	resolvedCmd, remArgs, err := Resolve(CliCommands, remaining)
