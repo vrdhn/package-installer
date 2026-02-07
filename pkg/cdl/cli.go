@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-type Action[T any] func() (T, error)
-
 type FlagDef struct {
 	Name  string
 	Short string
@@ -160,6 +158,8 @@ type Handlers[T any] interface {
 	RunSelfUpdate(params *SelfUpdateParams) (T, error)
 	RunVersion(params *VersionParams) (T, error)
 }
+
+type Action[T any] func(h Handlers[T]) (T, error)
 
 var CliGlobalFlags = []FlagDef{
 	{Name: "help", Short: "h", Type: "bool", Desc: "Show help information"},
@@ -450,10 +450,8 @@ type Invocation struct {
 	Flags   map[string]any
 }
 
-func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) {
-	if h == nil {
-		return nil, nil, fmt.Errorf("handlers is nil")
-	}
+func Parse[T any](args []string) (Action[T], *CommandDef, error) {
+
 	var gf GlobalFlags
 	remaining := ProcessGlobalFlags(args, &gf)
 
@@ -463,7 +461,7 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 	}
 
 	if gf.Help || len(remaining) == 0 {
-		return func() (T, error) {
+		return func(h Handlers[T]) (T, error) {
 			return h.Help(remaining)
 		}, nil, nil
 	}
@@ -480,41 +478,41 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 
 	switch resolvedCmd.FullCommand {
 	case "cave/addpkg":
-		return handleCaveAddpkg(h, inv, gf), resolvedCmd, nil
+		return handleCaveAddpkg[T](inv, gf), resolvedCmd, nil
 	case "cave/enter":
-		return handleCaveEnter(h, inv, gf), resolvedCmd, nil
+		return handleCaveEnter[T](inv, gf), resolvedCmd, nil
 	case "cave/info":
-		return handleCaveInfo(h, inv, gf), resolvedCmd, nil
+		return handleCaveInfo[T](inv, gf), resolvedCmd, nil
 	case "cave/init":
-		return handleCaveInit(h, inv, gf), resolvedCmd, nil
+		return handleCaveInit[T](inv, gf), resolvedCmd, nil
 	case "cave/list":
-		return handleCaveList(h, inv, gf), resolvedCmd, nil
+		return handleCaveList[T](inv, gf), resolvedCmd, nil
 	case "cave/run":
-		return handleCaveRun(h, inv, gf), resolvedCmd, nil
+		return handleCaveRun[T](inv, gf), resolvedCmd, nil
 	case "cave/sync":
-		return handleCaveSync(h, inv, gf), resolvedCmd, nil
+		return handleCaveSync[T](inv, gf), resolvedCmd, nil
 	case "cave/use":
-		return handleCaveUse(h, inv, gf), resolvedCmd, nil
+		return handleCaveUse[T](inv, gf), resolvedCmd, nil
 	case "disk/clean":
-		return handleDiskClean(h, inv, gf), resolvedCmd, nil
+		return handleDiskClean[T](inv, gf), resolvedCmd, nil
 	case "disk/info":
-		return handleDiskInfo(h, inv, gf), resolvedCmd, nil
+		return handleDiskInfo[T](inv, gf), resolvedCmd, nil
 	case "disk/uninstall":
-		return handleDiskUninstall(h, inv, gf), resolvedCmd, nil
+		return handleDiskUninstall[T](inv, gf), resolvedCmd, nil
 	case "pkg/install":
-		return handlePkgInstall(h, inv, gf), resolvedCmd, nil
+		return handlePkgInstall[T](inv, gf), resolvedCmd, nil
 	case "pkg/list":
-		return handlePkgList(h, inv, gf), resolvedCmd, nil
+		return handlePkgList[T](inv, gf), resolvedCmd, nil
 	case "recipe/repl":
-		return handleRecipeRepl(h, inv, gf), resolvedCmd, nil
+		return handleRecipeRepl[T](inv, gf), resolvedCmd, nil
 	case "repo/add":
-		return handleRepoAdd(h, inv, gf), resolvedCmd, nil
+		return handleRepoAdd[T](inv, gf), resolvedCmd, nil
 	case "repo/list":
-		return handleRepoList(h, inv, gf), resolvedCmd, nil
+		return handleRepoList[T](inv, gf), resolvedCmd, nil
 	case "self-update":
-		return handleSelfUpdate(h, inv, gf), resolvedCmd, nil
+		return handleSelfUpdate[T](inv, gf), resolvedCmd, nil
 	case "version":
-		return handleVersion(h, inv, gf), resolvedCmd, nil
+		return handleVersion[T](inv, gf), resolvedCmd, nil
 	default:
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
@@ -536,142 +534,142 @@ func ApplyGlobalFlag(g *GlobalFlags, name string, val any) {
 		}
 	}
 }
-func handleCaveAddpkg[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveAddpkg[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveAddpkgParams{}
 	params.GlobalFlags = gf
 	params.Package = inv.Args["package"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveAddpkg(params)
 	}
 }
-func handleCaveEnter[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveEnter[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveEnterParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveEnter(params)
 	}
 }
-func handleCaveInfo[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveInfo[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveInfoParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveInfo(params)
 	}
 }
-func handleCaveInit[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveInit[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveInitParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveInit(params)
 	}
 }
-func handleCaveList[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveList[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveListParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveList(params)
 	}
 }
-func handleCaveRun[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveRun[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveRunParams{}
 	params.GlobalFlags = gf
 	params.Command = inv.Args["command"]
 	params.Variant = StringFlag(inv.Flags, "variant")
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveRun(params)
 	}
 }
-func handleCaveSync[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveSync[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveSyncParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveSync(params)
 	}
 }
-func handleCaveUse[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleCaveUse[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &CaveUseParams{}
 	params.GlobalFlags = gf
 	params.Cave = inv.Args["cave"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunCaveUse(params)
 	}
 }
-func handleDiskClean[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleDiskClean[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &DiskCleanParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunDiskClean(params)
 	}
 }
-func handleDiskInfo[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleDiskInfo[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &DiskInfoParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunDiskInfo(params)
 	}
 }
-func handleDiskUninstall[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleDiskUninstall[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &DiskUninstallParams{}
 	params.GlobalFlags = gf
 	params.Force = BoolFlag(inv.Flags, "force")
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunDiskUninstall(params)
 	}
 }
-func handlePkgInstall[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handlePkgInstall[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &PkgInstallParams{}
 	params.GlobalFlags = gf
 	params.Package = inv.Args["package"]
 	params.Force = BoolFlag(inv.Flags, "force")
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunPkgInstall(params)
 	}
 }
-func handlePkgList[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handlePkgList[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &PkgListParams{}
 	params.GlobalFlags = gf
 	params.Package = inv.Args["package"]
 	params.All = BoolFlag(inv.Flags, "all")
 	params.Index = BoolFlag(inv.Flags, "index")
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunPkgList(params)
 	}
 }
-func handleRecipeRepl[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleRecipeRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &RecipeReplParams{}
 	params.GlobalFlags = gf
 	params.File = inv.Args["file"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunRecipeRepl(params)
 	}
 }
-func handleRepoAdd[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleRepoAdd[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &RepoAddParams{}
 	params.GlobalFlags = gf
 	params.Name = inv.Args["name"]
 	params.Url = inv.Args["url"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunRepoAdd(params)
 	}
 }
-func handleRepoList[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleRepoList[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &RepoListParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunRepoList(params)
 	}
 }
-func handleSelfUpdate[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleSelfUpdate[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &SelfUpdateParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunSelfUpdate(params)
 	}
 }
-func handleVersion[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleVersion[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &VersionParams{}
 	params.GlobalFlags = gf
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunVersion(params)
 	}
 }

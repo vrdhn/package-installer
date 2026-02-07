@@ -43,28 +43,22 @@ func main() {
 }
 
 func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error) {
-	// Initialize handlers with context (Managers populated later)
-	handlers := &engine.DefaultHandlers{Ctx: ctx}
 
-	// 1. Parse command line arguments with generics
-	action, _, err := cdl.Parse[engine.ExecutionResult](handlers, args)
-	if err != nil {
-		return engine.ExecutionResult{}, err
-	}
-
-	if action == nil {
-		return engine.ExecutionResult{}, fmt.Errorf("no action defined for command")
-	}
-
-	// 2. Initialize console, setup verbosity, etc.
-	disp := display.NewConsole()
-	defer disp.Close()
-
-	// 3. Execute commands
 	config, err := config.Init()
 	if err != nil {
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
+
+	action, _, err := cdl.Parse[engine.ExecutionResult](args)
+	if err != nil {
+		return engine.ExecutionResult{}, err
+	}
+	if action == nil {
+		return engine.ExecutionResult{}, fmt.Errorf("no action defined for command")
+	}
+
+	disp := display.NewConsole()
+	defer disp.Close()
 
 	repo, err := repository.NewManager(disp, config)
 	if err != nil {
@@ -75,7 +69,8 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	pkgsMgr := pkgs.NewManager(repo, disp, config)
 	diskMgr := disk.NewManager(config)
 
-	managers := &engine.Managers{
+	handlers := &engine.Handlers{
+		Ctx:     ctx,
 		Repo:    repo,
 		Disp:    disp,
 		CaveMgr: caveMgr,
@@ -84,8 +79,5 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 		Config:  config,
 	}
 
-	// Update handlers with managers
-	handlers.Mgr = managers
-
-	return action()
+	return action(handlers)
 }

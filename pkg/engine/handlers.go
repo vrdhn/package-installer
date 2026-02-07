@@ -10,6 +10,9 @@ import (
 	"pi/pkg/cdl"
 	"pi/pkg/config"
 	"pi/pkg/disk"
+	"pi/pkg/display"
+	"pi/pkg/pkgs"
+	"pi/pkg/repository"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -20,99 +23,104 @@ var (
 )
 
 // Implements cdl.
-type DefaultHandlers struct {
-	Ctx context.Context
-	Mgr *Managers
+type Handlers struct {
+	Ctx     context.Context
+	Repo    *repository.Manager
+	Disp    display.Display
+	CaveMgr *cave.Manager
+	PkgsMgr *pkgs.Manager
+	DiskMgr *disk.Manager
+	Config  config.Config
 }
 
-func (h *DefaultHandlers) Help(args []string) (ExecutionResult, error) {
+func (h *Handlers) Help(args []string) (ExecutionResult, error) {
 	cdl.PrintHelp(args)
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *DefaultHandlers) RunVersion(params *cdl.VersionParams) (ExecutionResult, error) {
+func (h *Handlers) RunVersion(params *cdl.VersionParams) (ExecutionResult, error) {
 	fmt.Println(config.BuildVersion)
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *DefaultHandlers) RunPkgInstall(params *cdl.PkgInstallParams) (ExecutionResult, error) {
-	res, err := runInstall(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunPkgInstall(params *cdl.PkgInstallParams) (ExecutionResult, error) {
+	res, err := runInstall(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunPkgList(params *cdl.PkgListParams) (ExecutionResult, error) {
-	res, err := runPkgList(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunPkgList(params *cdl.PkgListParams) (ExecutionResult, error) {
+	res, err := runPkgList(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunRecipeRepl(params *cdl.RecipeReplParams) (ExecutionResult, error) {
-	res, err := runRecipeRepl(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunRecipeRepl(params *cdl.RecipeReplParams) (ExecutionResult, error) {
+	res, err := runRecipeRepl(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveInfo(params *cdl.CaveInfoParams) (ExecutionResult, error) {
-	res, err := runInfo(h.Ctx, h.Mgr)
+func (h *Handlers) RunCaveInfo(params *cdl.CaveInfoParams) (ExecutionResult, error) {
+	res, err := runInfo(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveList(params *cdl.CaveListParams) (ExecutionResult, error) {
-	res, err := runCaveList(h.Ctx, h.Mgr)
+func (h *Handlers) RunCaveList(params *cdl.CaveListParams) (ExecutionResult, error) {
+	res, err := runCaveList(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveUse(params *cdl.CaveUseParams) (ExecutionResult, error) {
-	res, err := runCaveUse(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunCaveUse(params *cdl.CaveUseParams) (ExecutionResult, error) {
+	res, err := runCaveUse(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveRun(params *cdl.CaveRunParams) (ExecutionResult, error) {
-	res, err := runCaveCommand(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunCaveRun(params *cdl.CaveRunParams) (ExecutionResult, error) {
+	res, err := runCaveCommand(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveEnter(params *cdl.CaveEnterParams) (ExecutionResult, error) {
-	res, err := runCaveCommand(h.Ctx, h.Mgr, &cdl.CaveRunParams{GlobalFlags: params.GlobalFlags, Command: ""})
+func (h *Handlers) RunCaveEnter(params *cdl.CaveEnterParams) (ExecutionResult, error) {
+	res, err := runCaveCommand(h.Ctx, h, &cdl.CaveRunParams{GlobalFlags: params.GlobalFlags, Command: ""})
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveInit(params *cdl.CaveInitParams) (ExecutionResult, error) {
-	res, err := runInit(h.Ctx, h.Mgr)
+func (h *Handlers) RunCaveInit(params *cdl.CaveInitParams) (ExecutionResult, error) {
+	res, err := runInit(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunCaveSync(params *cdl.CaveSyncParams) (ExecutionResult, error) {
+func (h *Handlers) RunCaveSync(params *cdl.CaveSyncParams) (ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ExecutionResult{}, err
 	}
-	c, err := h.Mgr.CaveMgr.Find(cwd)
+	c, err := h.CaveMgr.Find(cwd)
 	if err != nil {
 		return ExecutionResult{}, err
 	}
@@ -124,7 +132,7 @@ func (h *DefaultHandlers) RunCaveSync(params *cdl.CaveSyncParams) (ExecutionResu
 	fmt.Printf("Syncing workspace '%s' (variant: %s)...\n", c.Config.Name, c.Variant)
 
 	// Ensure packages are installed
-	_, err = h.Mgr.PkgsMgr.Prepare(h.Ctx, settings.Pkgs)
+	_, err = h.PkgsMgr.Prepare(h.Ctx, settings.Pkgs)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("failed to sync packages: %w", err)
 	}
@@ -133,68 +141,68 @@ func (h *DefaultHandlers) RunCaveSync(params *cdl.CaveSyncParams) (ExecutionResu
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *DefaultHandlers) RunCaveAddpkg(params *cdl.CaveAddpkgParams) (ExecutionResult, error) {
-	res, err := runAddPkg(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunCaveAddpkg(params *cdl.CaveAddpkgParams) (ExecutionResult, error) {
+	res, err := runAddPkg(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunDiskInfo(params *cdl.DiskInfoParams) (ExecutionResult, error) {
-	res, err := runDiskInfo(h.Ctx, h.Mgr)
+func (h *Handlers) RunDiskInfo(params *cdl.DiskInfoParams) (ExecutionResult, error) {
+	res, err := runDiskInfo(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunDiskClean(params *cdl.DiskCleanParams) (ExecutionResult, error) {
-	res, err := runDiskClean(h.Ctx, h.Mgr)
+func (h *Handlers) RunDiskClean(params *cdl.DiskCleanParams) (ExecutionResult, error) {
+	res, err := runDiskClean(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunDiskUninstall(params *cdl.DiskUninstallParams) (ExecutionResult, error) {
-	res, err := runDiskUninstall(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunDiskUninstall(params *cdl.DiskUninstallParams) (ExecutionResult, error) {
+	res, err := runDiskUninstall(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunSelfUpdate(params *cdl.SelfUpdateParams) (ExecutionResult, error) {
-	res, err := runSelfUpdate(h.Ctx, h.Mgr, params)
+func (h *Handlers) RunSelfUpdate(params *cdl.SelfUpdateParams) (ExecutionResult, error) {
+	res, err := runSelfUpdate(h.Ctx, h, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResult, error) {
-	res, err := runRepoList(h.Ctx, h.Mgr)
+func (h *Handlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResult, error) {
+	res, err := runRepoList(h.Ctx, h)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
 	return *res, err
 }
 
-func (h *DefaultHandlers) RunRepoAdd(params *cdl.RepoAddParams) (ExecutionResult, error) {
-	if err := h.Mgr.Repo.AddRepo(params.Name, params.Url); err != nil {
+func (h *Handlers) RunRepoAdd(params *cdl.RepoAddParams) (ExecutionResult, error) {
+	if err := h.Repo.AddRepo(params.Name, params.Url); err != nil {
 		return ExecutionResult{}, err
 	}
 	fmt.Printf("Added repository %s: %s\n", params.Name, params.Url)
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
-func runCaveCommand(ctx context.Context, m *Managers, params *cdl.CaveRunParams) (*ExecutionResult, error) {
+func runCaveCommand(ctx context.Context, h *Handlers, params *cdl.CaveRunParams) (*ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	c, err := m.CaveMgr.Find(cwd)
+	c, err := h.CaveMgr.Find(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +216,7 @@ func runCaveCommand(ctx context.Context, m *Managers, params *cdl.CaveRunParams)
 		return nil, err
 	}
 	// Ensure packages are installed and get symlinks
-	prep, err := m.PkgsMgr.Prepare(ctx, settings.Pkgs)
+	prep, err := h.PkgsMgr.Prepare(ctx, settings.Pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare packages: %w", err)
 	}
@@ -218,7 +226,7 @@ func runCaveCommand(ctx context.Context, m *Managers, params *cdl.CaveRunParams)
 		command = strings.Fields(params.Command)
 	}
 	backend := bubblewrap.Create()
-	cmd, err := backend.ResolveLaunch(ctx, m.Config, c, settings, prep, command)
+	cmd, err := backend.ResolveLaunch(ctx, h.Config, c, settings, prep, command)
 	if err != nil {
 		return nil, err
 	}
@@ -229,12 +237,12 @@ func runCaveCommand(ctx context.Context, m *Managers, params *cdl.CaveRunParams)
 		Env:    cmd.Env,
 	}, nil
 }
-func runInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+func runInfo(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	c, err := m.CaveMgr.Find(cwd)
+	c, err := h.CaveMgr.Find(cwd)
 	if err != nil {
 		fmt.Printf("Current directory is not in a pi workspace.\n")
 		return &ExecutionResult{ExitCode: 0}, nil
@@ -252,13 +260,13 @@ func runInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runCaveList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	reg, err := cave.LoadRegistry(m.Config)
+func runCaveList(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
+	reg, err := cave.LoadRegistry(h.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
 
-	m.Disp.Close()
+	h.Disp.Close()
 
 	if len(reg.Caves) == 0 {
 		fmt.Println("No caves registered.")
@@ -289,7 +297,7 @@ func runCaveList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runCaveUse(ctx context.Context, m *Managers, params *cdl.CaveUseParams) (*ExecutionResult, error) {
+func runCaveUse(ctx context.Context, h *Handlers, params *cdl.CaveUseParams) (*ExecutionResult, error) {
 	target := params.Cave
 	if target == "" {
 		return nil, fmt.Errorf("cave name required")
@@ -302,7 +310,7 @@ func runCaveUse(ctx context.Context, m *Managers, params *cdl.CaveUseParams) (*E
 		variant = parts[1]
 	}
 
-	reg, err := cave.LoadRegistry(m.Config)
+	reg, err := cave.LoadRegistry(h.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
@@ -323,20 +331,20 @@ func runCaveUse(ctx context.Context, m *Managers, params *cdl.CaveUseParams) (*E
 		return nil, fmt.Errorf("failed to change directory to workspace %s: %w", workspace, err)
 	}
 
-	return runCaveCommand(ctx, m, &cdl.CaveRunParams{Variant: variant})
+	return runCaveCommand(ctx, h, &cdl.CaveRunParams{Variant: variant})
 }
-func runInit(ctx context.Context, m *Managers) (*ExecutionResult, error) {
+func runInit(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
-	if err := m.CaveMgr.CreateInitConfig(cwd); err != nil {
+	if err := h.CaveMgr.CreateInitConfig(cwd); err != nil {
 		return nil, err
 	}
 	fmt.Println("Initialized new workspace in", cwd)
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runAddPkg(ctx context.Context, m *Managers, params *cdl.CaveAddpkgParams) (*ExecutionResult, error) {
+func runAddPkg(ctx context.Context, h *Handlers, params *cdl.CaveAddpkgParams) (*ExecutionResult, error) {
 	pkgStr := params.Package
 	if pkgStr == "" {
 		return nil, fmt.Errorf("package string required")
@@ -345,7 +353,7 @@ func runAddPkg(ctx context.Context, m *Managers, params *cdl.CaveAddpkgParams) (
 	if err != nil {
 		return nil, err
 	}
-	c, err := m.CaveMgr.Find(cwd)
+	c, err := h.CaveMgr.Find(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -374,25 +382,25 @@ func runAddPkg(ctx context.Context, m *Managers, params *cdl.CaveAddpkgParams) (
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runInstall(ctx context.Context, m *Managers, params *cdl.PkgInstallParams) (*ExecutionResult, error) {
+func runInstall(ctx context.Context, h *Handlers, params *cdl.PkgInstallParams) (*ExecutionResult, error) {
 	pkgQuery := params.Package
 	if pkgQuery == "" {
 		return nil, fmt.Errorf("package name required")
 	}
-	_, err := m.PkgsMgr.Prepare(ctx, []string{pkgQuery})
+	_, err := h.PkgsMgr.Prepare(ctx, []string{pkgQuery})
 	if err != nil {
 		return nil, err
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runPkgList(ctx context.Context, m *Managers, params *cdl.PkgListParams) (*ExecutionResult, error) {
+func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*ExecutionResult, error) {
 	if params.Index {
-		entries, err := m.PkgsMgr.ListIndex(ctx)
+		entries, err := h.PkgsMgr.ListIndex(ctx)
 		if err != nil {
 			return nil, err
 		}
-		m.Disp.Close()
+		h.Disp.Close()
 		fmt.Printf("%-20s %-50s %s\n", "RECIPE", "PATTERNS", "MODE")
 		fmt.Println(strings.Repeat("-", 90))
 		for _, entry := range entries {
@@ -415,18 +423,18 @@ func runPkgList(ctx context.Context, m *Managers, params *cdl.PkgListParams) (*E
 	}
 	showAll := params.All
 
-	pkgs, err := m.PkgsMgr.List(ctx, pkgQuery)
+	pkgs, err := h.PkgsMgr.List(ctx, pkgQuery)
 	if err != nil {
 		return nil, err
 	}
 
-	m.Disp.Close() // Close TUI to print list to stdout
+	h.Disp.Close() // Close TUI to print list to stdout
 
 	fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
 	fmt.Println(strings.Repeat("-", 90))
 
-	myOS := m.Config.GetOS()
-	myArch := m.Config.GetArch()
+	myOS := h.Config.GetOS()
+	myArch := h.Config.GetArch()
 
 	for _, p := range pkgs {
 		if !showAll {
@@ -447,22 +455,22 @@ func runPkgList(ctx context.Context, m *Managers, params *cdl.PkgListParams) (*E
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runRepoList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	m.Disp.Close()
+func runRepoList(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
+	h.Disp.Close()
 
 	fmt.Printf("%-20s %s\n", "NAME", "URL")
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Printf("%-20s %s\n", "builtin", "(embedded)")
 
-	repos := m.Repo.ListRepos()
+	repos := h.Repo.ListRepos()
 	for _, r := range repos {
 		fmt.Printf("%-20s %s\n", r.Name, r.URL)
 	}
 
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runDiskInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	stats, total := m.DiskMgr.GetInfo()
+func runDiskInfo(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
+	stats, total := h.DiskMgr.GetInfo()
 	fmt.Printf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path")
 	fmt.Println(strings.Repeat("-", 75))
 	for _, s := range stats {
@@ -472,18 +480,18 @@ func runDiskInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 	fmt.Printf("%-15s %-10s\n", "Total", disk.FormatSize(total))
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runDiskClean(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	cleaned := m.DiskMgr.Clean()
+func runDiskClean(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
+	cleaned := h.DiskMgr.Clean()
 	for _, dir := range cleaned {
 		fmt.Printf("Cleaning %s...\n", dir)
 	}
 	fmt.Println("Clean complete.")
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runDiskUninstall(ctx context.Context, m *Managers, params *cdl.DiskUninstallParams) (*ExecutionResult, error) {
+func runDiskUninstall(ctx context.Context, h *Handlers, params *cdl.DiskUninstallParams) (*ExecutionResult, error) {
 	force := params.Force
 	if !force {
-		m.Disp.Close() // Terminate Bubble Tea before interactive prompt
+		h.Disp.Close() // Terminate Bubble Tea before interactive prompt
 		fmt.Print(infoStyle.Render("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: "))
 		var response string
 		fmt.Scanln(&response)
@@ -492,7 +500,7 @@ func runDiskUninstall(ctx context.Context, m *Managers, params *cdl.DiskUninstal
 			return &ExecutionResult{ExitCode: 0}, nil
 		}
 	}
-	removed := m.DiskMgr.Uninstall()
+	removed := h.DiskMgr.Uninstall()
 	for _, dir := range removed {
 		fmt.Printf("Removing %s...\n", dir)
 	}
@@ -500,7 +508,7 @@ func runDiskUninstall(ctx context.Context, m *Managers, params *cdl.DiskUninstal
 	return &ExecutionResult{ExitCode: 0}, nil
 }
 
-func runSelfUpdate(ctx context.Context, m *Managers, params *cdl.SelfUpdateParams) (*ExecutionResult, error) {
+func runSelfUpdate(ctx context.Context, h *Handlers, params *cdl.SelfUpdateParams) (*ExecutionResult, error) {
 	fmt.Println("Checking for updates...")
 	fmt.Printf("Current version: %s\n", config.BuildVersion)
 	fmt.Println("You are already on the latest version.")

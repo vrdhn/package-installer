@@ -35,7 +35,7 @@ type recipeRepl struct {
 	legacy   bool
 }
 
-func runRecipeRepl(ctx context.Context, m *Managers, params *cdl.RecipeReplParams) (*ExecutionResult, error) {
+func runRecipeRepl(ctx context.Context, h *Handlers, params *cdl.RecipeReplParams) (*ExecutionResult, error) {
 	if params.File == "" {
 		return nil, fmt.Errorf("recipe file required")
 	}
@@ -44,7 +44,7 @@ func runRecipeRepl(ctx context.Context, m *Managers, params *cdl.RecipeReplParam
 		in:   bufio.NewReader(os.Stdin),
 		out:  os.Stdout,
 		err:  os.Stderr,
-		cfg:  m.Config,
+		cfg:  h.Config,
 		path: params.File,
 	}
 
