@@ -16,11 +16,13 @@ import (
 )
 
 // Mutable
-type Manager struct {
-	Repo      *repository.Manager
+type manager struct {
+	Repo      repository.Manager
 	Disp      display.Display
 	SysConfig sysconfig.Config
 }
+
+type Manager = *manager
 
 // IndexEntry represents a lazy recipe registration entry.
 type IndexEntry struct {
@@ -29,8 +31,8 @@ type IndexEntry struct {
 	Legacy   bool
 }
 
-func NewManager(repo *repository.Manager, disp display.Display, config sysconfig.Config) *Manager {
-	return &Manager{
+func NewManager(repo repository.Manager, disp display.Display, config sysconfig.Config) Manager {
+	return &manager{
 		Repo:      repo,
 		Disp:      disp,
 		SysConfig: config,
@@ -38,7 +40,7 @@ func NewManager(repo *repository.Manager, disp display.Display, config sysconfig
 }
 
 // Prepare ensures all packages are installed and returns the required symlinks.
-func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*Result, error) {
+func (m *manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*Result, error) {
 	var allSymlinks []Symlink
 	allEnv := make(map[string]string)
 	var mu sync.Mutex
@@ -128,7 +130,7 @@ func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 }
 
 // List returns all versions of a package.
-func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
+func (m *manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
 	p, err := Parse(pkgStr)
 	if err != nil {
 		return nil, err
@@ -158,7 +160,7 @@ func (m *Manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 }
 
 // ListIndex returns the registered package definitions for all recipes without executing handlers.
-func (m *Manager) ListIndex(ctx context.Context) ([]IndexEntry, error) {
+func (m *manager) ListIndex(ctx context.Context) ([]IndexEntry, error) {
 	var entries []IndexEntry
 	for _, name := range m.Repo.ListRecipes() {
 		src, err := m.Repo.GetRecipe(name)

@@ -25,11 +25,11 @@ var (
 // Implements cdl.
 type Handlers struct {
 	Ctx     context.Context
-	Repo    *repository.Manager
-	Disp    display.Display
-	CaveMgr *cave.Manager
-	PkgsMgr *pkgs.Manager
-	DiskMgr *disk.Manager
+	RepoMgr repository.Manager
+	DispMgr display.Display
+	CaveMgr cave.Manager
+	PkgsMgr pkgs.Manager
+	DiskMgr disk.Manager
 	Config  config.Config
 }
 
@@ -190,7 +190,7 @@ func (h *Handlers) RunRepoList(params *cdl.RepoListParams) (ExecutionResult, err
 }
 
 func (h *Handlers) RunRepoAdd(params *cdl.RepoAddParams) (ExecutionResult, error) {
-	if err := h.Repo.AddRepo(params.Name, params.Url); err != nil {
+	if err := h.RepoMgr.AddRepo(params.Name, params.Url); err != nil {
 		return ExecutionResult{}, err
 	}
 	fmt.Printf("Added repository %s: %s\n", params.Name, params.Url)
@@ -266,7 +266,7 @@ func runCaveList(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
 
-	h.Disp.Close()
+	h.DispMgr.Close()
 
 	if len(reg.Caves) == 0 {
 		fmt.Println("No caves registered.")
@@ -400,7 +400,7 @@ func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*E
 		if err != nil {
 			return nil, err
 		}
-		h.Disp.Close()
+		h.DispMgr.Close()
 		fmt.Printf("%-20s %-50s %s\n", "RECIPE", "PATTERNS", "MODE")
 		fmt.Println(strings.Repeat("-", 90))
 		for _, entry := range entries {
@@ -428,7 +428,7 @@ func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*E
 		return nil, err
 	}
 
-	h.Disp.Close() // Close TUI to print list to stdout
+	h.DispMgr.Close() // Close TUI to print list to stdout
 
 	fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
 	fmt.Println(strings.Repeat("-", 90))
@@ -456,13 +456,13 @@ func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*E
 }
 
 func runRepoList(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
-	h.Disp.Close()
+	h.DispMgr.Close()
 
 	fmt.Printf("%-20s %s\n", "NAME", "URL")
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Printf("%-20s %s\n", "builtin", "(embedded)")
 
-	repos := h.Repo.ListRepos()
+	repos := h.RepoMgr.ListRepos()
 	for _, r := range repos {
 		fmt.Printf("%-20s %s\n", r.Name, r.URL)
 	}
@@ -491,7 +491,7 @@ func runDiskClean(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
 func runDiskUninstall(ctx context.Context, h *Handlers, params *cdl.DiskUninstallParams) (*ExecutionResult, error) {
 	force := params.Force
 	if !force {
-		h.Disp.Close() // Terminate Bubble Tea before interactive prompt
+		h.DispMgr.Close() // Terminate Bubble Tea before interactive prompt
 		fmt.Print(infoStyle.Render("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: "))
 		var response string
 		fmt.Scanln(&response)

@@ -49,30 +49,37 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
 
-	action, _, err := cdl.Parse[engine.ExecutionResult](args)
+	action, cmd, err := cdl.Parse[engine.ExecutionResult](args)
 	if err != nil {
 		return engine.ExecutionResult{}, err
 	}
 	if action == nil {
 		return engine.ExecutionResult{}, fmt.Errorf("no action defined for command")
 	}
+	if !cmd.Safe {
+		caveName, exists := os.LookupEnv("PI_CAVENAME")
+		if exists {
+			return engine.ExecutionResult{},
+				fmt.Errorf("command can not be run from cave %s", caveName)
+		}
+	}
 
-	disp := display.NewConsole()
-	defer disp.Close()
+	dispMgr := display.NewConsole()
+	defer dispMgr.Close()
 
-	repo, err := repository.NewManager(disp, config)
+	repoMgr, err := repository.NewManager(dispMgr, config)
 	if err != nil {
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing repository: %w", err)
 	}
 
 	caveMgr := cave.NewManager(config)
-	pkgsMgr := pkgs.NewManager(repo, disp, config)
+	pkgsMgr := pkgs.NewManager(repoMgr, dispMgr, config)
 	diskMgr := disk.NewManager(config)
 
 	handlers := &engine.Handlers{
 		Ctx:     ctx,
-		Repo:    repo,
-		Disp:    disp,
+		RepoMgr: repoMgr,
+		DispMgr: dispMgr,
 		CaveMgr: caveMgr,
 		PkgsMgr: pkgsMgr,
 		DiskMgr: diskMgr,

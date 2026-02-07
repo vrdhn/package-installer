@@ -22,13 +22,15 @@ type Cave struct {
 
 // Manager handles cave discovery and loading.
 // Mutable
-type Manager struct {
+type manager struct {
 	SysConfig sysconfig.Config
 }
 
+type Manager = *manager
+
 // NewManager creates a new Cave Manager.
-func NewManager(config sysconfig.Config) *Manager {
-	return &Manager{
+func NewManager(config sysconfig.Config) Manager {
+	return &manager{
 		SysConfig: config,
 	}
 }
@@ -38,7 +40,7 @@ func NewManager(config sysconfig.Config) *Manager {
 // 1. PI_WORKSPACE environment variable
 // 2. PI_CAVENAME environment variable (lookup in registry)
 // 3. Walking up from cwd
-func (m *Manager) Find(cwd string) (*Cave, error) {
+func (m *manager) Find(cwd string) (*Cave, error) {
 	var root string
 	var variant string
 
@@ -111,7 +113,7 @@ func (m *Manager) Find(cwd string) (*Cave, error) {
 }
 
 // CreateInitConfig creates a default pi.cave.json in the specified directory.
-func (m *Manager) CreateInitConfig(dir string) error {
+func (m *manager) CreateInitConfig(dir string) error {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return err
@@ -143,7 +145,7 @@ func (m *Manager) CreateInitConfig(dir string) error {
 }
 
 // SyncRegistry updates the global caves.json with the provided config.
-func (m *Manager) SyncRegistry(cfg *CaveConfig) error {
+func (m *manager) SyncRegistry(cfg *CaveConfig) error {
 	reg, err := LoadRegistry(m.SysConfig)
 	if err != nil {
 		return err

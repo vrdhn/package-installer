@@ -24,7 +24,7 @@ type repoRegistry struct {
 }
 
 // Mutable
-type Manager struct {
+type manager struct {
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
 	disp    display.Display
@@ -34,13 +34,15 @@ type Manager struct {
 	resolveCache map[string]resolvedRecipe
 }
 
+type Manager = *manager
+
 type resolvedRecipe struct {
 	recipeName string
 	regexKey   string
 }
 
-func NewManager(disp display.Display, cfg config.Config) (*Manager, error) {
-	m := &Manager{
+func NewManager(disp display.Display, cfg config.Config) (Manager, error) {
+	m := &manager{
 		recipes:      make(map[string]string),
 		resolveCache: make(map[string]resolvedRecipe),
 		disp:         disp,
@@ -58,7 +60,7 @@ func NewManager(disp display.Display, cfg config.Config) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) loadBuiltins() error {
+func (m *manager) loadBuiltins() error {
 	return fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -76,7 +78,7 @@ func (m *Manager) loadBuiltins() error {
 	})
 }
 
-func (m *Manager) LoadRepos() error {
+func (m *manager) LoadRepos() error {
 	path := filepath.Join(m.cfg.GetConfigDir(), "repos.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -102,7 +104,7 @@ func (m *Manager) LoadRepos() error {
 	return nil
 }
 
-func (m *Manager) loadLocalRepo(repo RepoConfig) {
+func (m *manager) loadLocalRepo(repo RepoConfig) {
 	err := filepath.Walk(repo.URL, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -122,7 +124,7 @@ func (m *Manager) loadLocalRepo(repo RepoConfig) {
 	}
 }
 
-func (m *Manager) AddRepo(name, url string) error {
+func (m *manager) AddRepo(name, url string) error {
 	for _, r := range m.repos {
 		if r.Name == name {
 			return fmt.Errorf("repository already exists: %s", name)
@@ -152,11 +154,11 @@ func (m *Manager) AddRepo(name, url string) error {
 	return nil
 }
 
-func (m *Manager) ListRepos() []RepoConfig {
+func (m *manager) ListRepos() []RepoConfig {
 	return m.repos
 }
 
-func (m *Manager) GetRecipe(name string) (string, error) {
+func (m *manager) GetRecipe(name string) (string, error) {
 	content, ok := m.recipes[name]
 	if !ok {
 		return "", fmt.Errorf("recipe not found: %s", name)
@@ -164,7 +166,7 @@ func (m *Manager) GetRecipe(name string) (string, error) {
 	return content, nil
 }
 
-func (m *Manager) ListRecipes() []string {
+func (m *manager) ListRecipes() []string {
 	var list []string
 	for name := range m.recipes {
 		list = append(list, name)
@@ -174,7 +176,7 @@ func (m *Manager) ListRecipes() []string {
 
 // Resolve selects the single matching recipe/regex for a package identifier.
 // pkgName can be 'name' or 'prefix:name' (no version).
-func (m *Manager) Resolve(pkgName string, cfg config.Config) (string, string, error) {
+func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, error) {
 	if res, ok := m.resolveCache[pkgName]; ok {
 		return res.recipeName, res.regexKey, nil
 	}

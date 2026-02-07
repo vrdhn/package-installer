@@ -8,13 +8,15 @@ import (
 )
 
 // Manager handles disk operations for pi's XDG directories.
-type Manager struct {
+type manager struct {
 	cfg config.Config
 }
 
+type Manager = *manager
+
 // NewManager creates a new disk manager.
-func NewManager(cfg config.Config) *Manager {
-	return &Manager{cfg: cfg}
+func NewManager(cfg config.Config) Manager {
+	return &manager{cfg: cfg}
 }
 
 // Usage represents disk usage information for a specific type.
@@ -26,7 +28,7 @@ type Usage struct {
 }
 
 // GetInfo returns disk usage statistics for all pi directories.
-func (m *Manager) GetInfo() ([]Usage, int64) {
+func (m *manager) GetInfo() ([]Usage, int64) {
 	paths := map[string]string{
 		"Packages":  m.cfg.GetPkgDir(),
 		"Downloads": m.cfg.GetDownloadDir(),
@@ -50,7 +52,7 @@ func (m *Manager) GetInfo() ([]Usage, int64) {
 }
 
 // Clean removes temporary and cached data (packages, downloads, discovery).
-func (m *Manager) Clean() []string {
+func (m *manager) Clean() []string {
 	dirs := []string{
 		m.cfg.GetPkgDir(),
 		m.cfg.GetDownloadDir(),
@@ -68,7 +70,7 @@ func (m *Manager) Clean() []string {
 }
 
 // Uninstall removes all pi-related XDG directories.
-func (m *Manager) Uninstall() []string {
+func (m *manager) Uninstall() []string {
 	dirs := []string{
 		m.cfg.GetCacheDir(),
 		m.cfg.GetConfigDir(),
