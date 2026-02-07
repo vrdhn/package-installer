@@ -160,7 +160,7 @@ func (sr *StarlarkRecipe) executeHandler(ctx *DiscoveryContext, regexKey string,
 }
 
 // Registry returns registered regex patterns and whether the recipe is legacy.
-func (sr *StarlarkRecipe) Registry(cfg config.ReadOnly) ([]string, bool, error) {
+func (sr *StarlarkRecipe) Registry(cfg config.Config) ([]string, bool, error) {
 	ctx := &DiscoveryContext{
 		Config:       cfg,
 		PkgName:      "",
@@ -580,6 +580,44 @@ func (sr *StarlarkRecipe) storeHandlerCache(ctx *DiscoveryContext, regexKey stri
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+// Test runs all functions in the recipe that start with "test_".
+func (sr *StarlarkRecipe) Test(cfg config.Config) error {
+	if !sr.registryLoaded {
+		if err := sr.loadRegistry(); err != nil {
+			return err
+		}
+	}
+
+	var testFuncs []string
+	for name, val := range sr.globals {
+		if strings.HasPrefix(name, "test_") {
+			if _, ok := val.(starlark.Callable); ok {
+				testFuncs = append(testFuncs, name)
+			}
+		}
+	}
+	sort.Strings(testFuncs)
+
+	if len(testFuncs) == 0 {
+		return fmt.Errorf("no test functions found (starting with 'test_')")
+	}
+
+	for _, name := range testFuncs {
+		fmt.Printf("  Running %s... ", name)
+		_, err := starlark.Call(sr.thread, sr.globals[name], nil, nil)
+		if err != nil {
+			fmt.Println("FAILED")
+			if evalErr, ok := err.(*starlark.EvalError); ok {
+				return fmt.Errorf("test %s failed:\n%s", name, evalErr.Backtrace())
+			}
+			return fmt.Errorf("test %s failed: %w", name, err)
+		}
+		fmt.Println("OK")
+	}
+
+	return nil
 }
 
 func getString(dict *starlark.Dict, key string) string {

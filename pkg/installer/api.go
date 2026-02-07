@@ -24,7 +24,7 @@ type Plan struct {
 type Stage func(ctx context.Context, plan *Plan, task display.Task) error
 
 // NewPlan creates an installation plan for a package definition using provided config.
-func NewPlan(cfg config.ReadOnly, pkg recipe.PackageDefinition) (*Plan, error) {
+func NewPlan(cfg config.Config, pkg recipe.PackageDefinition) (*Plan, error) {
 	// Create subdirectories if they don't exist
 	if err := os.MkdirAll(cfg.GetDownloadDir(), 0755); err != nil {
 		return nil, err

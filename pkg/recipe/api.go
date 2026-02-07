@@ -26,7 +26,7 @@ type PackageDefinition struct {
 
 // DiscoveryContext provides the environment for recipe execution.
 type DiscoveryContext struct {
-	Config       config.ReadOnly
+	Config       config.Config
 	PkgName      string
 	VersionQuery string
 	Download     func(url string) ([]byte, error)

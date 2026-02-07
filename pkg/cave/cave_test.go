@@ -52,15 +52,15 @@ func TestFindWithEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sysCfg := &mockConfig{
+	config := &mockConfig{
 		configDir: filepath.Join(tmpDir, "config"),
 		homeDir:   filepath.Join(tmpDir, "home"),
 	}
-	if err := os.MkdirAll(sysCfg.configDir, 0755); err != nil {
+	if err := os.MkdirAll(config.configDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	mgr := NewManager(sysCfg)
+	mgr := NewManager(config)
 
 	// Test PI_WORKSPACE
 	t.Run("PI_WORKSPACE", func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestFindWithEnv(t *testing.T) {
 				{Name: "mycave", Workspace: wsDir},
 			},
 		}
-		if err := reg.Save(sysCfg); err != nil {
+		if err := reg.Save(config); err != nil {
 			t.Fatal(err)
 		}
 

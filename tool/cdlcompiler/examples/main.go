@@ -39,13 +39,13 @@ func (h *handlerfuncs) RunProjectInit(params *cli.ProjectInitParams) (ExecutionR
 }
 
 func main() {
-	h := &handlerfuncs{}
-	action, _, err := cli.Parse[ExecutionResult](h, os.Args[1:])
+	action, _, err := cli.Parse[ExecutionResult](os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	res, err := action()
+	h := &handlerfuncs{}
+	res, err := action(h)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

@@ -17,7 +17,7 @@ import (
 )
 
 // List returns all available packages for the given recipe and version query.
-func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
+func List(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
 	task.SetStage("List", r.GetName())
 
 	dCtx := &recipe.DiscoveryContext{
@@ -33,7 +33,7 @@ func List(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName str
 }
 
 // Resolve finds the best matching package for the given recipe and version constraint.
-func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+func Resolve(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
 	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func Resolve(ctx context.Context, cfg config.ReadOnly, r recipe.Recipe, pkgName 
 	return bestMatch, nil
 }
 
-func fetchData(ctx context.Context, cfg config.ReadOnly, url string, task display.Task) ([]byte, error) {
+func fetchData(ctx context.Context, cfg config.Config, url string, task display.Task) ([]byte, error) {
 	// 1. Create discovery directory
 	if err := os.MkdirAll(cfg.GetDiscoveryDir(), 0755); err != nil {
 		return nil, err

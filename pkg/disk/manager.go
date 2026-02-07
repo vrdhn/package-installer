@@ -9,11 +9,11 @@ import (
 
 // Manager handles disk operations for pi's XDG directories.
 type Manager struct {
-	cfg config.ReadOnly
+	cfg config.Config
 }
 
 // NewManager creates a new disk manager.
-func NewManager(cfg config.ReadOnly) *Manager {
+func NewManager(cfg config.Config) *Manager {
 	return &Manager{cfg: cfg}
 }
 
@@ -21,6 +21,7 @@ func NewManager(cfg config.ReadOnly) *Manager {
 type Usage struct {
 	Label string
 	Size  int64
+	Items int
 	Path  string
 }
 
@@ -36,11 +37,12 @@ func (m *Manager) GetInfo() ([]Usage, int64) {
 	var total int64
 	var stats []Usage
 	for label, path := range paths {
-		size, _ := DirSize(path)
+		size, count := DirSize(path)
 		total += size
 		stats = append(stats, Usage{
 			Label: label,
 			Size:  size,
+			Items: count,
 			Path:  path,
 		})
 	}
@@ -82,19 +84,21 @@ func (m *Manager) Uninstall() []string {
 	return removed
 }
 
-// DirSize calculates the total size of a directory.
-func DirSize(path string) (int64, error) {
+// DirSize calculates the total size and item count of a directory.
+func DirSize(path string) (int64, int) {
 	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+	var count int
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
 			size += info.Size()
+			count++
 		}
 		return nil
 	})
-	return size, err
+	return size, count
 }
 
 // FormatSize converts bytes to a human-readable string.

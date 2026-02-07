@@ -129,6 +129,11 @@ type RepoListParams struct {
 	_ struct{}
 }
 
+type SelfUpdateParams struct {
+	GlobalFlags
+	_ struct{}
+}
+
 type VersionParams struct {
 	GlobalFlags
 	_ struct{}
@@ -152,6 +157,7 @@ type Handlers[T any] interface {
 	RunRecipeRepl(params *RecipeReplParams) (T, error)
 	RunRepoAdd(params *RepoAddParams) (T, error)
 	RunRepoList(params *RepoListParams) (T, error)
+	RunSelfUpdate(params *SelfUpdateParams) (T, error)
 	RunVersion(params *VersionParams) (T, error)
 }
 
@@ -391,6 +397,16 @@ var CliCommands = []CommandDef{
 	},
 
 	CommandDef{
+		Name:        "self-update",
+		FullCommand: "self-update",
+		Desc:        "Update pi to the latest version",
+		Safe:        false,
+		Examples: []string{
+			"pi self-update",
+		},
+	},
+
+	CommandDef{
 		Name:        "repo",
 		FullCommand: "repo",
 		Desc:        "Manage repositories",
@@ -495,6 +511,8 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 		return handleRepoAdd(h, inv, gf), resolvedCmd, nil
 	case "repo/list":
 		return handleRepoList(h, inv, gf), resolvedCmd, nil
+	case "self-update":
+		return handleSelfUpdate(h, inv, gf), resolvedCmd, nil
 	case "version":
 		return handleVersion(h, inv, gf), resolvedCmd, nil
 	default:
@@ -641,6 +659,13 @@ func handleRepoList[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Actio
 	params.GlobalFlags = gf
 	return func() (T, error) {
 		return h.RunRepoList(params)
+	}
+}
+func handleSelfUpdate[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &SelfUpdateParams{}
+	params.GlobalFlags = gf
+	return func() (T, error) {
+		return h.RunSelfUpdate(params)
 	}
 }
 func handleVersion[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {

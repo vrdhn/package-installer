@@ -46,7 +46,21 @@ func LoadConfig(path string) (*CaveConfig, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
 	return &cfg, nil
+}
+
+// Validate ensures the configuration is valid.
+func (c *CaveConfig) Validate() error {
+	if c.Name == "" {
+		return fmt.Errorf("missing 'name'")
+	}
+	if c.Workspace == "" {
+		return fmt.Errorf("missing 'workspace'")
+	}
+	return nil
 }
 
 // Save writes the CaveConfig to a file path.
@@ -91,7 +105,7 @@ func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 }
 
 // LoadRegistry reads the global registry.
-func LoadRegistry(cfg sysconfig.ReadOnly) (*Registry, error) {
+func LoadRegistry(cfg sysconfig.Config) (*Registry, error) {
 	path := filepath.Join(cfg.GetConfigDir(), "caves.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -108,7 +122,7 @@ func LoadRegistry(cfg sysconfig.ReadOnly) (*Registry, error) {
 }
 
 // SaveRegistry writes the global registry.
-func (r *Registry) Save(cfg sysconfig.ReadOnly) error {
+func (r *Registry) Save(cfg sysconfig.Config) error {
 	dir := cfg.GetConfigDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err

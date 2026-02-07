@@ -23,13 +23,13 @@ type Cave struct {
 // Manager handles cave discovery and loading.
 // Mutable
 type Manager struct {
-	SysConfig sysconfig.ReadOnly
+	SysConfig sysconfig.Config
 }
 
 // NewManager creates a new Cave Manager.
-func NewManager(sysCfg sysconfig.ReadOnly) *Manager {
+func NewManager(config sysconfig.Config) *Manager {
 	return &Manager{
-		SysConfig: sysCfg,
+		SysConfig: config,
 	}
 }
 

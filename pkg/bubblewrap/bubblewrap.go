@@ -218,7 +218,7 @@ func sortedKeys[T any](m map[string]T) []string {
 }
 
 // ResolveLaunch implements cave.Backend
-func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.ReadOnly, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
+func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.Config, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
 	// Internal home path inside the sandbox
 	internalHome := cfg.GetHostHome()
 

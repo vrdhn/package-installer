@@ -17,7 +17,7 @@ type Managers struct {
 	CaveMgr *cave.Manager
 	PkgsMgr *pkgs.Manager
 	DiskMgr *disk.Manager
-	SysCfg  config.ReadOnly
+	Config  config.Config
 }
 
 // ExecutionResult is returned at top level, to figure out if to execute bwrap

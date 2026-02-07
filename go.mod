@@ -13,6 +13,7 @@ require (
 	github.com/klauspost/compress v1.18.3
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9
 	golang.org/x/net v0.47.0
+	golang.org/x/sync v0.19.0
 )
 
 require (

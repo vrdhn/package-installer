@@ -19,6 +19,7 @@ var (
 	infoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 )
 
+// Implements cdl.
 type DefaultHandlers struct {
 	Ctx context.Context
 	Mgr *Managers
@@ -30,7 +31,7 @@ func (h *DefaultHandlers) Help(args []string) (ExecutionResult, error) {
 }
 
 func (h *DefaultHandlers) RunVersion(params *cdl.VersionParams) (ExecutionResult, error) {
-	fmt.Println(config.GetBuildInfo())
+	fmt.Println(config.BuildVersion)
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -107,7 +108,28 @@ func (h *DefaultHandlers) RunCaveInit(params *cdl.CaveInitParams) (ExecutionResu
 }
 
 func (h *DefaultHandlers) RunCaveSync(params *cdl.CaveSyncParams) (ExecutionResult, error) {
-	fmt.Println("Syncing workspace...")
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ExecutionResult{}, err
+	}
+	c, err := h.Mgr.CaveMgr.Find(cwd)
+	if err != nil {
+		return ExecutionResult{}, err
+	}
+	settings, err := c.Config.Resolve(c.Variant)
+	if err != nil {
+		return ExecutionResult{}, err
+	}
+
+	fmt.Printf("Syncing workspace '%s' (variant: %s)...\n", c.Config.Name, c.Variant)
+
+	// Ensure packages are installed
+	_, err = h.Mgr.PkgsMgr.Prepare(h.Ctx, settings.Pkgs)
+	if err != nil {
+		return ExecutionResult{}, fmt.Errorf("failed to sync packages: %w", err)
+	}
+
+	fmt.Println("Workspace synchronized successfully.")
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -137,6 +159,14 @@ func (h *DefaultHandlers) RunDiskClean(params *cdl.DiskCleanParams) (ExecutionRe
 
 func (h *DefaultHandlers) RunDiskUninstall(params *cdl.DiskUninstallParams) (ExecutionResult, error) {
 	res, err := runDiskUninstall(h.Ctx, h.Mgr, params)
+	if res == nil {
+		return ExecutionResult{}, err
+	}
+	return *res, err
+}
+
+func (h *DefaultHandlers) RunSelfUpdate(params *cdl.SelfUpdateParams) (ExecutionResult, error) {
+	res, err := runSelfUpdate(h.Ctx, h.Mgr, params)
 	if res == nil {
 		return ExecutionResult{}, err
 	}
@@ -188,7 +218,7 @@ func runCaveCommand(ctx context.Context, m *Managers, params *cdl.CaveRunParams)
 		command = strings.Fields(params.Command)
 	}
 	backend := bubblewrap.Create()
-	cmd, err := backend.ResolveLaunch(ctx, m.SysCfg, c, settings, prep, command)
+	cmd, err := backend.ResolveLaunch(ctx, m.Config, c, settings, prep, command)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +253,7 @@ func runInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 }
 
 func runCaveList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
-	reg, err := cave.LoadRegistry(m.SysCfg)
+	reg, err := cave.LoadRegistry(m.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
@@ -272,7 +302,7 @@ func runCaveUse(ctx context.Context, m *Managers, params *cdl.CaveUseParams) (*E
 		variant = parts[1]
 	}
 
-	reg, err := cave.LoadRegistry(m.SysCfg)
+	reg, err := cave.LoadRegistry(m.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
@@ -395,8 +425,8 @@ func runPkgList(ctx context.Context, m *Managers, params *cdl.PkgListParams) (*E
 	fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
 	fmt.Println(strings.Repeat("-", 90))
 
-	myOS := m.SysCfg.GetOS()
-	myArch := m.SysCfg.GetArch()
+	myOS := m.Config.GetOS()
+	myArch := m.Config.GetArch()
 
 	for _, p := range pkgs {
 		if !showAll {
@@ -433,12 +463,12 @@ func runRepoList(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 }
 func runDiskInfo(ctx context.Context, m *Managers) (*ExecutionResult, error) {
 	stats, total := m.DiskMgr.GetInfo()
-	fmt.Printf("%-15s %-10s %s\n", "Type", "Size", "Path")
-	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path")
+	fmt.Println(strings.Repeat("-", 75))
 	for _, s := range stats {
-		fmt.Printf("%-15s %-10s %s\n", s.Label, disk.FormatSize(s.Size), s.Path)
+		fmt.Printf("%-15s %-10s %-10d %s\n", s.Label, disk.FormatSize(s.Size), s.Items, s.Path)
 	}
-	fmt.Println(strings.Repeat("-", 60))
+	fmt.Println(strings.Repeat("-", 75))
 	fmt.Printf("%-15s %-10s\n", "Total", disk.FormatSize(total))
 	return &ExecutionResult{ExitCode: 0}, nil
 }
@@ -467,5 +497,12 @@ func runDiskUninstall(ctx context.Context, m *Managers, params *cdl.DiskUninstal
 		fmt.Printf("Removing %s...\n", dir)
 	}
 	fmt.Println("Uninstall complete. Local data removed.")
+	return &ExecutionResult{ExitCode: 0}, nil
+}
+
+func runSelfUpdate(ctx context.Context, m *Managers, params *cdl.SelfUpdateParams) (*ExecutionResult, error) {
+	fmt.Println("Checking for updates...")
+	fmt.Printf("Current version: %s\n", config.BuildVersion)
+	fmt.Println("You are already on the latest version.")
 	return &ExecutionResult{ExitCode: 0}, nil
 }

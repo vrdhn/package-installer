@@ -26,7 +26,7 @@ type recipeRepl struct {
 	in   *bufio.Reader
 	out  io.Writer
 	err  io.Writer
-	cfg  config.ReadOnly
+	cfg  config.Config
 	path string
 
 	name     string
@@ -44,7 +44,7 @@ func runRecipeRepl(ctx context.Context, m *Managers, params *cdl.RecipeReplParam
 		in:   bufio.NewReader(os.Stdin),
 		out:  os.Stdout,
 		err:  os.Stderr,
-		cfg:  m.SysCfg,
+		cfg:  m.Config,
 		path: params.File,
 	}
 

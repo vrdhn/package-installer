@@ -10,13 +10,16 @@ import (
 	"pi/pkg/repository"
 	"pi/pkg/resolver"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Mutable
 type Manager struct {
 	Repo      *repository.Manager
 	Disp      display.Display
-	SysConfig sysconfig.ReadOnly
+	SysConfig sysconfig.Config
 }
 
 // IndexEntry represents a lazy recipe registration entry.
@@ -26,11 +29,11 @@ type IndexEntry struct {
 	Legacy   bool
 }
 
-func NewManager(repo *repository.Manager, disp display.Display, sysCfg sysconfig.ReadOnly) *Manager {
+func NewManager(repo *repository.Manager, disp display.Display, config sysconfig.Config) *Manager {
 	return &Manager{
 		Repo:      repo,
 		Disp:      disp,
-		SysConfig: sysCfg,
+		SysConfig: config,
 	}
 }
 
@@ -38,67 +41,82 @@ func NewManager(repo *repository.Manager, disp display.Display, sysCfg sysconfig
 func (m *Manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*Result, error) {
 	var allSymlinks []Symlink
 	allEnv := make(map[string]string)
+	var mu sync.Mutex
+
+	g, ctx := errgroup.WithContext(ctx)
 
 	for _, pkgStr := range pkgStrings {
-		p, err := Parse(pkgStr)
-		if err != nil {
-			return nil, err
-		}
+		pkgStr := pkgStr // capture for goroutine
+		g.Go(func() error {
+			p, err := Parse(pkgStr)
+			if err != nil {
+				return err
+			}
 
-		recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
-		if err != nil {
-			return nil, err
-		}
+			recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
+			if err != nil {
+				return err
+			}
 
-		src, err := m.Repo.GetRecipe(recipeName)
-		if err != nil {
-			return nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
-		}
+			src, err := m.Repo.GetRecipe(recipeName)
+			if err != nil {
+				return fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
+			}
 
-		task := m.Disp.StartTask(p.String())
-		recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
-		if err != nil {
+			task := m.Disp.StartTask(p.String())
+			recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+			if err != nil {
+				task.Done()
+				return fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
+			}
+			selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
+
+			// Resolve
+			pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Name, p.Version, task)
+			if err != nil {
+				task.Done()
+				return fmt.Errorf("resolution failed for %s: %v", p.String(), err)
+			}
+
+			// Plan
+			plan, err := installer.NewPlan(m.SysConfig, *pkgDef)
+			if err != nil {
+				task.Done()
+				return fmt.Errorf("planning failed for %s: %v", p.String(), err)
+			}
+
+			// Install
+			if err := installer.Install(ctx, plan, task); err != nil {
+				task.Done()
+				return fmt.Errorf("installation failed for %s: %v", p.String(), err)
+			}
+
+			// Discover symlinks
+			links, err := DiscoverSymlinks(plan.InstallPath, pkgDef.Symlinks)
+			if err != nil {
+				task.Done()
+				return fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
+			}
+
+			mu.Lock()
+			allSymlinks = append(allSymlinks, links...)
+
+			// Handle environment variables
+			for k, v := range pkgDef.Env {
+				// Replace ${PI_PKG_ROOT} with the actual install path
+				// Inside the cave, we will bind the package directory to its host path.
+				resolvedVal := strings.ReplaceAll(v, "${PI_PKG_ROOT}", plan.InstallPath)
+				allEnv[k] = resolvedVal
+			}
+			mu.Unlock()
+
 			task.Done()
-			return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
-		}
-		selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
+			return nil
+		})
+	}
 
-		// Resolve
-		pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Name, p.Version, task)
-		if err != nil {
-			task.Done()
-			return nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
-		}
-
-		// Plan
-		plan, err := installer.NewPlan(m.SysConfig, *pkgDef)
-		if err != nil {
-			task.Done()
-			return nil, fmt.Errorf("planning failed for %s: %v", p.String(), err)
-		}
-
-		// Install
-		if err := installer.Install(ctx, plan, task); err != nil {
-			task.Done()
-			return nil, fmt.Errorf("installation failed for %s: %v", p.String(), err)
-		}
-
-		// Discover symlinks
-		links, err := DiscoverSymlinks(plan.InstallPath, pkgDef.Symlinks)
-		if err != nil {
-			task.Done()
-			return nil, fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
-		}
-		allSymlinks = append(allSymlinks, links...)
-
-		// Handle environment variables
-		for k, v := range pkgDef.Env {
-			// Replace ${PI_PKG_ROOT} with the actual install path
-			// Inside the cave, we will bind the package directory to its host path.
-			resolvedVal := strings.ReplaceAll(v, "${PI_PKG_ROOT}", plan.InstallPath)
-			allEnv[k] = resolvedVal
-		}
-		task.Done()
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return &Result{

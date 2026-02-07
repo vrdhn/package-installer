@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-type Action[T any] func() (T, error)
-
 type FlagDef struct {
 	Name  string
 	Short string
@@ -58,6 +56,8 @@ type Handlers[T any] interface {
 	RunProjectInit(params *ProjectInitParams) (T, error)
 	RunUserAdd(params *UserAddParams) (T, error)
 }
+
+type Action[T any] func(h Handlers[T]) (T, error)
 
 var CliGlobalFlags = []FlagDef{
 	{Name: "help", Short: "h", Type: "bool", Desc: "Show help information"},
@@ -122,10 +122,8 @@ type Invocation struct {
 	Flags   map[string]any
 }
 
-func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) {
-	if h == nil {
-		return nil, nil, fmt.Errorf("handlers is nil")
-	}
+func Parse[T any](args []string) (Action[T], *CommandDef, error) {
+
 	var gf GlobalFlags
 	remaining := ProcessGlobalFlags(args, &gf)
 
@@ -135,7 +133,7 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 	}
 
 	if gf.Help || len(remaining) == 0 {
-		return func() (T, error) {
+		return func(h Handlers[T]) (T, error) {
 			return h.Help(remaining)
 		}, nil, nil
 	}
@@ -152,9 +150,9 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 
 	switch resolvedCmd.FullCommand {
 	case "project/init":
-		return handleProjectInit(h, inv, gf), resolvedCmd, nil
+		return handleProjectInit[T](inv, gf), resolvedCmd, nil
 	case "user/add":
-		return handleUserAdd(h, inv, gf), resolvedCmd, nil
+		return handleUserAdd[T](inv, gf), resolvedCmd, nil
 	default:
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
 	}
@@ -172,19 +170,19 @@ func ApplyGlobalFlag(g *GlobalFlags, name string, val any) {
 		}
 	}
 }
-func handleProjectInit[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleProjectInit[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &ProjectInitParams{}
 	params.GlobalFlags = gf
 	params.Path = inv.Args["path"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunProjectInit(params)
 	}
 }
-func handleUserAdd[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handleUserAdd[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &UserAddParams{}
 	params.GlobalFlags = gf
 	params.Name = inv.Args["name"]
-	return func() (T, error) {
+	return func(h Handlers[T]) (T, error) {
 		return h.RunUserAdd(params)
 	}
 }

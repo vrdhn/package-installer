@@ -6,8 +6,6 @@ import (
 	"fmt"
 )
 
-type Action[T any] func() (T, error)
-
 type FlagDef struct {
 	Name  string
 	Short string
@@ -76,6 +74,9 @@ type Handlers[T any] interface {
 	Run{{ goNameForPath (cmdPath .) }}(params *{{ goNameForPath (cmdPath .) }}Params) (T, error)
 {{- end }}
 }
+
+type Action[T any] func(h Handlers[T]) (T, error)
+
 
 var CliGlobalFlags = []FlagDef{
 {{- range .GlobalFlags }}
@@ -146,10 +147,8 @@ type Invocation struct {
 	Flags   map[string]any
 }
 
-func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) {
-	if h == nil {
-		return nil, nil, fmt.Errorf("handlers is nil")
-	}
+func Parse[T any]( args []string) (Action[T], *CommandDef, error) {
+
 	var gf GlobalFlags
 	remaining := ProcessGlobalFlags(args, &gf)
 
@@ -159,7 +158,7 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 	}
 
 	if gf.Help || len(remaining) == 0 {
-		return func() (T, error) {
+		return func(h Handlers[T]) (T, error) {
 			return h.Help(remaining)
 		}, nil, nil
 	}
@@ -177,7 +176,7 @@ func Parse[T any](h Handlers[T], args []string) (Action[T], *CommandDef, error) 
 	switch resolvedCmd.FullCommand {
 {{- range .Leafs }}
 	case {{ printf "%q" (cmdPath .) }}:
-		return handle{{ goNameForPath (cmdPath .) }}(h, inv, gf), resolvedCmd, nil
+		return handle{{ goNameForPath (cmdPath .) }}[T](inv, gf), resolvedCmd, nil
 {{- end }}
 	default:
 		return nil, resolvedCmd, fmt.Errorf("no handler for command: %s", resolvedCmd.FullCommand)
@@ -202,7 +201,7 @@ func ApplyGlobalFlag(g *GlobalFlags, name string, val any) {
 }
 
 {{- range .Leafs }}
-func handle{{ goNameForPath (cmdPath .) }}[T any](h Handlers[T], inv *Invocation, gf GlobalFlags) Action[T] {
+func handle{{ goNameForPath (cmdPath .) }}[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &{{ goNameForPath (cmdPath .) }}Params{}
 	params.GlobalFlags = gf
 {{- range .Args }}
@@ -215,7 +214,7 @@ func handle{{ goNameForPath (cmdPath .) }}[T any](h Handlers[T], inv *Invocation
 	params.{{ goFieldName .Name }} = StringFlag(inv.Flags, {{ printf "%q" .Name }})
 {{- end }}
 {{- end }}
-	return func() (T, error) {
+	return func(h Handlers[T] ) (T, error) {
 		return h.Run{{ goNameForPath (cmdPath .) }}(params)
 	}
 }

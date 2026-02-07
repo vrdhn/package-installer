@@ -28,14 +28,23 @@ type Manager struct {
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
 	disp    display.Display
-	cfg     config.ReadOnly
+	cfg     config.Config
+
+	// Cache for resolution: pkgName -> {recipeName, regexKey}
+	resolveCache map[string]resolvedRecipe
 }
 
-func NewManager(disp display.Display, cfg config.ReadOnly) (*Manager, error) {
+type resolvedRecipe struct {
+	recipeName string
+	regexKey   string
+}
+
+func NewManager(disp display.Display, cfg config.Config) (*Manager, error) {
 	m := &Manager{
-		recipes: make(map[string]string),
-		disp:    disp,
-		cfg:     cfg,
+		recipes:      make(map[string]string),
+		resolveCache: make(map[string]resolvedRecipe),
+		disp:         disp,
+		cfg:          cfg,
 	}
 
 	if err := m.loadBuiltins(); err != nil {
@@ -165,7 +174,11 @@ func (m *Manager) ListRecipes() []string {
 
 // Resolve selects the single matching recipe/regex for a package identifier.
 // pkgName can be 'name' or 'prefix:name' (no version).
-func (m *Manager) Resolve(pkgName string, cfg config.ReadOnly) (string, string, error) {
+func (m *Manager) Resolve(pkgName string, cfg config.Config) (string, string, error) {
+	if res, ok := m.resolveCache[pkgName]; ok {
+		return res.recipeName, res.regexKey, nil
+	}
+
 	type match struct {
 		repo   string
 		recipe string
@@ -222,6 +235,11 @@ func (m *Manager) Resolve(pkgName string, cfg config.ReadOnly) (string, string, 
 			lines = append(lines, fmt.Sprintf("  %s/%s  %s", m.repo, m.recipe, m.regex))
 		}
 		return "", "", fmt.Errorf("ambiguous package match for %s:\n%s", pkgName, strings.Join(lines, "\n"))
+	}
+
+	m.resolveCache[pkgName] = resolvedRecipe{
+		recipeName: matches[0].recipe,
+		regexKey:   matches[0].regex,
 	}
 
 	return matches[0].recipe, matches[0].regex, nil

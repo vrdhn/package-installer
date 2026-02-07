@@ -26,14 +26,14 @@
 The `global` keyword starts the global configuration.
 - `name "app" "tagline"`: Sets the binary name and a short description.
 - `flag <name> <type> "description" [<short>]`: Defines a global flag available to all commands.
-- `attr <name> = <value>`: Defines a global attribute inherited by all commands.
+- `attr <name> = <default-value>`: Defines a global attribute inherited by all commands.
 
 ### Commands
 - `cmd <path> "description"`: Defines a command or subcommand. Paths use spaces (e.g., `cmd user add`).
 - `flag <name> <type> "description" [<short>]`: Defines a flag for the preceding command.
 - `arg <name> <type> "description"`: Defines a positional argument for the preceding command.
 - `example "command string"`: Adds a usage example to the help output.
-- `attr <name> = <value>`: Sets or overrides an attribute for the preceding command.
+- `attr <name> = <override-value>`: Sets or overrides an attribute for the preceding command.
 
 ### Documentation Topics
 - `topic <name> "description"`: Defines a standalone help topic.
@@ -88,14 +88,14 @@ The generated `cli.Parse[T](h Handlers[T], args []string)` function is the entry
 ```go
 func main() {
     h := &myHandlers{}
-    
+
     // Parse os.Args[1:] with generics
     action, cmd, err := cli.Parse[ExecutionResult](h, os.Args[1:])
     if err != nil {
         fmt.Fprintf(os.Stderr, "Error: %v\n", err)
         os.Exit(1)
     }
-    
+
     // Inspect resolved command and its attributes
     if cmd != nil && (cmd.Safe == false) {
         fmt.Println("Warning: This is a potentially dangerous command!")
@@ -107,7 +107,8 @@ func main() {
         fmt.Fprintf(os.Stderr, "Error: %v\n", err)
         os.Exit(1)
     }
-    
-    os.Exit(res.ExitCode)
+
+	os.Exit(res.ExitCode)
+
 }
 ```
