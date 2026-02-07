@@ -71,6 +71,8 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 		pkg.OS = osType
 		pkg.Arch = archType
 
+		fmt.Printf("[%s] add_version: name=%s version=%s os=%s arch=%s\n", sr.Name, pkg.Name, pkg.Version, pkg.OS, pkg.Arch)
+
 		if env, ok := kwargs["env"].(*starlark.Dict); ok {
 			pkg.Env = make(map[string]string)
 			for _, k := range env.Keys() {

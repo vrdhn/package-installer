@@ -75,6 +75,9 @@ func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, e
 		if err := sr.loadRegistry(); err != nil {
 			return nil, err
 		}
+		if ctx.Download != nil {
+			fmt.Printf("[%s] Registry loaded, %d handlers found\n", sr.Name, len(sr.registry))
+		}
 		if len(sr.registry) == 0 {
 			sr.legacy = true
 			sr.legacyPkgs = pkgs
@@ -92,6 +95,9 @@ func (sr *StarlarkRecipe) Execute(ctx *DiscoveryContext) ([]PackageDefinition, e
 		return nil, err
 	}
 	if handler == nil {
+		if ctx.Download != nil {
+			fmt.Printf("[%s] No handler matched for %s\n", sr.Name, pi)
+		}
 		return nil, fmt.Errorf("recipe not applicable: %s", sr.Name)
 	}
 
@@ -585,7 +591,7 @@ func (sr *StarlarkRecipe) storeHandlerCache(ctx *DiscoveryContext, regexKey stri
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(ctx.Config.GetDiscoveryDir(), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(pkgs, "", "  ")

@@ -98,17 +98,15 @@ type DiskUninstallParams struct {
 	Force bool
 }
 
-type PkgInstallParams struct {
-	GlobalFlags
-	Package string
-	Force   bool
-}
-
 type PkgListParams struct {
 	GlobalFlags
-	Package string
-	All     bool
-	Index   bool
+	Query string
+	All   bool
+}
+
+type PkgSyncParams struct {
+	GlobalFlags
+	Query string
 }
 
 type RecipeReplParams struct {
@@ -154,8 +152,8 @@ type Handlers[T any] interface {
 	RunDiskClean(params *DiskCleanParams) (T, error)
 	RunDiskInfo(params *DiskInfoParams) (T, error)
 	RunDiskUninstall(params *DiskUninstallParams) (T, error)
-	RunPkgInstall(params *PkgInstallParams) (T, error)
 	RunPkgList(params *PkgListParams) (T, error)
+	RunPkgSync(params *PkgSyncParams) (T, error)
 	RunRecipeRepl(params *RecipeReplParams) (T, error)
 	RunRepoAdd(params *RepoAddParams) (T, error)
 	RunRepoList(params *RepoListParams) (T, error)
@@ -177,7 +175,7 @@ var CliTopics = []TopicDef{
 	{Name: "architecture", Desc: "Architecture & Patterns", Text: " pi is built for safety and speed using the following patterns:\n - Immutability: Core structures use ReadOnly/Writable interfaces to prevent accidental mutation.\n - Pipeline: Installation follows a strict Resolve -> Download -> Install -> Reify flow.\n - Concurrency: Go's goroutines are used for parallel downloads and extractions."},
 	{Name: "caves", Desc: "The Cave Sandbox", Text: " A 'Cave' is an isolated environment powered by Linux bubblewrap.\n - Isolation: Restricts filesystem access to the workspace and a private HOME.\n - Zero Pollution: Tools installed for one project do not affect the host or other projects.\n - Redirected Home: Environment variables (GOPATH, CARGO_HOME) are redirected into the Cave."},
 	{Name: "workspace", Desc: "Workspace & Manifests", Text: " Workspaces are managed via the 'pi.cave.json' manifest.\n - Symlink Forest: pi populates .local/bin in the Cave Home with symlinks to the package cache.\n - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing')\n within the same workspace."},
-	{Name: "versions", Desc: "Version Formats & Queries", Text: " pi supports flexible versioning schemes and semantic keywords for package resolution.\n\n Keywords:\n - latest:  (Default) Resolves to the most recent version available.\n - stable:  Resolves to the latest release marked as stable by the upstream provider.\n - lts:     (Node.js/Java) Resolves to the latest Long Term Support release.\n\n Formats:\n - exact:   pi pkg install nodejs@20.11.0\n - prefix:  pi pkg install nodejs@20 (matches 20.*)\n - names:   pi pkg install npm:typescript@latest (optional prefix)"},
+	{Name: "versions", Desc: "Version Formats & Queries", Text: " pi supports flexible versioning schemes and semantic keywords for package resolution.\n\n Keywords:\n - latest:  (Default) Resolves to the most recent version available.\n - stable:  Resolves to the latest release marked as stable by the upstream provider.\n - lts:     (Node.js/Java) Resolves to the latest Long Term Support release.\n\n Formats:\n - exact:   pi pkg install nodejs@20.11.0\n - prefix:  pi pkg install nodejs@20 (matches 20.*)\n - names:   pi pkg install npm:typescript@latest (optional prefix)\n - repos:   pi pkg install official/nodejs@latest (optional repo)"},
 	{Name: "recipes", Desc: "Starlark Recipes", Text: " Recipes describe how packages are discovered and installed.\n - Language: Written in Starlark (a Python dialect).\n - Pure: Recipes are declarative and perform no direct I/O.\n - Discovery: Recipes return a 'DiscoveryRequest' for the host to fetch, then parse the response."},
 }
 
@@ -205,19 +203,16 @@ var CliCommands = []CommandDef{
 		Subs: []CommandDef{
 
 			CommandDef{
-				Name:        "install",
-				FullCommand: "pkg/install",
-				Desc:        "Install a package",
+				Name:        "sync",
+				FullCommand: "pkg/sync",
+				Desc:        "Sync package versions from repositories",
 				Safe:        false,
 				Args: []ArgDef{
-					{Name: "package", Type: "string", Desc: "Package name and version (e.g., nodejs@20)"},
-				},
-				Flags: []FlagDef{
-					{Name: "force", Short: "f", Type: "bool", Desc: "Force reinstallation"},
+					{Name: "query", Type: "string", Desc: "Package query [repo/][prefix:]pkg"},
 				},
 				Examples: []string{
-					"pi pkg install nodejs@20",
-					"pi pkg i nodejs@latest",
+					"pi pkg sync nodejs",
+					"pi pkg sync official/go",
 				},
 			},
 
@@ -227,11 +222,10 @@ var CliCommands = []CommandDef{
 				Desc:        "List available versions for a package",
 				Safe:        false,
 				Args: []ArgDef{
-					{Name: "package", Type: "string", Desc: "Package name (e.g. go)"},
+					{Name: "query", Type: "string", Desc: "Package query [repo/][prefix:]pkg"},
 				},
 				Flags: []FlagDef{
 					{Name: "all", Short: "a", Type: "bool", Desc: "Show all architectures/OSs"},
-					{Name: "index", Short: "i", Type: "bool", Desc: "List registry patterns only"},
 				},
 				Examples: []string{
 					"pi pkg list go",
@@ -527,10 +521,10 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handleDiskInfo[T](inv, gf), resolvedCmd, nil
 	case "disk/uninstall":
 		return handleDiskUninstall[T](inv, gf), resolvedCmd, nil
-	case "pkg/install":
-		return handlePkgInstall[T](inv, gf), resolvedCmd, nil
 	case "pkg/list":
 		return handlePkgList[T](inv, gf), resolvedCmd, nil
+	case "pkg/sync":
+		return handlePkgSync[T](inv, gf), resolvedCmd, nil
 	case "recipe/repl":
 		return handleRecipeRepl[T](inv, gf), resolvedCmd, nil
 	case "repo/add":
@@ -651,23 +645,21 @@ func handleDiskUninstall[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 		return h.RunDiskUninstall(params)
 	}
 }
-func handlePkgInstall[T any](inv *Invocation, gf GlobalFlags) Action[T] {
-	params := &PkgInstallParams{}
-	params.GlobalFlags = gf
-	params.Package = inv.Args["package"]
-	params.Force = BoolFlag(inv.Flags, "force")
-	return func(h Handlers[T]) (T, error) {
-		return h.RunPkgInstall(params)
-	}
-}
 func handlePkgList[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &PkgListParams{}
 	params.GlobalFlags = gf
-	params.Package = inv.Args["package"]
+	params.Query = inv.Args["query"]
 	params.All = BoolFlag(inv.Flags, "all")
-	params.Index = BoolFlag(inv.Flags, "index")
 	return func(h Handlers[T]) (T, error) {
 		return h.RunPkgList(params)
+	}
+}
+func handlePkgSync[T any](inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &PkgSyncParams{}
+	params.GlobalFlags = gf
+	params.Query = inv.Args["query"]
+	return func(h Handlers[T]) (T, error) {
+		return h.RunPkgSync(params)
 	}
 }
 func handleRecipeRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {

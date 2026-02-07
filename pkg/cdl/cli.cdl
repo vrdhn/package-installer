@@ -11,16 +11,14 @@ cmd version "Show version information"
 
 cmd pkg "Manage packages"
 
-cmd pkg install "Install a package"
-    arg package string "Package name and version (e.g., nodejs@20)"
-    flag force bool "Force reinstallation" f
-    example "pi pkg install nodejs@20"
-    example "pi pkg i nodejs@latest"
+cmd pkg sync "Sync package versions from repositories"
+    arg query string "Package query [repo/][prefix:]pkg"
+    example "pi pkg sync nodejs"
+    example "pi pkg sync official/go"
 
 cmd pkg list "List available versions for a package"
-    arg package string "Package name (e.g. go)"
+    arg query string "Package query [repo/][prefix:]pkg"
     flag all bool "Show all architectures/OSs" a
-    flag index bool "List registry patterns only" i
     example "pi pkg list go"
 
 cmd recipe "Recipe development"
@@ -137,6 +135,7 @@ topic versions "Version Formats & Queries"
     - exact:   pi pkg install nodejs@20.11.0
     - prefix:  pi pkg install nodejs@20 (matches 20.*)
     - names:   pi pkg install npm:typescript@latest (optional prefix)
+    - repos:   pi pkg install official/nodejs@latest (optional repo)
     """
 
 topic recipes "Starlark Recipes"

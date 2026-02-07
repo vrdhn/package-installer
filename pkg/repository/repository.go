@@ -202,10 +202,29 @@ func (m *manager) LoadIndex() error {
 	return nil
 }
 
+func (m *manager) ensureIndexLoaded() error {
+	if len(m.index) == 0 {
+		if err := m.LoadIndex(); err != nil {
+			return err
+		}
+		if len(m.index) == 0 {
+			// Auto-sync if still empty (likely fresh system)
+			if err := m.Sync(false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m *manager) Sync(verbose bool) error {
 	csvPath := filepath.Join(m.cfg.GetConfigDir(), "packages.csv")
 	if verbose {
 		fmt.Printf("Regenerating index at %s\n", csvPath)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(csvPath), 0755); err != nil {
+		return err
 	}
 
 	f, err := os.Create(csvPath)
@@ -410,7 +429,11 @@ func (m *manager) GetFullRegistryInfo(verbose bool) ([]RegistryEntry, error) {
 			return nil, err
 		}
 		// If still empty and we have repos/builtins, maybe we need to sync?
-		// For now just return what we have (empty or loaded).
+		if len(m.index) == 0 {
+			if err := m.Sync(verbose); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Make a copy to sort
@@ -442,6 +465,30 @@ func (m *manager) ListRepos() []RepoConfig {
 	return m.repos
 }
 
+func (m *manager) GetRepoByUUID(uuid string) (RepoConfig, bool) {
+	if uuid == "builtin" {
+		return RepoConfig{Name: "builtin", UUID: "builtin"}, true
+	}
+	for _, r := range m.repos {
+		if r.UUID == uuid {
+			return r, true
+		}
+	}
+	return RepoConfig{}, false
+}
+
+func (m *manager) GetRepoByName(name string) (RepoConfig, bool) {
+	if name == "builtin" {
+		return RepoConfig{Name: "builtin", UUID: "builtin"}, true
+	}
+	for _, r := range m.repos {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return RepoConfig{}, false
+}
+
 func (m *manager) GetRecipe(name string) (string, error) {
 	content, ok := m.recipes[name]
 	if !ok {
@@ -460,8 +507,38 @@ func (m *manager) ListRecipes() []string {
 
 // Resolve selects the single matching recipe/regex for a package identifier.
 func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, error) {
+	if err := m.ensureIndexLoaded(); err != nil {
+		return "", "", err
+	}
+
 	if res, ok := m.resolveCache[pkgName]; ok {
 		return res.recipeName, res.regexKey, nil
+	}
+
+	originalPkgName := pkgName
+	repoFilter := ""
+	parts := strings.Split(pkgName, "/")
+
+	// Check for repo/prefix:name or repo/name
+	if len(parts) >= 2 {
+		first := parts[0]
+		// Check if 'first' is a known repo name
+		isRepo := false
+		if first == "builtin" {
+			isRepo = true
+		} else {
+			for _, r := range m.repos {
+				if r.Name == first {
+					isRepo = true
+					break
+				}
+			}
+		}
+
+		if isRepo {
+			repoFilter = first
+			pkgName = strings.Join(parts[1:], "/")
+		}
 	}
 
 	type match struct {
@@ -474,6 +551,10 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 
 	// Optimization: Use in-memory index
 	for _, entry := range m.index {
+		if repoFilter != "" && entry.RepoName != repoFilter {
+			continue
+		}
+
 		re, ok := m.compiledPatterns[entry.Pattern]
 		if !ok {
 			var err error
@@ -495,7 +576,7 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 	}
 
 	if len(matches) == 0 {
-		return "", "", fmt.Errorf("no recipe matched: %s", pkgName)
+		return "", "", fmt.Errorf("no recipe matched: %s", originalPkgName)
 	}
 	if len(matches) > 1 {
 		sort.Slice(matches, func(i, j int) bool {
@@ -511,13 +592,101 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 		for _, m := range matches {
 			lines = append(lines, fmt.Sprintf("  %s/%s  %s", m.repo, m.recipe, m.regex))
 		}
-		return "", "", fmt.Errorf("ambiguous package match for %s:\n%s", pkgName, strings.Join(lines, "\n"))
+		return "", "", fmt.Errorf("ambiguous package match for %s:\n%s", originalPkgName, strings.Join(lines, "\n"))
 	}
 
-	m.resolveCache[pkgName] = resolvedRecipe{
+	m.resolveCache[originalPkgName] = resolvedRecipe{
 		recipeName: matches[0].recipe,
 		regexKey:   matches[0].regex,
 	}
 
 	return matches[0].recipe, matches[0].regex, nil
+}
+
+type ResolvedQuery struct {
+	RepoUUID   string
+	RepoName   string
+	RecipeName string
+	Pattern    string
+}
+
+func (m *manager) ResolveQuery(query string) ([]ResolvedQuery, error) {
+	if err := m.ensureIndexLoaded(); err != nil {
+		return nil, err
+	}
+
+	repoFilter := ""
+	pkgFilter := query
+
+	if strings.Contains(query, "/") {
+		parts := strings.SplitN(query, "/", 2)
+		repoFilter = parts[0]
+		pkgFilter = parts[1]
+	}
+
+	var results []ResolvedQuery
+	for _, entry := range m.index {
+		if repoFilter != "" && entry.RepoName != repoFilter {
+			continue
+		}
+
+		if pkgFilter != "" {
+			// Exact match or prefix match if specified in requirements?
+			// User says: [repo/][prefix:]pkg
+			// "prefix:pkg" is the name used in patterns.
+			// Patterns in index are regexes.
+			// But user says: "There is no wildcard/regexp matching."
+			// This means the user input 'pkgFilter' should match a pattern exactly
+			// if we treat patterns as names?
+			// Actually, recipes use add_pkgdef("name", ...) or add_pkgdef(r"regex", ...)
+
+			// If pkgFilter is non-empty, we want to match it.
+			// For now, let's use the regex matching but anchored to start/end.
+			re, ok := m.compiledPatterns[entry.Pattern]
+			if !ok {
+				var err error
+				re, err = recipe.CompileAnchored(entry.Pattern)
+				if err != nil {
+					continue
+				}
+				m.compiledPatterns[entry.Pattern] = re
+			}
+
+			if re.MatchString(pkgFilter) {
+				results = append(results, ResolvedQuery{
+					RepoUUID:   entry.RepoUUID,
+					RepoName:   entry.RepoName,
+					RecipeName: entry.RecipeName,
+					Pattern:    entry.Pattern,
+				})
+			}
+		} else {
+			// pkgFilter is empty, means we want all in repo
+			results = append(results, ResolvedQuery{
+				RepoUUID:   entry.RepoUUID,
+				RepoName:   entry.RepoName,
+				RecipeName: entry.RecipeName,
+				Pattern:    entry.Pattern,
+			})
+		}
+	}
+
+	if repoFilter == "" && pkgFilter != "" && len(results) > 1 {
+		// Check for ambiguity: if the SAME pkg name matches in multiple repos
+		// Wait, if it's multiple patterns in same repo it's also maybe ambiguous?
+		// User: "If repo is not given, and package is found in multiple repo, ambiguity should be reported."
+		repos := make(map[string]bool)
+		for _, r := range results {
+			repos[r.RepoName] = true
+		}
+		if len(repos) > 1 {
+			var lines []string
+			for _, r := range results {
+				lines = append(lines, fmt.Sprintf("  %s/%s (%s)", r.RepoName, r.RecipeName, r.Pattern))
+			}
+			return nil, fmt.Errorf("ambiguous package match for %q:\n%s", query, strings.Join(lines, "\n"))
+		}
+	}
+
+	return results, nil
 }

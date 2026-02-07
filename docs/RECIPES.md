@@ -3,18 +3,19 @@
 `pi` uses a decentralized recipe model to support various platforms and languages. Recipes are Starlark files that emit package versions via `add_version(...)`.
 
 ## Package Identifiers
-Packages follow the format: `[prefix:]name[=version]`
+Packages follow the format: `[[repo/]prefix:]name[=version]`
 
 *   `nodejs=20`: Latest 20.x version of Node.js.
 *   `go=stable`: Latest stable Go.
 *   `pip:numpy`: Python package.
+*   `official/nodejs`: Package from a specific repository.
 
 ## Starlark Recipes
 Recipes are written in Starlark and register package handlers via `add_pkgdef(...)`.
 
 Handlers use this signature:
 `def handler(pkg_name):`
-`pkg_name` is the full identifier and may include an optional prefix (e.g., `npm:express`).
+`pkg_name` is the identifier (e.g., `npm:express`). If a repository was specified in the query, it is removed before being passed to the handler.
 
 ### Execution Model
 1.  Register handlers with `add_pkgdef(regex, handler)` at module load time.
@@ -44,7 +45,7 @@ All fields are required keyword args (use empty strings if unknown):
 Recipes do not receive a context object. They should emit as many versions as possible.
 Filtering is performed by `pi` after discovery.
 
-If multiple recipe regexes match a requested package, `pi` prints the matching repository/regex list and exits.
+If multiple recipe regexes match a requested package, `pi` prints the matching repository/regex list and exits. You can disambiguate by specifying the repository name (e.g., `repo/pkg`).
 
 ## Recipe REPL
 Use the REPL to iterate on Starlark recipes locally:
@@ -61,5 +62,6 @@ Commands:
 - `exit` / `quit`: leave the REPL
 
 ## Repositories
-Recipes are currently loaded from built-in Starlark files embedded in the binary.
-Repository management commands exist but are placeholders.
+Recipes are loaded from built-in Starlark files embedded in the binary or from local filesystem repositories added via `pi repo add <path>`.
+
+The package index is managed via `pi repo sync` which populates `packages.csv` for fast resolution.

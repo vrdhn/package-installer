@@ -10,8 +10,11 @@ def map_file(file):
     return mapping.get(file)
 
 def resolve_nodejs(pkg_name):
+    print("resolve_nodejs called for", pkg_name)
     data = download(url = "https://nodejs.org/dist/index.json")
+    print("downloaded data length:", len(data))
     versions = json.decode(data)
+    print("decoded", len(versions), "versions")
 
     for v in versions:
         version = v["version"].lstrip("v")

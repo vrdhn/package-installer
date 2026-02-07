@@ -14,12 +14,6 @@ import (
 	"pi/pkg/pkgs"
 	"pi/pkg/repository"
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
-)
-
-var (
-	infoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 )
 
 // Implements cdl.
@@ -43,20 +37,67 @@ func (h *Handlers) RunVersion(params *cdl.VersionParams) (ExecutionResult, error
 	return ExecutionResult{ExitCode: 0}, nil
 }
 
-func (h *Handlers) RunPkgInstall(params *cdl.PkgInstallParams) (ExecutionResult, error) {
-	res, err := runInstall(h.Ctx, h, params)
-	if res == nil {
+func (h *Handlers) RunPkgSync(params *cdl.PkgSyncParams) (ExecutionResult, error) {
+	err := h.PkgsMgr.Sync(h.Ctx, params.Query)
+	if err != nil {
 		return ExecutionResult{}, err
 	}
-	return *res, err
+
+	// Print updated records
+	versions, err := h.PkgsMgr.List(h.Ctx, params.Query)
+	if err != nil {
+		return ExecutionResult{}, err
+	}
+
+	h.DispMgr.Close()
+	pkgs.SortPackageVersions(versions)
+
+	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
+	fmt.Println(strings.Repeat("-", 100))
+	for _, v := range versions {
+		repo, _ := h.RepoMgr.GetRepoByUUID(v.RepoUUID)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+	}
+
+	return ExecutionResult{ExitCode: 0}, nil
 }
 
 func (h *Handlers) RunPkgList(params *cdl.PkgListParams) (ExecutionResult, error) {
-	res, err := runPkgList(h.Ctx, h, params)
-	if res == nil {
+	versions, err := h.PkgsMgr.List(h.Ctx, params.Query)
+	if err != nil {
 		return ExecutionResult{}, err
 	}
-	return *res, err
+
+	h.DispMgr.Close()
+
+	myOS := h.Config.GetOS()
+	myArch := h.Config.GetArch()
+
+	if !params.All {
+		var filtered []pkgs.PackageVersion
+		for _, v := range versions {
+			if v.OS == string(myOS) && v.Arch == string(myArch) {
+				filtered = append(filtered, v)
+			}
+		}
+		versions = filtered
+	}
+
+	pkgs.SortPackageVersions(versions)
+
+	// Show only most recent 5
+	if len(versions) > 5 {
+		versions = versions[len(versions)-5:]
+	}
+
+	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
+	fmt.Println(strings.Repeat("-", 100))
+	for _, v := range versions {
+		repo, _ := h.RepoMgr.GetRepoByUUID(v.RepoUUID)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+	}
+
+	return ExecutionResult{ExitCode: 0}, nil
 }
 
 func (h *Handlers) RunRecipeRepl(params *cdl.RecipeReplParams) (ExecutionResult, error) {
@@ -390,78 +431,6 @@ func runAddPkg(ctx context.Context, h *Handlers, params *cdl.CaveAddpkgParams) (
 	}
 	return &ExecutionResult{ExitCode: 0}, nil
 }
-func runInstall(ctx context.Context, h *Handlers, params *cdl.PkgInstallParams) (*ExecutionResult, error) {
-	pkgQuery := params.Package
-	if pkgQuery == "" {
-		return nil, fmt.Errorf("package name required")
-	}
-	_, err := h.PkgsMgr.Prepare(ctx, []string{pkgQuery})
-	if err != nil {
-		return nil, err
-	}
-	return &ExecutionResult{ExitCode: 0}, nil
-}
-
-func runPkgList(ctx context.Context, h *Handlers, params *cdl.PkgListParams) (*ExecutionResult, error) {
-	if params.Index {
-		entries, err := h.PkgsMgr.ListIndex(ctx)
-		if err != nil {
-			return nil, err
-		}
-		h.DispMgr.Close()
-		fmt.Printf("%-20s %-50s %s\n", "RECIPE", "PATTERNS", "MODE")
-		fmt.Println(strings.Repeat("-", 90))
-		for _, entry := range entries {
-			mode := "lazy"
-			if entry.Legacy {
-				mode = "legacy"
-			}
-			patterns := "-"
-			if len(entry.Patterns) > 0 {
-				patterns = strings.Join(entry.Patterns, ", ")
-			}
-			fmt.Printf("%-20s %-50s %s\n", entry.Recipe, patterns, mode)
-		}
-		return &ExecutionResult{ExitCode: 0}, nil
-	}
-
-	pkgQuery := params.Package
-	if pkgQuery == "" {
-		return nil, fmt.Errorf("package name required")
-	}
-	showAll := params.All
-
-	pkgs, err := h.PkgsMgr.List(ctx, pkgQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	h.DispMgr.Close() // Close TUI to print list to stdout
-
-	fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", "NAME", "VERSION", "STATUS", "RELEASE", "OS", "ARCH")
-	fmt.Println(strings.Repeat("-", 90))
-
-	myOS := h.Config.GetOS()
-	myArch := h.Config.GetArch()
-
-	for _, p := range pkgs {
-		if !showAll {
-			if p.OS != myOS || p.Arch != myArch {
-				continue
-			}
-		}
-		status := p.ReleaseStatus
-		if status == "" {
-			status = "unknown"
-		}
-		releaseDate := p.ReleaseDate
-		if releaseDate == "" {
-			releaseDate = "-"
-		}
-		fmt.Printf("%-20s %-15s %-10s %-12s %-10s %-10s\n", p.Name, p.Version, status, releaseDate, p.OS, p.Arch)
-	}
-	return &ExecutionResult{ExitCode: 0}, nil
-}
 
 func runRepoList(ctx context.Context, h *Handlers, verbose bool) (*ExecutionResult, error) {
 	h.DispMgr.Close()
@@ -497,8 +466,8 @@ func runDiskClean(ctx context.Context, h *Handlers) (*ExecutionResult, error) {
 func runDiskUninstall(ctx context.Context, h *Handlers, params *cdl.DiskUninstallParams) (*ExecutionResult, error) {
 	force := params.Force
 	if !force {
-		h.DispMgr.Close() // Terminate Bubble Tea before interactive prompt
-		fmt.Print(infoStyle.Render("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: "))
+		h.DispMgr.Close() // close the display before prompting
+		fmt.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" {

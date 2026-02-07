@@ -53,6 +53,8 @@ func newAddPkgdefBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 			return nil, fmt.Errorf("add_pkgdef: requires regex and handler")
 		}
 
+		fmt.Printf("[%s] add_pkgdef: regex=%s handler=%s\n", sr.Name, regex, handler.Name())
+
 		if sr.registry == nil {
 			sr.registry = make(map[string]starlark.Callable)
 		}

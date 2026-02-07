@@ -129,8 +129,8 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*
 	}, nil
 }
 
-// List returns all versions of a package.
-func (m *manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
+// ListFromSource returns all versions of a package by executing the recipe.
+func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
 	p, err := Parse(pkgStr)
 	if err != nil {
 		return nil, err
@@ -157,6 +157,104 @@ func (m *manager) List(ctx context.Context, pkgStr string) ([]recipe.PackageDefi
 	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
+}
+
+// Sync retrieves all versions for matching packages and saves them to repo.csv.
+func (m *manager) Sync(ctx context.Context, query string) error {
+	matches, err := m.Repo.ResolveQuery(query)
+	if err != nil {
+		return err
+	}
+
+	if len(matches) == 0 {
+		return fmt.Errorf("no packages matched query: %s", query)
+	}
+
+	for _, match := range matches {
+		src, err := m.Repo.GetRecipe(match.RecipeName)
+		if err != nil {
+			return err
+		}
+
+		task := m.Disp.StartTask(fmt.Sprintf("Syncing %s/%s", match.RepoName, match.Pattern))
+		recipeObj, err := recipe.NewStarlarkRecipe(match.RecipeName, src, task.Log)
+		if err != nil {
+			task.Done()
+			return err
+		}
+
+		selected := recipe.NewSelectedRecipe(recipeObj, match.Pattern)
+		// List with empty version to get all
+		pkgs, err := resolver.List(ctx, m.SysConfig, selected, match.Pattern, "", task)
+		if err != nil {
+			task.Done()
+			return err
+		}
+
+		task.Log(fmt.Sprintf("Found %d versions for %s", len(pkgs), match.Pattern))
+
+		if err := m.UpdateVersions(match.RepoUUID, match.Pattern, pkgs); err != nil {
+			task.Done()
+			return err
+		}
+		task.Done()
+	}
+
+	return nil
+}
+
+func (m *manager) filterVersions(all []PackageVersion, query string) []PackageVersion {
+	repoFilter := ""
+	pkgFilter := query
+	if strings.Contains(query, "/") {
+		parts := strings.SplitN(query, "/", 2)
+		repoFilter = parts[0]
+		pkgFilter = parts[1]
+	}
+
+	var matches []PackageVersion
+	for _, v := range all {
+		if repoFilter != "" {
+			repo, ok := m.Repo.GetRepoByUUID(v.RepoUUID)
+			if !ok || repo.Name != repoFilter {
+				continue
+			}
+		}
+
+		if pkgFilter != "" && v.Name != pkgFilter {
+			continue
+		}
+
+		matches = append(matches, v)
+	}
+	return matches
+}
+
+// List returns the matching versions from repo.csv.
+func (m *manager) List(ctx context.Context, query string) ([]PackageVersion, error) {
+	all, err := m.loadRepoCSV()
+	if err != nil {
+		return nil, err
+	}
+
+	matches := m.filterVersions(all, query)
+
+	// Auto-sync if no matches found and a query was provided
+	if len(matches) == 0 && query != "" {
+		if err := m.Sync(ctx, query); err != nil {
+			// If Sync fails, we return the error (e.g. no recipe found)
+			return nil, err
+		}
+
+		// Reload after sync
+		all, err = m.loadRepoCSV()
+		if err != nil {
+			return nil, err
+		}
+		matches = m.filterVersions(all, query)
+	}
+
+	return matches, nil
 }
 
 // ListIndex returns the registered package definitions for all recipes without executing handlers.

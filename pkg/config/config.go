@@ -29,22 +29,35 @@ type config struct {
 	hostHome string
 }
 
-type Config = *config
+type Config interface {
+	GetCacheDir() string
+	GetConfigDir() string
+	GetStateDir() string
+	GetPkgDir() string
+	GetDownloadDir() string
+	GetRecipeDir() string
+	GetHomeDir() string
+	GetDiscoveryDir() string
+	GetOS() OSType
+	GetArch() ArchType
+	GetUser() string
+	GetHostHome() string
+}
 
-func (c config) GetCacheDir() string     { return c.cacheDir }
-func (c config) GetConfigDir() string    { return c.configDir }
-func (c config) GetStateDir() string     { return c.stateDir }
-func (c config) GetPkgDir() string       { return c.pkgDir }
-func (c config) GetDownloadDir() string  { return c.downloadDir }
-func (c config) GetRecipeDir() string    { return c.recipeDir }
-func (c config) GetHomeDir() string      { return c.homeDir }
-func (c config) GetDiscoveryDir() string { return c.discoveryDir }
-func (c config) GetOS() OSType           { return c.os }
-func (c config) GetArch() ArchType       { return c.arch }
-func (c config) GetUser() string         { return c.user }
-func (c config) GetHostHome() string     { return c.hostHome }
+func (c *config) GetCacheDir() string     { return c.cacheDir }
+func (c *config) GetConfigDir() string    { return c.configDir }
+func (c *config) GetStateDir() string     { return c.stateDir }
+func (c *config) GetPkgDir() string       { return c.pkgDir }
+func (c *config) GetDownloadDir() string  { return c.downloadDir }
+func (c *config) GetRecipeDir() string    { return c.recipeDir }
+func (c *config) GetHomeDir() string      { return c.homeDir }
+func (c *config) GetDiscoveryDir() string { return c.discoveryDir }
+func (c *config) GetOS() OSType           { return c.os }
+func (c *config) GetArch() ArchType       { return c.arch }
+func (c *config) GetUser() string         { return c.user }
+func (c *config) GetHostHome() string     { return c.hostHome }
 
-func (c config) updateDerived() {
+func (c *config) updateDerived() {
 	c.pkgDir = filepath.Join(c.cacheDir, "pkgs")
 	c.downloadDir = filepath.Join(c.cacheDir, "downloads")
 	c.recipeDir = filepath.Join(c.configDir, "recipes")
