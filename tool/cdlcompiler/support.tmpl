@@ -235,14 +235,31 @@ type RootHelpData struct {
 func PrintHelp(args []string) {
 	if len(args) > 0 {
 		subject := args[0]
+
+		// 1. Try exact command match
+		cmd, rem, err := Resolve(CliCommands, args)
+		if err == nil && len(rem) == 0 {
+			RenderHelp(HelpData{Command: cmd, CommandPath: GetCmdPath(cmd)})
+			return
+		}
+
+		// 2. Try exact topic match
 		for _, topic := range CliTopics {
-			if topic.Name == subject || strings.HasPrefix(topic.Name, subject) {
+			if topic.Name == subject {
 				RenderHelp(HelpData{Topic: &topic})
 				return
 			}
 		}
 
-		cmd, _, err := Resolve(CliCommands, args)
+		// 3. Try prefix topic match
+		for _, topic := range CliTopics {
+			if strings.HasPrefix(topic.Name, subject) {
+				RenderHelp(HelpData{Topic: &topic})
+				return
+			}
+		}
+
+		// 4. Fallback to whatever Resolve found (partial command matches or subcommands)
 		if err == nil {
 			RenderHelp(HelpData{Command: cmd, CommandPath: GetCmdPath(cmd)})
 			return
