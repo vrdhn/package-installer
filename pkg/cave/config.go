@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"pi/pkg/config"
 )
 
@@ -25,15 +24,15 @@ type CaveConfig struct {
 	Variants  map[string]CaveSettings `json:"variants"`
 }
 
-// RegistryEntry represents an entry in the global caves.json.
-type RegistryEntry struct {
+// CaveEntry represents an entry in the global caves.json.
+type CaveEntry struct {
 	Name      string          `json:"name"`
 	Workspace config.HostPath `json:"workspace"`
 }
 
-// Registry represents the content of $XDG_CONFIG_DIR/pi/caves.json.
+// Registry represents the content of $XDG_CONFIG_DIR/pi/cave.json.
 type Registry struct {
-	Caves []RegistryEntry `json:"caves"`
+	Caves []CaveEntry `json:"caves"`
 }
 
 // LoadConfig reads a CaveConfig from a file path.
@@ -102,35 +101,4 @@ func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 	}
 
 	return merged, nil
-}
-
-// LoadRegistry reads the global registry.
-func LoadRegistry(cfg config.Config) (*Registry, error) {
-	path := filepath.Join(cfg.GetConfigDir(), "caves.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &Registry{Caves: []RegistryEntry{}}, nil
-		}
-		return nil, err
-	}
-	var reg Registry
-	if err := json.Unmarshal(data, &reg); err != nil {
-		return nil, err
-	}
-	return &reg, nil
-}
-
-// SaveRegistry writes the global registry.
-func (r *Registry) Save(cfg config.Config) error {
-	dir := cfg.GetConfigDir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "caves.json")
-	data, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
 }

@@ -64,4 +64,4 @@ Commands:
 ## Repositories
 Recipes are loaded from built-in Starlark files embedded in the binary or from local filesystem repositories added via `pi repo add <path>`.
 
-The package index is managed via `pi repo sync` which populates `packages.csv` for fast resolution.
+The package index is managed via `pi repo sync` which populates `repo.json` for fast resolution.

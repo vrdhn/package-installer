@@ -16,12 +16,14 @@ func newDownloadBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 	}
 
 	return NewStrictBuiltin(def, func(kwargs map[string]starlark.Value) (starlark.Value, error) {
-		ctx := sr.currentCtx
-		if ctx == nil || ctx.Download == nil {
-			return nil, fmt.Errorf("download called without active context")
+		val := sr.thread.Local(keyFetcher)
+		if val == nil {
+			return nil, fmt.Errorf("download called without active fetcher")
 		}
+		fetch := val.(Fetcher)
+
 		url := kwargs["url"].(starlark.String).GoString()
-		data, err := ctx.Download(url)
+		data, err := fetch(url)
 		if err != nil {
 			return nil, err
 		}

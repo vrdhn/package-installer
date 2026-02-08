@@ -31,7 +31,6 @@ type recipeRepl struct {
 	name     string
 	source   string
 	patterns []string
-	legacy   bool
 }
 
 // Run starts the recipe development REPL.
@@ -101,12 +100,11 @@ func (r *recipeRepl) loadPatterns() error {
 	if err != nil {
 		return err
 	}
-	patterns, legacy, err := sr.Registry(r.cfg)
+	patterns, err := sr.Registry(r.cfg)
 	if err != nil {
 		return err
 	}
 	r.patterns = patterns
-	r.legacy = legacy
 	return nil
 }
 
@@ -160,14 +158,9 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 		return err
 	}
 
-	patterns, legacy, err := sr.Registry(r.cfg)
+	patterns, err := sr.Registry(r.cfg)
 	if err != nil {
 		return err
-	}
-
-	if legacy {
-		fmt.Fprintln(r.out, "Legacy recipe detected (no regex registry).")
-		return r.executeLegacy(ctx, sr, p)
 	}
 
 	regex, err := selectRegex(patterns, p.Name, regexOverride)
@@ -175,7 +168,7 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 		return err
 	}
 
-	selected := recipe.NewSelectedRecipe(sr, regex)
+	selected := recipe.NewPinnedRecipe(sr, regex)
 	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, p.Name), r.out)
 	pkgs, err := resolver.List(ctx, r.cfg, selected, p.Name, p.Version, task)
 	if err != nil {
@@ -183,16 +176,6 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 	}
 
 	r.printRunSummary(p.Name, p.Name, p.Version, regex, pkgs)
-	return nil
-}
-
-func (r *recipeRepl) executeLegacy(ctx context.Context, sr *recipe.StarlarkRecipe, p *pkgs.Package) error {
-	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, p.Name), r.out)
-	pkgs, err := resolver.List(ctx, r.cfg, sr, p.Name, p.Version, task)
-	if err != nil {
-		return err
-	}
-	r.printRunSummary(p.Name, p.Name, p.Version, "(legacy)", pkgs)
 	return nil
 }
 
@@ -229,18 +212,10 @@ func selectRegex(patterns []string, fullName string, override string) (string, e
 
 func (r *recipeRepl) printSummary() {
 	fmt.Fprintf(r.out, "Recipe: %s\n", r.name)
-	if r.legacy {
-		fmt.Fprintln(r.out, "Registry: legacy (no regex patterns)")
-		return
-	}
 	fmt.Fprintf(r.out, "Registry patterns: %d\n", len(r.patterns))
 }
 
 func (r *recipeRepl) printPatterns() {
-	if r.legacy {
-		fmt.Fprintln(r.out, "Legacy recipe (no regex patterns).")
-		return
-	}
 	if len(r.patterns) == 0 {
 		fmt.Fprintln(r.out, "No regex patterns registered.")
 		return

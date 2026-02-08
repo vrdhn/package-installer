@@ -13,7 +13,7 @@ def resolve_nodejs(pkg_name):
     print("resolve_nodejs called for", pkg_name)
     data = download(url = "https://nodejs.org/dist/index.json")
     print("downloaded data length:", len(data))
-    versions = json.decode(data)
+    versions = json.decode(data=data)
     print("decoded", len(versions), "versions")
 
     for v in versions:
@@ -54,4 +54,4 @@ def resolve_nodejs(pkg_name):
                 }
             )
 
-add_pkgdef("nodejs", resolve_nodejs)
+add_pkgdef(regex="nodejs", handler=resolve_nodejs)

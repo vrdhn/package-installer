@@ -1,7 +1,7 @@
 def resolve_foojay(pkg_name):
     # Fetch all GA JDKs
     data = download(url = "https://api.foojay.io/disco/v3.0/packages?package_type=jdk&release_status=ga")
-    resp = json.decode(data)
+    resp = json.decode(data=data)
 
     for p in resp["result"]:
         version = p["java_version"]
@@ -40,4 +40,4 @@ def resolve_foojay(pkg_name):
             symlinks = {}
         )
 
-add_pkgdef("foojay:.*", resolve_foojay)
+add_pkgdef(regex="foojay:.*", handler=resolve_foojay)

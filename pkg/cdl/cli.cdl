@@ -117,7 +117,7 @@ topic workspace "Workspace & Manifests"
     text """
     Workspaces are managed via the 'pi.cave.json' manifest.
     - Symlink Forest: pi populates .local/bin in the Cave Home with symlinks to the package cache.
-    - Variants: Support for different environment configurations (e.g., 'legacy' or 'testing')
+    - Variants: Support for different environment configurations (e.g., 'stable' or 'testing')
     within the same workspace.
     """
 

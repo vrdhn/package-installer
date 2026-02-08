@@ -15,7 +15,7 @@ The manifest defines the requirements for a workspace.
       "pkgs": ["nodejs=20", "go=1.22"],
       "env": { "DEBUG": "1" }
     },
-    "legacy": {
+    "testing": {
       "pkgs": ["nodejs=18"]
     }
   }

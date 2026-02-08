@@ -2,13 +2,33 @@ package cache
 
 import (
 	"os"
+	"time"
 )
+
+// IsFresh checks if the target path exists and is not older than ttl.
+// A ttl of 0 means the file never expires.
+func IsFresh(target string, ttl time.Duration) bool {
+	info, err := os.Stat(target)
+	if err != nil {
+		return false
+	}
+	if ttl == 0 {
+		return true
+	}
+	return time.Since(info.ModTime()) < ttl
+}
 
 // Ensure ensures that the target path exists by running fn if it doesn't.
 // It uses locking to prevent multiple processes from running fn for the same target.
 func Ensure(target string, fn func() error) error {
-	// 1. Quick check if already exists
-	if _, err := os.Stat(target); err == nil {
+	return EnsureWithTTL(target, 0, fn)
+}
+
+// EnsureWithTTL ensures that the target path exists and is not older than ttl by running fn if it doesn't.
+// A ttl of 0 means the file never expires.
+func EnsureWithTTL(target string, ttl time.Duration, fn func() error) error {
+	// 1. Quick check if already exists and is fresh
+	if IsFresh(target, ttl) {
 		return nil
 	}
 
@@ -19,8 +39,8 @@ func Ensure(target string, fn func() error) error {
 	}
 	defer unlock()
 
-	// 3. Re-check if exists (it might have been created while we waited for the lock)
-	if _, err := os.Stat(target); err == nil {
+	// 3. Re-check if exists and is fresh (it might have been updated while we waited for the lock)
+	if IsFresh(target, ttl) {
 		return nil
 	}
 

@@ -10,6 +10,7 @@ import (
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/display"
+	"pi/pkg/lazyjson"
 	"pi/pkg/pkgs"
 	"strings"
 )
@@ -28,14 +29,17 @@ type Cave struct {
 // Mutable
 type manager struct {
 	SysConfig config.Config
+	regMgr    *lazyjson.Manager[Registry]
 }
 
 type Manager = *manager
 
 // NewManager creates a new Cave Manager.
 func NewManager(cfg config.Config) Manager {
+	regPath := filepath.Join(cfg.GetConfigDir(), "cave.json")
 	return &manager{
 		SysConfig: cfg,
+		regMgr:    lazyjson.New[Registry](regPath),
 	}
 }
 
@@ -63,7 +67,7 @@ func (m *manager) Find(cwd string) (*Cave, error) {
 		}
 
 		if root == "" {
-			reg, err := LoadRegistry(m.SysConfig)
+			reg, err := m.regMgr.Get()
 			if err == nil {
 				for _, entry := range reg.Caves {
 					if entry.Name == name {
@@ -140,7 +144,7 @@ func (m *manager) Info(ctx context.Context) (*common.ExecutionResult, error) {
 }
 
 func (m *manager) List(ctx context.Context, disp display.Display) (*common.ExecutionResult, error) {
-	reg, err := LoadRegistry(m.SysConfig)
+	reg, err := m.regMgr.Get()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
@@ -188,7 +192,7 @@ func (m *manager) Use(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager
 		variant = parts[1]
 	}
 
-	reg, err := LoadRegistry(m.SysConfig)
+	reg, err := m.regMgr.Get()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
@@ -359,30 +363,31 @@ func (m *manager) CreateInitConfig(dir string) error {
 	return m.SyncRegistry(cfg)
 }
 
-// SyncRegistry updates the global caves.json with the provided config.
+// SyncRegistry updates the global cave.json with the provided config.
 func (m *manager) SyncRegistry(cfg *CaveConfig) error {
-	reg, err := LoadRegistry(m.SysConfig)
+	err := m.regMgr.Modify(func(reg *Registry) error {
+		found := false
+		for i, entry := range reg.Caves {
+			if entry.Name == cfg.Name {
+				reg.Caves[i].Workspace = cfg.Workspace
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			reg.Caves = append(reg.Caves, CaveEntry{
+				Name:      cfg.Name,
+				Workspace: cfg.Workspace,
+			})
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 
-	found := false
-	for i, entry := range reg.Caves {
-		if entry.Name == cfg.Name {
-			reg.Caves[i].Workspace = cfg.Workspace
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		reg.Caves = append(reg.Caves, RegistryEntry{
-			Name:      cfg.Name,
-			Workspace: cfg.Workspace,
-		})
-	}
-
-	return reg.Save(m.SysConfig)
+	return m.regMgr.Save()
 }
 
 func findWorkspaceRoot(start string) (string, error) {

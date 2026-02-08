@@ -1,6 +1,6 @@
 def resolve_golang(pkg_name):
     data = download(url = "https://go.dev/dl/?mode=json&include=all")
-    releases = json.decode(data)
+    releases = json.decode(data=data)
 
     #  {
     #  "version": "go1.26rc2",
@@ -70,4 +70,4 @@ def resolve_golang(pkg_name):
                 }
             )
 
-add_pkgdef("golang", resolve_golang)
+add_pkgdef(regex="golang", handler=resolve_golang)

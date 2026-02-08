@@ -3,10 +3,12 @@ package pkgs
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/installer"
+	"pi/pkg/lazyjson"
 	"pi/pkg/recipe"
 	"pi/pkg/repository"
 	"pi/pkg/resolver"
@@ -21,26 +23,31 @@ type manager struct {
 	Repo      repository.Manager
 	Disp      display.Display
 	SysConfig config.Config
+	pkgMgr    *lazyjson.Manager[PackageRegistry]
 }
 
 type Manager = *manager
 
-// IndexEntry represents a lazy recipe registration entry.
-type IndexEntry struct {
+// RecipeIndexEntry represents a lazy recipe registration entry.
+type RecipeIndexEntry struct {
 	Recipe   string
 	Patterns []string
-	Legacy   bool
 }
 
 func NewManager(repo repository.Manager, disp display.Display, cfg config.Config) Manager {
+	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
 	return &manager{
 		Repo:      repo,
 		Disp:      disp,
 		SysConfig: cfg,
+		pkgMgr:    lazyjson.New[PackageRegistry](pkgPath),
 	}
 }
 
 func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.ExecutionResult, error) {
+	if err := m.Repo.LoadRepos(); err != nil {
+		return nil, err
+	}
 	err := m.Sync(ctx, query)
 	if err != nil {
 		return nil, err
@@ -53,19 +60,22 @@ func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.Execution
 	}
 
 	m.Disp.Close()
-	SortPackageVersions(versions)
+	SortPackageDefinitions(versions)
 
 	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
 	fmt.Println(strings.Repeat("-", 100))
 	for _, v := range versions {
 		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate)
 	}
 
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
 func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error) {
+	if err := m.Repo.LoadRepos(); err != nil {
+		return nil, err
+	}
 	versions, err := m.List(ctx, query)
 	if err != nil {
 		return nil, err
@@ -77,16 +87,16 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 	myArch := m.SysConfig.GetArch()
 
 	if !showAll {
-		var filtered []PackageVersion
+		var filtered []PackageDefinition
 		for _, v := range versions {
-			if v.OS == string(myOS) && v.Arch == string(myArch) {
+			if v.OS == myOS && v.Arch == myArch {
 				filtered = append(filtered, v)
 			}
 		}
 		versions = filtered
 	}
 
-	SortPackageVersions(versions)
+	SortPackageDefinitions(versions)
 
 	// Show only most recent 5
 	if len(versions) > 5 {
@@ -97,7 +107,7 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 	fmt.Println(strings.Repeat("-", 100))
 	for _, v := range versions {
 		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate)
 	}
 
 	return &common.ExecutionResult{ExitCode: 0}, nil
@@ -135,7 +145,7 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Res
 				task.Done()
 				return fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 			}
-			selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
+			selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
 
 			// Resolve
 			pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Name, p.Version, task)
@@ -217,13 +227,13 @@ func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.P
 		return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 	}
 
-	selected := recipe.NewSelectedRecipe(recipeObj, regexKey)
+	selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
 	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
 }
 
-// Sync retrieves all versions for matching packages and saves them to repo.csv.
+// Sync retrieves all versions for matching packages and saves them to package.json.
 func (m *manager) Sync(ctx context.Context, query string) error {
 	matches, err := m.Repo.ResolveQuery(query)
 	if err != nil {
@@ -247,7 +257,7 @@ func (m *manager) Sync(ctx context.Context, query string) error {
 			return err
 		}
 
-		selected := recipe.NewSelectedRecipe(recipeObj, match.Pattern)
+		selected := recipe.NewPinnedRecipe(recipeObj, match.Pattern)
 		// List with empty version to get all
 		pkgs, err := resolver.List(ctx, m.SysConfig, selected, match.Pattern, "", task)
 		if err != nil {
@@ -267,7 +277,7 @@ func (m *manager) Sync(ctx context.Context, query string) error {
 	return nil
 }
 
-func (m *manager) filterVersions(all []PackageVersion, query string) []PackageVersion {
+func (m *manager) filterVersions(all []PackageDefinition, query string) []PackageDefinition {
 	repoFilter := ""
 	pkgFilter := query
 	if strings.Contains(query, "/") {
@@ -276,7 +286,7 @@ func (m *manager) filterVersions(all []PackageVersion, query string) []PackageVe
 		pkgFilter = parts[1]
 	}
 
-	var matches []PackageVersion
+	var matches []PackageDefinition
 	for _, v := range all {
 		if repoFilter != "" {
 			repo, ok := m.Repo.GetRepoByUUID(v.RepoUUID)
@@ -294,12 +304,13 @@ func (m *manager) filterVersions(all []PackageVersion, query string) []PackageVe
 	return matches
 }
 
-// List returns the matching versions from repo.csv.
-func (m *manager) List(ctx context.Context, query string) ([]PackageVersion, error) {
-	all, err := m.loadRepoCSV()
+// List returns the matching versions from package.json.
+func (m *manager) List(ctx context.Context, query string) ([]PackageDefinition, error) {
+	reg, err := m.pkgMgr.Get()
 	if err != nil {
 		return nil, err
 	}
+	all := reg.Versions
 
 	matches := m.filterVersions(all, query)
 
@@ -311,10 +322,11 @@ func (m *manager) List(ctx context.Context, query string) ([]PackageVersion, err
 		}
 
 		// Reload after sync
-		all, err = m.loadRepoCSV()
+		reg, err = m.pkgMgr.Get()
 		if err != nil {
 			return nil, err
 		}
+		all = reg.Versions
 		matches = m.filterVersions(all, query)
 	}
 
@@ -322,8 +334,8 @@ func (m *manager) List(ctx context.Context, query string) ([]PackageVersion, err
 }
 
 // ListIndex returns the registered package definitions for all recipes without executing handlers.
-func (m *manager) ListIndex(ctx context.Context) ([]IndexEntry, error) {
-	var entries []IndexEntry
+func (m *manager) ListIndex(ctx context.Context) ([]RecipeIndexEntry, error) {
+	var entries []RecipeIndexEntry
 	for _, name := range m.Repo.ListRecipes() {
 		src, err := m.Repo.GetRecipe(name)
 		if err != nil {
@@ -334,15 +346,14 @@ func (m *manager) ListIndex(ctx context.Context) ([]IndexEntry, error) {
 			return nil, err
 		}
 
-		patterns, legacy, err := recipeObj.Registry(m.SysConfig)
+		patterns, err := recipeObj.Registry(m.SysConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		entries = append(entries, IndexEntry{
+		entries = append(entries, RecipeIndexEntry{
 			Recipe:   name,
 			Patterns: patterns,
-			Legacy:   legacy,
 		})
 	}
 	return entries, nil

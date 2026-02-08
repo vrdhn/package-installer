@@ -6,6 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/adrg/xdg v0.5.3
 	github.com/dustin/go-humanize v1.0.1
+	github.com/google/uuid v1.6.0
 	github.com/itchyny/gojq v0.12.18
 	github.com/klauspost/compress v1.18.3
 	go.starlark.net v0.0.0-20260102030733-3fee463870c9

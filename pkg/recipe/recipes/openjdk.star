@@ -2,16 +2,16 @@ def resolve_openjdk(pkg_name):
     data = download(url = "https://jdk.java.net/archive/")
 
     # Convert HTML to a JSON-compatible tree
-    full_tree = html.to_json(data)
+    full_tree = html.to_json(data=data)
 
     # Use JQ to find all rows in the 'builds' table
     # We use .. to find tr anywhere inside the table (handles tbody)
     rows_query = '.. | select(.tag? == "table" and .attr?.class == "builds") | .. | select(.tag? == "tr")'
-    rows = jq.query(rows_query, full_tree)
+    rows = jq.query(query=rows_query, value=full_tree)
 
     if not rows:
         # Fallback: just find ANY table with many rows
-        rows = jq.query('.. | select(.tag? == "table") | select((.children | length) > 10) | .children[]? | select(.tag == "tr")', full_tree)
+        rows = jq.query(query='.. | select(.tag? == "table") | select((.children | length) > 10) | .children[]? | select(.tag == "tr")', value=full_tree)
 
     if rows:
         if type(rows) != "list":
@@ -20,7 +20,7 @@ def resolve_openjdk(pkg_name):
         current_version = ""
         for row in rows:
             # Check if row is a version header (usually has one <th>)
-            headers = jq.query('.children[]? | select(.tag == "th")', row)
+            headers = jq.query(query='.children[]? | select(.tag == "th")', value=row)
             if not headers:
                 headers = []
             elif type(headers) != "list":
@@ -35,7 +35,7 @@ def resolve_openjdk(pkg_name):
             if not current_version:
                 continue
 
-            links = jq.query('.. | select(.tag? == "a" and (.attr?.href? | startswith("http")))', row)
+            links = jq.query(query='.. | select(.tag? == "a" and (.attr?.href? | startswith("http")))', value=row)
             if not links:
                 continue
             if type(links) != "list":
@@ -82,4 +82,4 @@ def resolve_openjdk(pkg_name):
                     }
                 )
 
-add_pkgdef("openjdk", resolve_openjdk)
+add_pkgdef(regex="openjdk", handler=resolve_openjdk)

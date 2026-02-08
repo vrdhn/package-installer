@@ -46,4 +46,4 @@ def resolve_rust(pkg_name):
                 }
             )
 
-add_pkgdef("rust", resolve_rust)
+add_pkgdef(regex="rust", handler=resolve_rust)

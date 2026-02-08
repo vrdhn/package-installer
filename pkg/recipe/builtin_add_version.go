@@ -27,10 +27,11 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 	}
 
 	return NewStrictBuiltin(def, func(kwargs map[string]starlark.Value) (starlark.Value, error) {
-		ctx := sr.currentCtx
-		if ctx == nil || ctx.AddVersion == nil {
-			return nil, fmt.Errorf("add_version called without active context")
+		val := sr.thread.Local(keyCollector)
+		if val == nil {
+			return nil, fmt.Errorf("add_version called without active collector")
 		}
+		pkgs := val.(*[]PackageDefinition)
 
 		nonNullable := []string{
 			"name",
@@ -91,23 +92,10 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 			return nil, fmt.Errorf("symlinks must be a dict")
 		}
 
-		ctx.AddVersion(pkg)
+		*pkgs = append(*pkgs, pkg)
 
 		return starlark.None, nil
 	})
-}
-
-func asString(v starlark.Value) string {
-	if v == nil {
-		return ""
-	}
-	if v == starlark.None {
-		return ""
-	}
-	if s, ok := v.(starlark.String); ok {
-		return s.GoString()
-	}
-	return fmt.Sprintf("%v", v)
 }
 
 func isNone(v starlark.Value) bool {

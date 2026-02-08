@@ -1,39 +1,39 @@
 package repository
 
 import (
-	"crypto/rand"
-	"encoding/csv"
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/display"
+	"pi/pkg/lazyjson"
 	"pi/pkg/recipe"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type RepoConfig struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	UUID string `json:"uuid"`
+	Name string    `json:"name"`
+	URL  string    `json:"url"`
+	UUID uuid.UUID `json:"uuid"`
+}
+
+type IndexEntry struct {
+	RepoUUID   uuid.UUID `json:"repo_uuid"`
+	RepoName   string    `json:"-"` // Not stored, resolved on load
+	RecipeName string    `json:"recipe_name"`
+	Pattern    string    `json:"pattern"`
+	Handler    string    `json:"handler"`
 }
 
 type repoRegistry struct {
 	Repos []RepoConfig `json:"repos"`
-}
-
-type RegistryEntry struct {
-	RepoUUID   string
-	RepoName   string
-	RecipeName string
-	Pattern    string
-	Handler    string
+	Index []IndexEntry `json:"index"`
 }
 
 type resolvedRecipe struct {
@@ -47,9 +47,10 @@ type manager struct {
 	repos   []RepoConfig
 	disp    display.Display
 	cfg     config.Config
+	repoMgr *lazyjson.Manager[repoRegistry]
 
 	// In-memory index of all packages
-	index []RegistryEntry
+	index []IndexEntry
 	// Cache for resolution: pkgName -> {recipeName, regexKey}
 	resolveCache     map[string]resolvedRecipe
 	compiledPatterns map[string]*regexp.Regexp
@@ -58,12 +59,14 @@ type manager struct {
 type Manager = *manager
 
 func NewManager(disp display.Display, cfg config.Config) Manager {
+	repoPath := filepath.Join(cfg.GetConfigDir(), "repo.json")
 	m := &manager{
 		recipes:          make(map[string]string),
 		resolveCache:     make(map[string]resolvedRecipe),
 		compiledPatterns: make(map[string]*regexp.Regexp),
 		disp:             disp,
 		cfg:              cfg,
+		repoMgr:          lazyjson.New[repoRegistry](repoPath),
 	}
 
 	return m
@@ -117,26 +120,57 @@ func (m *manager) loadBuiltins() error {
 }
 
 func (m *manager) LoadRepos() error {
-	path := filepath.Join(m.cfg.GetConfigDir(), "repos.json")
-	data, err := os.ReadFile(path)
+	err := m.repoMgr.Modify(func(reg *repoRegistry) error {
+		hasBuiltin := false
+		for i := range reg.Repos {
+			if reg.Repos[i].Name == "builtin" || reg.Repos[i].URL == "builtin://" {
+				hasBuiltin = true
+				if reg.Repos[i].UUID == uuid.Nil {
+					reg.Repos[i].UUID = generateUUID()
+				}
+				break
+			}
+		}
+		if !hasBuiltin {
+			reg.Repos = append([]RepoConfig{{
+				Name: "builtin",
+				URL:  "builtin://",
+				UUID: generateUUID(),
+			}}, reg.Repos...)
+		}
+		return nil
+	})
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
+		return err
+	}
+
+	reg, err := m.repoMgr.Get()
+	if err != nil {
+		return err
+	}
+
+	m.repos = nil
+	for _, repo := range reg.Repos {
+		if repo.UUID != uuid.Nil && repo.Name != "" {
+			m.repos = append(m.repos, repo)
 		}
+	}
+
+	// TODO: Fetch recipes from URLs.
+	if err := m.loadBuiltins(); err != nil {
 		return err
 	}
 
-	var reg repoRegistry
-	if err := json.Unmarshal(data, &reg); err != nil {
-		return err
-	}
-	m.repos = reg.Repos
-
-	// TODO: Fetch recipes from URLs. For now, we only support local paths as URLs.
 	for _, repo := range m.repos {
-		if strings.HasPrefix(repo.URL, "/") || strings.HasPrefix(repo.URL, "./") {
-			m.loadLocalRepo(repo)
+		if repo.URL == "builtin://" {
+			continue // already loaded by loadBuiltins
 		}
+		if strings.HasPrefix(repo.URL, "http://") || strings.HasPrefix(repo.URL, "https://") {
+			// Remote URL - WIP
+			continue
+		}
+		// Assume local path if no remote scheme
+		m.loadLocalRepo(repo)
 	}
 
 	return nil
@@ -163,60 +197,30 @@ func (m *manager) loadLocalRepo(repo RepoConfig) {
 }
 
 func (m *manager) LoadIndex() error {
-	path := filepath.Join(m.cfg.GetConfigDir(), "packages.csv")
-	f, err := os.Open(path)
+	reg, err := m.repoMgr.Get()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
-	defer f.Close()
 
-	r := csv.NewReader(f)
 	m.index = nil
-
-	for {
-		record, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if len(record) != 4 {
-			continue
-		}
-
-		uuid := record[0]
-		recipeName := record[1]
-		pattern := record[2]
-		handler := record[3]
-
-		repoName := "unknown"
-		if uuid == "builtin" {
-			repoName = "builtin"
-		} else {
-			for _, repo := range m.repos {
-				if repo.UUID == uuid {
-					repoName = repo.Name
-					break
-				}
+	for _, entry := range reg.Index {
+		e := entry
+		e.RepoName = "unknown"
+		for _, repo := range m.repos {
+			if repo.UUID == e.RepoUUID {
+				e.RepoName = repo.Name
+				break
 			}
 		}
-
-		m.index = append(m.index, RegistryEntry{
-			RepoUUID:   uuid,
-			RepoName:   repoName,
-			RecipeName: recipeName,
-			Pattern:    pattern,
-			Handler:    handler,
-		})
+		m.index = append(m.index, e)
 	}
 	return nil
 }
 
 func (m *manager) ensureIndexLoaded() error {
+	if err := m.LoadRepos(); err != nil {
+		return err
+	}
 	if len(m.index) == 0 {
 		if err := m.LoadIndex(); err != nil {
 			return err
@@ -232,102 +236,102 @@ func (m *manager) ensureIndexLoaded() error {
 }
 
 func (m *manager) Sync(verbose bool) error {
-	csvPath := filepath.Join(m.cfg.GetConfigDir(), "packages.csv")
-	if verbose {
-		fmt.Printf("Regenerating index at %s\n", csvPath)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(csvPath), 0755); err != nil {
+	if err := m.LoadRepos(); err != nil {
 		return err
 	}
-
-	f, err := os.Create(csvPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	w := csv.NewWriter(f)
-
-	var entries []RegistryEntry
-
-	// 1. Builtins
 	if verbose {
-		fmt.Println("Indexing builtin recipes...")
+		fmt.Println("Regenerating index...")
 	}
-	err = fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(path, ".star") {
-			name := strings.TrimSuffix(filepath.Base(path), ".star")
-			content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
-			if err != nil {
-				return err
+
+	var entries []IndexEntry
+
+	for _, repo := range m.repos {
+		if repo.URL == "builtin://" {
+			if verbose {
+				fmt.Println("Indexing builtin recipes...")
 			}
-			regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
-			if err != nil {
-				return err
-			}
-			for p, h := range regInfo {
-				if err := w.Write([]string{"builtin", name, p, h}); err != nil {
+			err := fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
 					return err
 				}
-				entries = append(entries, RegistryEntry{
-					RepoUUID:   "builtin",
-					RepoName:   "builtin",
-					RecipeName: name,
-					Pattern:    p,
-					Handler:    h,
-				})
+				if !d.IsDir() && strings.HasSuffix(path, ".star") {
+					name := strings.TrimSuffix(filepath.Base(path), ".star")
+					content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
+					if err != nil {
+						return err
+					}
+					regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
+					if err != nil {
+						return err
+					}
+					for p, h := range regInfo {
+						entries = append(entries, IndexEntry{
+							RepoUUID:   repo.UUID,
+							RepoName:   repo.Name,
+							RecipeName: name,
+							Pattern:    p,
+							Handler:    h,
+						})
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		} else if strings.HasPrefix(repo.URL, "http://") || strings.HasPrefix(repo.URL, "https://") {
+			return fmt.Errorf("remote url syncing is WIP: %s", repo.URL)
+		} else {
+			// Local path
+			path := repo.URL
+			if path == "" {
+				// Fallback or skip? Assuming path is in URL field as per instructions
+				continue
+			}
+			if verbose {
+				fmt.Printf("Indexing repo: %s (%s)\n", repo.Name, path)
+			}
+			err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() && strings.HasSuffix(p, ".star") {
+					name := strings.TrimSuffix(filepath.Base(p), ".star")
+					content, err := os.ReadFile(p)
+					if err != nil {
+						return err
+					}
+					regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
+					if err != nil {
+						return err
+					}
+					for pat, h := range regInfo {
+						entries = append(entries, IndexEntry{
+							RepoUUID:   repo.UUID,
+							RepoName:   repo.Name,
+							RecipeName: name,
+							Pattern:    pat,
+							Handler:    h,
+						})
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 		}
+	}
+
+	err := m.repoMgr.Modify(func(reg *repoRegistry) error {
+		reg.Index = entries
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	// 2. Repos
-	for _, repo := range m.repos {
-		if verbose {
-			fmt.Printf("Indexing repo: %s (%s)\n", repo.Name, repo.URL)
-		}
-		err := filepath.Walk(repo.URL, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() && strings.HasSuffix(path, ".star") {
-				name := strings.TrimSuffix(filepath.Base(path), ".star")
-				content, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				regInfo, err := m.GetRecipeRegistryInfo(name, string(content))
-				if err != nil {
-					return err
-				}
-				for p, h := range regInfo {
-					if err := w.Write([]string{repo.UUID, name, p, h}); err != nil {
-						return err
-					}
-					entries = append(entries, RegistryEntry{
-						RepoUUID:   repo.UUID,
-						RepoName:   repo.Name,
-						RecipeName: name,
-						Pattern:    p,
-						Handler:    h,
-					})
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	w.Flush()
-	if err := w.Error(); err != nil {
+	if err := m.repoMgr.Save(); err != nil {
 		return err
 	}
 
@@ -383,9 +387,7 @@ func (m *manager) AddLocalRepo(path string, verbose bool) error {
 		}
 	}
 
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	uuid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	uuid := generateUUID()
 
 	name := filepath.Base(absPath)
 
@@ -401,31 +403,25 @@ func (m *manager) AddLocalRepo(path string, verbose bool) error {
 		UUID: uuid,
 	}
 
-	m.repos = append(m.repos, newRepo)
-	if err := m.saveRepos(verbose); err != nil {
-		return err
-	}
-
-	// Also load it into memory
-	m.loadLocalRepo(newRepo)
-
-	// Update index
-	return m.Sync(verbose)
-}
-
-func (m *manager) saveRepos(verbose bool) error {
-	path := filepath.Join(m.cfg.GetConfigDir(), "repos.json")
-	if verbose {
-		fmt.Printf("Saving repos to %s\n", path)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(repoRegistry{Repos: m.repos}, "", "  ")
+	err = m.repoMgr.Modify(func(reg *repoRegistry) error {
+		reg.Repos = append(reg.Repos, newRepo)
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+
+	if err := m.repoMgr.Save(); err != nil {
+		return err
+	}
+
+	// Refresh in-memory list
+	if err := m.LoadRepos(); err != nil {
+		return err
+	}
+
+	// Update index
+	return m.Sync(verbose)
 }
 
 func (m *manager) GetRecipeRegistryInfo(name, src string) (map[string]string, error) {
@@ -436,7 +432,7 @@ func (m *manager) GetRecipeRegistryInfo(name, src string) (map[string]string, er
 	return sr.GetRegistryInfo(m.cfg)
 }
 
-func (m *manager) GetFullRegistryInfo(verbose bool) ([]RegistryEntry, error) {
+func (m *manager) GetFullRegistryInfo(verbose bool) ([]IndexEntry, error) {
 	// If index is empty, try loading it
 	if len(m.index) == 0 {
 		if err := m.LoadIndex(); err != nil {
@@ -451,7 +447,7 @@ func (m *manager) GetFullRegistryInfo(verbose bool) ([]RegistryEntry, error) {
 	}
 
 	// Make a copy to sort
-	entries := make([]RegistryEntry, len(m.index))
+	entries := make([]IndexEntry, len(m.index))
 	copy(entries, m.index)
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -467,7 +463,7 @@ func (m *manager) GetFullRegistryInfo(verbose bool) ([]RegistryEntry, error) {
 	return entries, nil
 }
 
-func DisplayRegistryInfo(entries []RegistryEntry) {
+func DisplayRegistryInfo(entries []IndexEntry) {
 	fmt.Printf("%-15s %-15s %-30s %s\n", "REPO", "RECIPE", "PATTERN", "HANDLER")
 	fmt.Println(strings.Repeat("-", 80))
 	for _, e := range entries {
@@ -479,10 +475,7 @@ func (m *manager) ListRepos() []RepoConfig {
 	return m.repos
 }
 
-func (m *manager) GetRepoByUUID(uuid string) (RepoConfig, bool) {
-	if uuid == "builtin" {
-		return RepoConfig{Name: "builtin", UUID: "builtin"}, true
-	}
+func (m *manager) GetRepoByUUID(uuid uuid.UUID) (RepoConfig, bool) {
 	for _, r := range m.repos {
 		if r.UUID == uuid {
 			return r, true
@@ -492,9 +485,6 @@ func (m *manager) GetRepoByUUID(uuid string) (RepoConfig, bool) {
 }
 
 func (m *manager) GetRepoByName(name string) (RepoConfig, bool) {
-	if name == "builtin" {
-		return RepoConfig{Name: "builtin", UUID: "builtin"}, true
-	}
 	for _, r := range m.repos {
 		if r.Name == name {
 			return r, true
@@ -537,17 +527,7 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 	if len(parts) >= 2 {
 		first := parts[0]
 		// Check if 'first' is a known repo name
-		isRepo := false
-		if first == "builtin" {
-			isRepo = true
-		} else {
-			for _, r := range m.repos {
-				if r.Name == first {
-					isRepo = true
-					break
-				}
-			}
-		}
+		_, isRepo := m.GetRepoByName(first)
 
 		if isRepo {
 			repoFilter = first
@@ -618,7 +598,7 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 }
 
 type ResolvedQuery struct {
-	RepoUUID   string
+	RepoUUID   uuid.UUID
 	RepoName   string
 	RecipeName string
 	Pattern    string
@@ -703,4 +683,8 @@ func (m *manager) ResolveQuery(query string) ([]ResolvedQuery, error) {
 	}
 
 	return results, nil
+}
+
+func generateUUID() uuid.UUID {
+	return uuid.New()
 }
