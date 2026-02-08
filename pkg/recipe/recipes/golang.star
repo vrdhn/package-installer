@@ -62,8 +62,6 @@ def resolve_golang(pkg_name):
                 checksum = "sha256:" + file["sha256"],
                 filename = filename,
                 env = {
-                    "GOROOT": "${PI_PKG_ROOT}",
-                    "GOPATH": "~/go"
                 },
                 symlinks = {
                     "go/bin/*": ".local/bin"

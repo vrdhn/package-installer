@@ -224,7 +224,6 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.Config, c *ca
 
 	// 1. Isolation & Flags
 	b.AddFlag("--unshare-pid")
-	b.AddFlag("--new-session")
 	b.AddFlag("--die-with-parent")
 
 	// 2. Base system bindings (read-only)
