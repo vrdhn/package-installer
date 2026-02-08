@@ -20,11 +20,11 @@ cmd pkg list "List available versions for a package"
     flag all bool "Show all architectures/OSs" a
     example "pi pkg list go"
 
-cmd recipe "Recipe development"
+cmd devel "Developer tools"
 
-cmd recipe repl "Run the recipe development REPL"
+cmd devel repl "Run the recipe development REPL"
     arg file string "Path to recipe file"
-    example "pi recipe repl ./recipes/nodejs.star"
+    example "pi devel repl ./recipes/nodejs.star"
 
 
 cmd cave "Manage the cave (sandbox)"

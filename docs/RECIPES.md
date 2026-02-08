@@ -51,7 +51,7 @@ If multiple recipe regexes match a requested package, `pi` prints the matching r
 Use the REPL to iterate on Starlark recipes locally:
 
 ```sh
-pi recipe repl ./recipes/nodejs.star
+pi devel repl ./recipes/nodejs.star
 ```
 
 Commands:

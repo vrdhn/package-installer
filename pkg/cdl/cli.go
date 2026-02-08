@@ -82,6 +82,11 @@ type CaveUseParams struct {
 	Cave string
 }
 
+type DevelReplParams struct {
+	GlobalFlags
+	File string
+}
+
 type DiskCleanParams struct {
 	GlobalFlags
 	_ struct{}
@@ -106,11 +111,6 @@ type PkgListParams struct {
 type PkgSyncParams struct {
 	GlobalFlags
 	Query string
-}
-
-type RecipeReplParams struct {
-	GlobalFlags
-	File string
 }
 
 type RepoAddParams struct {
@@ -148,12 +148,12 @@ type Handlers[T any] interface {
 	RunCaveRun(params *CaveRunParams) (T, error)
 	RunCaveSync(params *CaveSyncParams) (T, error)
 	RunCaveUse(params *CaveUseParams) (T, error)
+	RunDevelRepl(params *DevelReplParams) (T, error)
 	RunDiskClean(params *DiskCleanParams) (T, error)
 	RunDiskInfo(params *DiskInfoParams) (T, error)
 	RunDiskUninstall(params *DiskUninstallParams) (T, error)
 	RunPkgList(params *PkgListParams) (T, error)
 	RunPkgSync(params *PkgSyncParams) (T, error)
-	RunRecipeRepl(params *RecipeReplParams) (T, error)
 	RunRepoAdd(params *RepoAddParams) (T, error)
 	RunRepoList(params *RepoListParams) (T, error)
 	RunRepoSync(params *RepoSyncParams) (T, error)
@@ -233,22 +233,22 @@ var CliCommands = []CommandDef{
 	},
 
 	CommandDef{
-		Name:        "recipe",
-		FullCommand: "recipe",
-		Desc:        "Recipe development",
+		Name:        "devel",
+		FullCommand: "devel",
+		Desc:        "Developer tools",
 		Safe:        false,
 		Subs: []CommandDef{
 
 			CommandDef{
 				Name:        "repl",
-				FullCommand: "recipe/repl",
+				FullCommand: "devel/repl",
 				Desc:        "Run the recipe development REPL",
 				Safe:        false,
 				Args: []ArgDef{
 					{Name: "file", Type: "string", Desc: "Path to recipe file"},
 				},
 				Examples: []string{
-					"pi recipe repl ./recipes/nodejs.star",
+					"pi devel repl ./recipes/nodejs.star",
 				},
 			},
 		},
@@ -513,6 +513,8 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handleCaveSync[T](inv, gf), resolvedCmd, nil
 	case "cave/use":
 		return handleCaveUse[T](inv, gf), resolvedCmd, nil
+	case "devel/repl":
+		return handleDevelRepl[T](inv, gf), resolvedCmd, nil
 	case "disk/clean":
 		return handleDiskClean[T](inv, gf), resolvedCmd, nil
 	case "disk/info":
@@ -523,8 +525,6 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handlePkgList[T](inv, gf), resolvedCmd, nil
 	case "pkg/sync":
 		return handlePkgSync[T](inv, gf), resolvedCmd, nil
-	case "recipe/repl":
-		return handleRecipeRepl[T](inv, gf), resolvedCmd, nil
 	case "repo/add":
 		return handleRepoAdd[T](inv, gf), resolvedCmd, nil
 	case "repo/list":
@@ -617,6 +617,14 @@ func handleCaveUse[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 		return h.RunCaveUse(params)
 	}
 }
+func handleDevelRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &DevelReplParams{}
+	params.GlobalFlags = gf
+	params.File = inv.Args["file"]
+	return func(h Handlers[T]) (T, error) {
+		return h.RunDevelRepl(params)
+	}
+}
 func handleDiskClean[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &DiskCleanParams{}
 	params.GlobalFlags = gf
@@ -654,14 +662,6 @@ func handlePkgSync[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params.Query = inv.Args["query"]
 	return func(h Handlers[T]) (T, error) {
 		return h.RunPkgSync(params)
-	}
-}
-func handleRecipeRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {
-	params := &RecipeReplParams{}
-	params.GlobalFlags = gf
-	params.File = inv.Args["file"]
-	return func(h Handlers[T]) (T, error) {
-		return h.RunRecipeRepl(params)
 	}
 }
 func handleRepoAdd[T any](inv *Invocation, gf GlobalFlags) Action[T] {

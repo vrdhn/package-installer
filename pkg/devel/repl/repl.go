@@ -1,4 +1,4 @@
-package engine
+package repl
 
 import (
 	"bufio"
@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"pi/pkg/cdl"
 	"pi/pkg/config"
 	"pi/pkg/pkgs"
 	"pi/pkg/recipe"
@@ -35,19 +34,17 @@ type recipeRepl struct {
 	legacy   bool
 }
 
-func (h *Handlers) RunRecipeRepl(params *cdl.RecipeReplParams) (ExecutionResult, error) {
+// Run starts the recipe development REPL.
+func Run(ctx context.Context, cfg config.Config, path string) error {
 	repl := &recipeRepl{
 		in:   os.Stdin,
 		out:  os.Stdout,
 		err:  os.Stderr,
-		cfg:  h.Config,
-		path: params.File,
+		cfg:  cfg,
+		path: path,
 	}
 
-	if err := repl.Run(h.Ctx); err != nil {
-		return ExecutionResult{}, err
-	}
-	return ExecutionResult{ExitCode: 0}, nil
+	return repl.Run(ctx)
 }
 
 func (r *recipeRepl) Run(ctx context.Context) error {
