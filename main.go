@@ -49,12 +49,11 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
 
+	// contract: err is nil;, or both action and cmd are nil.
 	action, cmd, err := cdl.Parse[engine.ExecutionResult](args)
-	if err != nil {
+
+	if action == nil || cmd == nil { // implies err != nil
 		return engine.ExecutionResult{}, err
-	}
-	if action == nil {
-		return engine.ExecutionResult{}, fmt.Errorf("no action defined for command")
 	}
 	if !cmd.Safe {
 		caveName, exists := os.LookupEnv("PI_CAVENAME")
@@ -67,11 +66,7 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	dispMgr := display.NewConsole()
 	defer dispMgr.Close()
 
-	repoMgr, err := repository.NewManager(dispMgr, config)
-	if err != nil {
-		return engine.ExecutionResult{}, fmt.Errorf("error initializing repository: %w", err)
-	}
-
+	repoMgr := repository.NewManager(dispMgr, config)
 	caveMgr := cave.NewManager(config)
 	pkgsMgr := pkgs.NewManager(repoMgr, dispMgr, config)
 	diskMgr := disk.NewManager(config)

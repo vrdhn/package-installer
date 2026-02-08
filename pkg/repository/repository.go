@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/recipe"
@@ -35,6 +36,11 @@ type RegistryEntry struct {
 	Handler    string
 }
 
+type resolvedRecipe struct {
+	recipeName string
+	regexKey   string
+}
+
 // Mutable
 type manager struct {
 	recipes map[string]string // recipe name -> source
@@ -51,12 +57,7 @@ type manager struct {
 
 type Manager = *manager
 
-type resolvedRecipe struct {
-	recipeName string
-	regexKey   string
-}
-
-func NewManager(disp display.Display, cfg config.Config) (Manager, error) {
+func NewManager(disp display.Display, cfg config.Config) Manager {
 	m := &manager{
 		recipes:          make(map[string]string),
 		resolveCache:     make(map[string]resolvedRecipe),
@@ -65,23 +66,36 @@ func NewManager(disp display.Display, cfg config.Config) (Manager, error) {
 		cfg:              cfg,
 	}
 
-	if err := m.loadBuiltins(); err != nil {
+	return m
+}
+
+func (m *manager) List(verbose bool) (*common.ExecutionResult, error) {
+	m.disp.Close()
+
+	entries, err := m.GetFullRegistryInfo(verbose)
+	if err != nil {
 		return nil, err
 	}
 
-	if err := m.LoadRepos(); err != nil {
+	DisplayRegistryInfo(entries)
+
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
+
+func (m *manager) Add(path string, verbose bool) (*common.ExecutionResult, error) {
+	if err := m.AddLocalRepo(path, verbose); err != nil {
 		return nil, err
 	}
+	fmt.Printf("Added repository from %s\n", path)
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
 
-	if err := m.LoadIndex(); err != nil {
-		// If loading index fails (e.g. file missing), we'll just have an empty index
-		// and Resolve will fail or fallback if we implement fallback.
-		// For now, we assume index is critical for performance but not strictly fatal for startup if missing (just Resolve will fail).
-		// Ideally we should auto-sync if missing, but we will leave that for 'repo sync' command.
-		m.disp.Log(fmt.Sprintf("Warning: Failed to load package index: %v", err))
+func (m *manager) SyncRepo(verbose bool) (*common.ExecutionResult, error) {
+	if err := m.Sync(verbose); err != nil {
+		return nil, err
 	}
-
-	return m, nil
+	fmt.Println("Package index synchronized successfully.")
+	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
 func (m *manager) loadBuiltins() error {

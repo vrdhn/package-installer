@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	sysconfig "pi/pkg/config"
+	"pi/pkg/config"
 )
 
 // CaveSettings defines the configuration for a specific environment.
 type CaveSettings struct {
 	// Pkgs is a list of package requirements.
-	Pkgs []sysconfig.PkgRef `json:"pkgs"`
+	Pkgs []config.PkgRef `json:"pkgs"`
 
 	// Env is a map of environment variables (e.g. "DEBUG": "1").
 	Env map[string]string `json:"env,omitempty"`
@@ -20,15 +20,15 @@ type CaveSettings struct {
 // CaveConfig represents the content of pi.cave.json.
 type CaveConfig struct {
 	Name      string                  `json:"name"`
-	Workspace sysconfig.HostPath      `json:"workspace"`
+	Workspace config.HostPath         `json:"workspace"`
 	Home      string                  `json:"home"`
 	Variants  map[string]CaveSettings `json:"variants"`
 }
 
 // RegistryEntry represents an entry in the global caves.json.
 type RegistryEntry struct {
-	Name      string             `json:"name"`
-	Workspace sysconfig.HostPath `json:"workspace"`
+	Name      string          `json:"name"`
+	Workspace config.HostPath `json:"workspace"`
 }
 
 // Registry represents the content of $XDG_CONFIG_DIR/pi/caves.json.
@@ -80,7 +80,7 @@ func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 	}
 
 	merged := &CaveSettings{
-		Pkgs: append([]sysconfig.PkgRef(nil), base.Pkgs...),
+		Pkgs: append([]config.PkgRef(nil), base.Pkgs...),
 		Env:  make(map[string]string),
 	}
 	for k, v := range base.Env {
@@ -105,7 +105,7 @@ func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 }
 
 // LoadRegistry reads the global registry.
-func LoadRegistry(cfg sysconfig.Config) (*Registry, error) {
+func LoadRegistry(cfg config.Config) (*Registry, error) {
 	path := filepath.Join(cfg.GetConfigDir(), "caves.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -122,7 +122,7 @@ func LoadRegistry(cfg sysconfig.Config) (*Registry, error) {
 }
 
 // SaveRegistry writes the global registry.
-func (r *Registry) Save(cfg sysconfig.Config) error {
+func (r *Registry) Save(cfg config.Config) error {
 	dir := cfg.GetConfigDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err

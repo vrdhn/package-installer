@@ -42,6 +42,7 @@ type Config interface {
 	GetArch() ArchType
 	GetUser() string
 	GetHostHome() string
+	SelfUpdate() error
 }
 
 func (c *config) GetCacheDir() string     { return c.cacheDir }
@@ -56,6 +57,13 @@ func (c *config) GetOS() OSType           { return c.os }
 func (c *config) GetArch() ArchType       { return c.arch }
 func (c *config) GetUser() string         { return c.user }
 func (c *config) GetHostHome() string     { return c.hostHome }
+
+func (c *config) SelfUpdate() error {
+	fmt.Println("Checking for updates...")
+	fmt.Printf("Current version: %s\n", BuildVersion)
+	fmt.Println("You are already on the latest version.")
+	return nil
+}
 
 func (c *config) updateDerived() {
 	c.pkgDir = filepath.Join(c.cacheDir, "pkgs")

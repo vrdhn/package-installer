@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"pi/pkg/common"
 	"pi/pkg/config"
+	"strings"
 )
 
 // Manager handles disk operations for pi's XDG directories.
@@ -25,6 +27,48 @@ type Usage struct {
 	Size  int64
 	Items int
 	Path  string
+}
+
+// Info displays disk usage statistics for all pi directories.
+func (m *manager) Info() (*common.ExecutionResult, error) {
+	stats, total := m.GetInfo()
+	fmt.Printf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path")
+	fmt.Println(strings.Repeat("-", 75))
+	for _, s := range stats {
+		fmt.Printf("%-15s %-10s %-10d %s\n", s.Label, FormatSize(s.Size), s.Items, s.Path)
+	}
+	fmt.Println(strings.Repeat("-", 75))
+	fmt.Printf("%-15s %-10s\n", "Total", FormatSize(total))
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
+
+// CleanDir removes temporary and cached data (packages, downloads, discovery).
+func (m *manager) CleanDir() (*common.ExecutionResult, error) {
+	cleaned := m.Clean()
+	for _, dir := range cleaned {
+		fmt.Printf("Cleaning %s...\n", dir)
+	}
+	fmt.Println("Clean complete.")
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
+
+// UninstallData removes all pi-related XDG directories.
+func (m *manager) UninstallData(force bool) (*common.ExecutionResult, error) {
+	if !force {
+		fmt.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		if strings.ToLower(response) != "y" {
+			fmt.Println("Aborted.")
+			return &common.ExecutionResult{ExitCode: 0}, nil
+		}
+	}
+	removed := m.Uninstall()
+	for _, dir := range removed {
+		fmt.Printf("Removing %s...\n", dir)
+	}
+	fmt.Println("Uninstall complete. Local data removed.")
+	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
 // GetInfo returns disk usage statistics for all pi directories.

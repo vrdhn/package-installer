@@ -23,7 +23,7 @@ const (
 )
 
 type recipeRepl struct {
-	in   *bufio.Reader
+	in   io.Reader
 	out  io.Writer
 	err  io.Writer
 	cfg  config.Config
@@ -35,23 +35,19 @@ type recipeRepl struct {
 	legacy   bool
 }
 
-func runRecipeRepl(ctx context.Context, h *Handlers, params *cdl.RecipeReplParams) (*ExecutionResult, error) {
-	if params.File == "" {
-		return nil, fmt.Errorf("recipe file required")
-	}
-
+func (h *Handlers) RunRecipeRepl(params *cdl.RecipeReplParams) (ExecutionResult, error) {
 	repl := &recipeRepl{
-		in:   bufio.NewReader(os.Stdin),
+		in:   os.Stdin,
 		out:  os.Stdout,
 		err:  os.Stderr,
 		cfg:  h.Config,
 		path: params.File,
 	}
 
-	if err := repl.Run(ctx); err != nil {
-		return nil, err
+	if err := repl.Run(h.Ctx); err != nil {
+		return ExecutionResult{}, err
 	}
-	return &ExecutionResult{ExitCode: 0}, nil
+	return ExecutionResult{ExitCode: 0}, nil
 }
 
 func (r *recipeRepl) Run(ctx context.Context) error {
@@ -63,11 +59,12 @@ func (r *recipeRepl) Run(ctx context.Context) error {
 	r.printSummary()
 	r.printHelp()
 
+	reader := bufio.NewReader(r.in)
 	for {
 		if _, err := fmt.Fprint(r.out, replPrompt); err != nil {
 			return err
 		}
-		line, err := r.in.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -154,7 +151,7 @@ func (r *recipeRepl) handleLine(ctx context.Context, line string) error {
 }
 
 func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride string) error {
-	p, err := pkgs.Parse(pkgStr)
+	p, err := pkgs.Parse(config.PkgRef(pkgStr))
 	if err != nil {
 		return err
 	}

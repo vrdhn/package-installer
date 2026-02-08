@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	sysconfig "pi/pkg/config"
+	"pi/pkg/config"
 	"strings"
 )
 
@@ -33,7 +33,7 @@ type Result struct {
 
 // Parse parses a package string in the format name[=version]
 // Note: name can contain colons (e.g., pip:numpy)
-func Parse(s sysconfig.PkgRef) (*Package, error) {
+func Parse(s config.PkgRef) (*Package, error) {
 	p := &Package{}
 
 	// Extract version if present

@@ -39,7 +39,6 @@ type TopicDef struct {
 type GlobalFlags struct {
 	Help    bool
 	Verbose bool
-	Config  string
 }
 
 type CaveAddpkgParams struct {
@@ -167,7 +166,6 @@ type Action[T any] func(h Handlers[T]) (T, error)
 var CliGlobalFlags = []FlagDef{
 	{Name: "help", Short: "h", Type: "bool", Desc: "Show help information"},
 	{Name: "verbose", Short: "v", Type: "bool", Desc: "Enable verbose output"},
-	{Name: "config", Short: "c", Type: "string", Desc: "Path to config file"},
 }
 
 var CliTopics = []TopicDef{
@@ -556,10 +554,6 @@ func ApplyGlobalFlag(g *GlobalFlags, name string, val any) {
 	case "verbose":
 		if b, ok := val.(bool); ok {
 			g.Verbose = b
-		}
-	case "config":
-		if s, ok := val.(string); ok {
-			g.Config = s
 		}
 	}
 }

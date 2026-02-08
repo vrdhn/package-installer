@@ -3,7 +3,8 @@ package pkgs
 import (
 	"context"
 	"fmt"
-	sysconfig "pi/pkg/config"
+	"pi/pkg/common"
+	"pi/pkg/config"
 	"pi/pkg/display"
 	"pi/pkg/installer"
 	"pi/pkg/recipe"
@@ -19,7 +20,7 @@ import (
 type manager struct {
 	Repo      repository.Manager
 	Disp      display.Display
-	SysConfig sysconfig.Config
+	SysConfig config.Config
 }
 
 type Manager = *manager
@@ -31,16 +32,79 @@ type IndexEntry struct {
 	Legacy   bool
 }
 
-func NewManager(repo repository.Manager, disp display.Display, config sysconfig.Config) Manager {
+func NewManager(repo repository.Manager, disp display.Display, cfg config.Config) Manager {
 	return &manager{
 		Repo:      repo,
 		Disp:      disp,
-		SysConfig: config,
+		SysConfig: cfg,
 	}
 }
 
+func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.ExecutionResult, error) {
+	err := m.Sync(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Print updated records
+	versions, err := m.List(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Disp.Close()
+	SortPackageVersions(versions)
+
+	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
+	fmt.Println(strings.Repeat("-", 100))
+	for _, v := range versions {
+		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+	}
+
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
+
+func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error) {
+	versions, err := m.List(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Disp.Close()
+
+	myOS := m.SysConfig.GetOS()
+	myArch := m.SysConfig.GetArch()
+
+	if !showAll {
+		var filtered []PackageVersion
+		for _, v := range versions {
+			if v.OS == string(myOS) && v.Arch == string(myArch) {
+				filtered = append(filtered, v)
+			}
+		}
+		versions = filtered
+	}
+
+	SortPackageVersions(versions)
+
+	// Show only most recent 5
+	if len(versions) > 5 {
+		versions = versions[len(versions)-5:]
+	}
+
+	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
+	fmt.Println(strings.Repeat("-", 100))
+	for _, v := range versions {
+		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
+		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseType, v.Timestamp)
+	}
+
+	return &common.ExecutionResult{ExitCode: 0}, nil
+}
+
 // Prepare ensures all packages are installed and returns the required symlinks.
-func (m *manager) Prepare(ctx context.Context, pkgStrings []sysconfig.PkgRef) (*Result, error) {
+func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Result, error) {
 	var allSymlinks []Symlink
 	allEnv := make(map[string]string)
 	var mu sync.Mutex

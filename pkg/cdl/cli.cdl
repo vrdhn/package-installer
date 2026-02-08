@@ -2,7 +2,6 @@
 global
 name "pi" "Universal package installer for isolated workspaces"
     flag verbose bool "Enable verbose output" v
-    flag config string "Path to config file" c
     attr safe = false
 
 # Commands
