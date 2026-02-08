@@ -18,36 +18,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
 // Manager defines the operations for managing package installations and synchronization.
-type Manager interface {
-	// SyncPkgs synchronizes package information from repositories matching the query.
-	SyncPkgs(ctx context.Context, query string) (*common.ExecutionResult, error)
-	// ListPkgs returns a list of installed or available packages matching the query.
-	ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error)
-	// Prepare ensures a set of packages are installed and returns instructions for sandboxing.
-	Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*common.PreparationResult, error)
-	// ListFromSource executes a recipe to find all available versions of a package.
-	ListFromSource(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error)
-	// Sync retrieves and indexes all versions for packages matching the query.
-	Sync(ctx context.Context, query string) error
-	// List returns the matching versions from the local package index.
-	List(ctx context.Context, query string) ([]PackageDefinition, error)
-	// ListIndex returns supported patterns for all known recipes without executing them.
-	ListIndex(ctx context.Context) ([]RecipeIndexEntry, error)
-	// UpdateVersions updates the local index for a specific repository and pattern.
-	UpdateVersions(repoUUID uuid.UUID, pattern string, versions []recipe.PackageDefinition) error
+type manager struct {
+	Repo   repository.Manager
+	Disp   display.Display
+	Config config.Config
+	pkgMgr *lazyjson.Manager[PackageRegistry]
 }
 
-type manager struct {
-	Repo      repository.Manager
-	Disp      display.Display
-	SysConfig config.Config
-	pkgMgr    *lazyjson.Manager[PackageRegistry]
-}
+type Manager = *manager
 
 // RecipeIndexEntry represents a discovery entry for a recipe and its supported patterns.
 type RecipeIndexEntry struct {
@@ -61,10 +43,10 @@ type RecipeIndexEntry struct {
 func NewManager(repo repository.Manager, disp display.Display, cfg config.Config) Manager {
 	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
 	return &manager{
-		Repo:      repo,
-		Disp:      disp,
-		SysConfig: cfg,
-		pkgMgr:    lazyjson.New[PackageRegistry](pkgPath),
+		Repo:   repo,
+		Disp:   disp,
+		Config: cfg,
+		pkgMgr: lazyjson.New[PackageRegistry](pkgPath),
 	}
 }
 
@@ -107,8 +89,8 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 
 	m.Disp.Close()
 
-	myOS := m.SysConfig.GetOS()
-	myArch := m.SysConfig.GetArch()
+	myOS := m.Config.GetOS()
+	myArch := m.Config.GetArch()
 
 	if !showAll {
 		var filtered []PackageDefinition
@@ -153,7 +135,7 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*com
 				return err
 			}
 
-			recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
+			recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.Config)
 			if err != nil {
 				return err
 			}
@@ -172,14 +154,14 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*com
 			selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
 
 			// Resolve
-			pkgDef, err := resolver.Resolve(ctx, m.SysConfig, selected, p.Name, p.Version, task)
+			pkgDef, err := resolver.Resolve(ctx, m.Config, selected, p.Name, p.Version, task)
 			if err != nil {
 				task.Done()
 				return fmt.Errorf("resolution failed for %s: %v", p.String(), err)
 			}
 
 			// Plan
-			plan, err := installer.NewPlan(m.SysConfig, *pkgDef)
+			plan, err := installer.NewPlan(m.Config, *pkgDef)
 			if err != nil {
 				task.Done()
 				return fmt.Errorf("planning failed for %s: %v", p.String(), err)
@@ -222,8 +204,8 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*com
 	return &common.PreparationResult{
 		Symlinks: allSymlinks,
 		Env:      allEnv,
-		PkgDir:   m.SysConfig.GetPkgDir(),
-		CacheDir: m.SysConfig.GetCacheDir(),
+		PkgDir:   m.Config.GetPkgDir(),
+		CacheDir: m.Config.GetCacheDir(),
 	}, nil
 }
 
@@ -234,7 +216,7 @@ func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.P
 		return nil, err
 	}
 
-	recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.SysConfig)
+	recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +234,7 @@ func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.P
 	}
 
 	selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
-	pkgs, err := resolver.List(ctx, m.SysConfig, selected, p.Name, p.Version, task)
+	pkgs, err := resolver.List(ctx, m.Config, selected, p.Name, p.Version, task)
 	task.Done()
 	return pkgs, err
 }
@@ -283,7 +265,7 @@ func (m *manager) Sync(ctx context.Context, query string) error {
 
 		selected := recipe.NewPinnedRecipe(recipeObj, match.Pattern)
 		// List with empty version to get all
-		pkgs, err := resolver.List(ctx, m.SysConfig, selected, match.Pattern, "", task)
+		pkgs, err := resolver.List(ctx, m.Config, selected, match.Pattern, "", task)
 		if err != nil {
 			task.Done()
 			return err
@@ -370,7 +352,7 @@ func (m *manager) ListIndex(ctx context.Context) ([]RecipeIndexEntry, error) {
 			return nil, err
 		}
 
-		patterns, err := recipeObj.Registry(m.SysConfig)
+		patterns, err := recipeObj.Registry(m.Config)
 		if err != nil {
 			return nil, err
 		}

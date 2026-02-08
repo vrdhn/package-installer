@@ -14,26 +14,13 @@ import (
 )
 
 // Manager defines the operations for managing pi's local storage.
-type Manager interface {
-	// Info returns an execution result that displays disk usage statistics.
-	Info() (*common.ExecutionResult, error)
-	// CleanDir removes temporary and cached data, such as downloaded archives and discovery results.
-	CleanDir() (*common.ExecutionResult, error)
-	// UninstallData removes all pi-related data, including configurations and sandboxed environments.
-	UninstallData(force bool) (*common.ExecutionResult, error)
-	// GetInfo calculates and returns the current disk usage statistics.
-	GetInfo() (stats []Usage, totalBytes int64)
-	// Clean performs the physical removal of temporary and cached directories.
-	Clean() (cleanedDirs []string)
-	// Uninstall performs the physical removal of all pi data directories.
-	Uninstall() (removedDirs []string)
-}
-
-// manager implements the Manager interface.
 type manager struct {
 	cfg  config.Config
 	Disp display.Display
 }
+
+// Manager is a pointer to the internal manager implementation.
+type Manager = *manager
 
 // NewManager creates a new disk manager with the specified configuration and display.
 func NewManager(cfg config.Config, disp display.Display) Manager {

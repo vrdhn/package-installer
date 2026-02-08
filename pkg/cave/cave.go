@@ -20,40 +20,22 @@ import (
 )
 
 // Manager defines the operations for discovering and managing caves.
-type Manager interface {
-	// Find locates a cave configuration by walking up from the given directory
-	// or checking environment variables.
-	Find(cwd string) (*common.Cave, error)
-	// Info returns information about the current active cave.
-	Info(ctx context.Context) (*common.ExecutionResult, error)
-	// List returns a list of all registered caves in the global registry.
-	List(ctx context.Context, disp display.Display) (*common.ExecutionResult, error)
-	// Use starts a cave session by its registered name.
-	Use(ctx context.Context, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error)
-	// RunCommand prepares an execution result for running a command inside a cave.
-	RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error)
-	// Init initializes a new pi.cave.json in the current directory.
-	Init(ctx context.Context) (*common.ExecutionResult, error)
-	// Sync ensures all packages required by the current cave are installed.
-	Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.ExecutionResult, error)
-	// AddPkg adds a new package requirement to the cave configuration.
-	AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionResult, error)
+type manager struct {
+	Config config.Config
+	Disp   display.Display
+	regMgr *lazyjson.Manager[common.Registry]
 }
 
-// manager implements the Manager interface.
-type manager struct {
-	SysConfig config.Config
-	Disp      display.Display
-	regMgr    *lazyjson.Manager[common.Registry]
-}
+// Manager is a pointer to the internal manager implementation.
+type Manager = *manager
 
 // NewManager creates a new Cave Manager.
 func NewManager(cfg config.Config, disp display.Display) Manager {
 	regPath := filepath.Join(cfg.GetConfigDir(), "cave.json")
 	return &manager{
-		SysConfig: cfg,
-		Disp:      disp,
-		regMgr:    lazyjson.New[common.Registry](regPath),
+		Config: cfg,
+		Disp:   disp,
+		regMgr: lazyjson.New[common.Registry](regPath),
 	}
 }
 
@@ -117,12 +99,12 @@ func (m *manager) Find(cwd string) (*common.Cave, error) {
 		if filepath.IsAbs(cfg.Home) {
 			homePath = cfg.Home
 		} else {
-			homePath = filepath.Join(m.SysConfig.GetHomeDir(), cfg.Home)
+			homePath = filepath.Join(m.Config.GetHomeDir(), cfg.Home)
 		}
 	} else {
 		// Fallback to hash-based ID for backward compatibility
 		id := generateID(root)
-		homePath = filepath.Join(m.SysConfig.GetHomeDir(), id)
+		homePath = filepath.Join(m.Config.GetHomeDir(), id)
 	}
 
 	return &common.Cave{

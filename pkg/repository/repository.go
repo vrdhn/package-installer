@@ -56,44 +56,6 @@ type resolvedRecipe struct {
 }
 
 // Manager defines the operations for managing repositories and resolving packages.
-type Manager interface {
-	// List returns the current registry information.
-	List(verbose bool) (*common.ExecutionResult, error)
-	// Add adds a new local repository at the given path.
-	Add(path string, verbose bool) (*common.ExecutionResult, error)
-	// SyncRepo regenerates the index for all registered repositories.
-	SyncRepo(verbose bool) (*common.ExecutionResult, error)
-	// LoadRepos loads all registered repositories into memory.
-	LoadRepos() error
-	// LoadIndex loads the package index from disk.
-	LoadIndex() error
-	// Sync performs the actual indexing of recipes in all repositories.
-	Sync(verbose bool) error
-	// AddLocalRepo validates and registers a local directory as a repository.
-	AddLocalRepo(path string, verbose bool) error
-	// GetRecipeRegistryInfo extracts indexing information from a Starlark recipe.
-	GetRecipeRegistryInfo(name, src string) (map[string]string, error)
-	// GetFullRegistryInfo returns the sorted list of all index entries.
-	GetFullRegistryInfo(verbose bool) ([]IndexEntry, error)
-	// ListRepos returns the list of all configured repositories.
-	ListRepos() []RepoConfig
-	// GetRepoByUUID finds a repository by its unique identifier.
-	GetRepoByUUID(uuid uuid.UUID) (RepoConfig, bool)
-	// GetRepoByName finds a repository by its display name.
-	GetRepoByName(name string) (RepoConfig, bool)
-	// GetRecipe returns the source code of a recipe by name.
-	GetRecipe(name string) (string, error)
-	// ListRecipes returns the names of all loaded recipes.
-	ListRecipes() []string
-	// Resolve identifies the recipe and pattern matching a package name.
-	Resolve(pkgName string, cfg config.Config) (recipeName string, regexKey string, err error)
-	// ResolveQuery finds all index entries matching a query string.
-	ResolveQuery(query string) ([]ResolvedQuery, error)
-	// DisplayRegistryInfo displays index entries to the user.
-	DisplayRegistryInfo(entries []IndexEntry)
-}
-
-// manager implements the Manager interface.
 type manager struct {
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
@@ -107,6 +69,9 @@ type manager struct {
 	resolveCache     map[string]resolvedRecipe
 	compiledPatterns map[string]*regexp.Regexp
 }
+
+// Manager is a pointer to the internal manager implementation.
+type Manager = *manager
 
 // NewManager creates a new repository manager with the provided display and configuration.
 func NewManager(disp display.Display, cfg config.Config) Manager {
