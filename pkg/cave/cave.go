@@ -19,33 +19,19 @@ import (
 	"strings"
 )
 
-// Cave represents an active sandbox context and its configuration.
-type Cave struct {
-	// ID is a unique identifier for the cave (usually a hash of the workspace path).
-	ID string
-	// Workspace is the host path to the project root.
-	Workspace config.HostPath
-	// HomePath is the host path to the isolated HOME directory for this cave.
-	HomePath config.HostPath
-	// Variant is the currently active configuration variant (e.g., "dev", "prod").
-	Variant string
-	// Config is the parsed pi.cave.json configuration.
-	Config *CaveConfig
-}
-
 // Manager defines the operations for discovering and managing caves.
 type Manager interface {
 	// Find locates a cave configuration by walking up from the given directory
 	// or checking environment variables.
-	Find(cwd string) (*Cave, error)
+	Find(cwd string) (*common.Cave, error)
 	// Info returns information about the current active cave.
 	Info(ctx context.Context) (*common.ExecutionResult, error)
 	// List returns a list of all registered caves in the global registry.
 	List(ctx context.Context, disp display.Display) (*common.ExecutionResult, error)
 	// Use starts a cave session by its registered name.
-	Use(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error)
+	Use(ctx context.Context, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error)
 	// RunCommand prepares an execution result for running a command inside a cave.
-	RunCommand(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error)
+	RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error)
 	// Init initializes a new pi.cave.json in the current directory.
 	Init(ctx context.Context) (*common.ExecutionResult, error)
 	// Sync ensures all packages required by the current cave are installed.
@@ -58,7 +44,7 @@ type Manager interface {
 type manager struct {
 	SysConfig config.Config
 	Disp      display.Display
-	regMgr    *lazyjson.Manager[Registry]
+	regMgr    *lazyjson.Manager[common.Registry]
 }
 
 // NewManager creates a new Cave Manager.
@@ -67,7 +53,7 @@ func NewManager(cfg config.Config, disp display.Display) Manager {
 	return &manager{
 		SysConfig: cfg,
 		Disp:      disp,
-		regMgr:    lazyjson.New[Registry](regPath),
+		regMgr:    lazyjson.New[common.Registry](regPath),
 	}
 }
 
@@ -76,7 +62,7 @@ func NewManager(cfg config.Config, disp display.Display) Manager {
 // 1. PI_WORKSPACE environment variable
 // 2. PI_CAVENAME environment variable (lookup in registry)
 // 3. Walking up from cwd
-func (m *manager) Find(cwd string) (*Cave, error) {
+func (m *manager) Find(cwd string) (*common.Cave, error) {
 	var root string
 	var variant string
 
@@ -116,7 +102,7 @@ func (m *manager) Find(cwd string) (*Cave, error) {
 	}
 
 	cfgPath := filepath.Join(root, "pi.cave.json")
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := common.LoadCaveConfig(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave config: %w", err)
 	}
@@ -139,7 +125,7 @@ func (m *manager) Find(cwd string) (*Cave, error) {
 		homePath = filepath.Join(m.SysConfig.GetHomeDir(), id)
 	}
 
-	return &Cave{
+	return &common.Cave{
 		ID:        filepath.Base(homePath),
 		Workspace: workspace,
 		HomePath:  homePath,
@@ -189,7 +175,7 @@ func (m *manager) List(ctx context.Context, disp display.Display) (*common.Execu
 
 	for _, entry := range reg.Caves {
 		cfgPath := filepath.Join(entry.Workspace, "pi.cave.json")
-		cfg, err := LoadConfig(cfgPath)
+		cfg, err := common.LoadCaveConfig(cfgPath)
 		variants := "-"
 		if err == nil {
 			var names []string
@@ -208,7 +194,7 @@ func (m *manager) List(ctx context.Context, disp display.Display) (*common.Execu
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
-func (m *manager) Use(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error) {
+func (m *manager) Use(ctx context.Context, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error) {
 	if target == "" {
 		return nil, fmt.Errorf("cave name required")
 	}
@@ -241,10 +227,10 @@ func (m *manager) Use(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager
 		return nil, fmt.Errorf("failed to change directory to workspace %s: %w", workspace, err)
 	}
 
-	return m.RunCommand(ctx, backend, pkgsMgr, variant, "")
+	return m.RunCommand(ctx, pkgsMgr, variant, "")
 }
 
-func (m *manager) RunCommand(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error) {
+func (m *manager) RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
@@ -271,15 +257,12 @@ func (m *manager) RunCommand(ctx context.Context, backend Backend, pkgsMgr pkgs.
 	if commandStr != "" {
 		command = strings.Fields(commandStr)
 	}
-	cmd, err := backend.ResolveLaunch(ctx, m.SysConfig, c, settings, prep, command)
-	if err != nil {
-		return nil, err
-	}
+
 	return &common.ExecutionResult{
-		IsCave: true,
-		Exe:    cmd.Path,
-		Args:   cmd.Args,
-		Env:    cmd.Env,
+		Cave:        c,
+		Settings:    settings,
+		Preparation: prep,
+		Command:     command,
 	}, nil
 }
 
@@ -336,7 +319,7 @@ func (m *manager) AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionR
 	// Add package to default variant config
 	base, ok := c.Config.Variants[""]
 	if !ok {
-		base = CaveSettings{}
+		base = common.CaveSettings{}
 	}
 	found := false
 	for _, p := range base.Pkgs {
@@ -368,13 +351,13 @@ func (m *manager) CreateInitConfig(dir string) error {
 
 	name := filepath.Base(absDir)
 
-	cfg := &CaveConfig{
+	cfg := &common.CaveConfig{
 		Name:      name,
 		Workspace: absDir,
 		Home:      name,
-		Variants: map[string]CaveSettings{
+		Variants: map[string]common.CaveSettings{
 			"": {
-				Pkgs: []config.PkgRef{},
+				Pkgs: []common.PkgRef{},
 			},
 		},
 	}
@@ -392,8 +375,8 @@ func (m *manager) CreateInitConfig(dir string) error {
 }
 
 // SyncRegistry updates the global cave.json with the provided config.
-func (m *manager) SyncRegistry(cfg *CaveConfig) error {
-	err := m.regMgr.Modify(func(reg *Registry) error {
+func (m *manager) SyncRegistry(cfg *common.CaveConfig) error {
+	err := m.regMgr.Modify(func(reg *common.Registry) error {
 		found := false
 		for i, entry := range reg.Caves {
 			if entry.Name == cfg.Name {
@@ -404,7 +387,7 @@ func (m *manager) SyncRegistry(cfg *CaveConfig) error {
 		}
 
 		if !found {
-			reg.Caves = append(reg.Caves, CaveEntry{
+			reg.Caves = append(reg.Caves, common.CaveEntry{
 				Name:      cfg.Name,
 				Workspace: cfg.Workspace,
 			})

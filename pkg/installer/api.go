@@ -15,11 +15,11 @@ import (
 // Plan contains the full specification for a package installation.
 type Plan struct {
 	// Package is the metadata of the package being installed.
-	Package      recipe.PackageDefinition
+	Package recipe.PackageDefinition
 	// DownloadPath is where the archive will be saved on the host.
 	DownloadPath string
 	// ExtractPath is a temporary location used during the extraction phase.
-	ExtractPath  string
+	ExtractPath string
 	// InstallPath is the final destination directory for the package.
 	InstallPath string
 }

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"syscall"
 
-	"pi/pkg/cave"
+	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/pkgs"
 )
@@ -213,8 +213,69 @@ func sortedKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-// ResolveLaunch implements cave.Backend
-func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.Config, c *cave.Cave, settings *cave.CaveSettings, prep *pkgs.Result, command []string) (*exec.Cmd, error) {
+// BindSlice returns the bindings as a slice of SandboxBind.
+func (b *Bubblewrap) BindSlice() []common.SandboxBind {
+	var res []common.SandboxBind
+	for _, key := range sortedKeys(b.binds) {
+		bind := b.binds[key]
+		res = append(res, common.SandboxBind{
+			Source: bind.host_source,
+			Target: bind.cave_target,
+			Type:   bind.bindType,
+		})
+	}
+	return res
+}
+
+// EnvSlice returns the environment variables as a slice of KEY=VALUE strings.
+func (b *Bubblewrap) EnvSlice() []string {
+	var res []string
+	for _, k := range sortedKeys(b.envs) {
+		res = append(res, fmt.Sprintf("%s=%s", k, b.envs[k]))
+	}
+	return res
+}
+
+// CmdFromSandbox constructs a bwrap command from a SandboxConfig.
+func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
+	execPath := "/usr/bin/bwrap"
+	args := []string{}
+
+	if s != nil {
+		args = append(args, s.Flags...)
+		for _, bind := range s.Binds {
+			if bind.Source == "" {
+				args = append(args, bind.Type, bind.Target)
+			} else {
+				args = append(args, bind.Type, bind.Source, bind.Target)
+			}
+		}
+		for _, k := range s.UnsetEnvs {
+			args = append(args, "--unsetenv", k)
+		}
+
+		// Environment
+		for _, env := range s.Env {
+			parts := strings.SplitN(env, "=", 2)
+			if len(parts) == 2 {
+				args = append(args, "--setenv", parts[0], parts[1])
+			}
+		}
+
+		// Inner command
+		if s.Exe != "" {
+			args = append(args, "--", s.Exe)
+			args = append(args, s.Args...)
+		}
+	}
+
+	return exec.Command(execPath, args...)
+}
+
+// ResolveLaunch prepares a command to be executed inside the bubblewrap sandbox.
+func ResolveLaunch(ctx context.Context, cfg config.Config, c *common.Cave, settings *common.CaveSettings, prep *common.PreparationResult, command []string) (*common.SandboxConfig, error) {
+	b := Create()
+
 	// Internal home path inside the sandbox
 	internalHome := cfg.GetHostHome()
 
@@ -329,5 +390,12 @@ func (b *Bubblewrap) ResolveLaunch(ctx context.Context, cfg config.Config, c *ca
 		b.SetCommand("/bin/bash")
 	}
 
-	return b.Cmd(), nil
+	return &common.SandboxConfig{
+		Exe:       b.executable,
+		Args:      b.cmdline,
+		Env:       b.EnvSlice(),
+		Binds:     b.BindSlice(),
+		Flags:     b.flags,
+		UnsetEnvs: b.unsets,
+	}, nil
 }

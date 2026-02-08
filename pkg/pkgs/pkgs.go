@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"pi/pkg/common"
 	"pi/pkg/config"
 	"strings"
 )
@@ -13,22 +14,6 @@ import (
 type Package struct {
 	Name    string
 	Version string
-}
-
-// Symlink represents a symlink that should be created in the cave.
-// Immutable
-type Symlink struct {
-	Source string // Path on the host (target of the symlink)
-	Target string // Relative path in the cave (the symlink itself)
-}
-
-// Result contains the outcome of package preparation.
-// Immutable
-type Result struct {
-	Symlinks []Symlink
-	Env      map[string]string
-	PkgDir   string
-	CacheDir string
 }
 
 // Parse parses a package string in the format name[=version]
@@ -64,7 +49,7 @@ func (p *Package) String() string {
 // DiscoverSymlinks finds files within the installPath that match specified patterns
 // and returns them as a slice of Symlink definitions.
 // Patterns support directory expansion via "/*" suffixes (e.g., {"bin/*": ".local/bin"}).
-func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink, error) {
+func DiscoverSymlinks(installPath string, patterns map[string]string) ([]common.Symlink, error) {
 	if len(patterns) == 0 {
 		// Default behavior: bin/* -> .local/bin
 		patterns = map[string]string{
@@ -72,7 +57,7 @@ func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink
 		}
 	}
 
-	var symlinks []Symlink
+	var symlinks []common.Symlink
 	for srcPattern, destDir := range patterns {
 		if strings.HasSuffix(srcPattern, "/*") {
 			// Directory expansion
@@ -93,14 +78,14 @@ func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink
 					continue
 				}
 
-				symlinks = append(symlinks, Symlink{
+				symlinks = append(symlinks, common.Symlink{
 					Source: filepath.Join(absSubDir, entry.Name()),
 					Target: filepath.Join(destDir, entry.Name()),
 				})
 			}
 		} else {
 			// Direct file/dir mapping
-			symlinks = append(symlinks, Symlink{
+			symlinks = append(symlinks, common.Symlink{
 				Source: filepath.Join(installPath, srcPattern),
 				Target: destDir,
 			})
@@ -112,7 +97,7 @@ func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink
 
 // CreateSymlinks physically creates symlinks on the host filesystem within the homePath.
 // It ensures parent directories exist and replaces any existing files at the target location.
-func CreateSymlinks(homePath string, symlinks []Symlink) error {
+func CreateSymlinks(homePath string, symlinks []common.Symlink) error {
 	for _, s := range symlinks {
 		linkPath := filepath.Join(homePath, s.Target)
 

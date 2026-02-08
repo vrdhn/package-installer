@@ -29,7 +29,7 @@ type Manager interface {
 	// ListPkgs returns a list of installed or available packages matching the query.
 	ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error)
 	// Prepare ensures a set of packages are installed and returns instructions for sandboxing.
-	Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Result, error)
+	Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*common.PreparationResult, error)
 	// ListFromSource executes a recipe to find all available versions of a package.
 	ListFromSource(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error)
 	// Sync retrieves and indexes all versions for packages matching the query.
@@ -138,8 +138,8 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 }
 
 // Prepare ensures all packages are installed and returns the required symlinks.
-func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Result, error) {
-	var allSymlinks []Symlink
+func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*common.PreparationResult, error) {
+	var allSymlinks []common.Symlink
 	allEnv := make(map[string]string)
 	var mu sync.Mutex
 
@@ -219,7 +219,7 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Res
 		return nil, err
 	}
 
-	return &Result{
+	return &common.PreparationResult{
 		Symlinks: allSymlinks,
 		Env:      allEnv,
 		PkgDir:   m.SysConfig.GetPkgDir(),

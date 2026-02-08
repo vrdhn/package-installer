@@ -5,6 +5,22 @@ import (
 	"pi/pkg/cdl"
 )
 
+func (h *Handlers) resolveSandbox(res *ExecutionResult, err error) (ExecutionResult, error) {
+	if err != nil || res == nil || res.Cave == nil {
+		if res == nil {
+			return ExecutionResult{}, err
+		}
+		return *res, err
+	}
+
+	sandbox, err := bubblewrap.ResolveLaunch(h.Ctx, h.Config, res.Cave, res.Settings, res.Preparation, res.Command)
+	if err != nil {
+		return ExecutionResult{}, err
+	}
+	res.Sandbox = sandbox
+	return *res, nil
+}
+
 // RunCaveInfo displays information about the current active cave.
 func (h *Handlers) RunCaveInfo(params *cdl.CaveInfoParams) (ExecutionResult, error) {
 	res, err := h.CaveMgr.Info(h.Ctx)
@@ -25,29 +41,20 @@ func (h *Handlers) RunCaveList(params *cdl.CaveListParams) (ExecutionResult, err
 
 // RunCaveUse starts a cave session by name.
 func (h *Handlers) RunCaveUse(params *cdl.CaveUseParams) (ExecutionResult, error) {
-	res, err := h.CaveMgr.Use(h.Ctx, bubblewrap.Create(), h.PkgsMgr, params.Cave)
-	if res == nil {
-		return ExecutionResult{}, err
-	}
-	return *res, err
+	res, err := h.CaveMgr.Use(h.Ctx, h.PkgsMgr, params.Cave)
+	return h.resolveSandbox(res, err)
 }
 
 // RunCaveRun executes a command inside a specific cave.
 func (h *Handlers) RunCaveRun(params *cdl.CaveRunParams) (ExecutionResult, error) {
-	res, err := h.CaveMgr.RunCommand(h.Ctx, bubblewrap.Create(), h.PkgsMgr, params.Variant, params.Command)
-	if res == nil {
-		return ExecutionResult{}, err
-	}
-	return *res, err
+	res, err := h.CaveMgr.RunCommand(h.Ctx, h.PkgsMgr, params.Variant, params.Command)
+	return h.resolveSandbox(res, err)
 }
 
 // RunCaveEnter enters the interactive sandbox shell.
 func (h *Handlers) RunCaveEnter(params *cdl.CaveEnterParams) (ExecutionResult, error) {
-	res, err := h.CaveMgr.RunCommand(h.Ctx, bubblewrap.Create(), h.PkgsMgr, "", "")
-	if res == nil {
-		return ExecutionResult{}, err
-	}
-	return *res, err
+	res, err := h.CaveMgr.RunCommand(h.Ctx, h.PkgsMgr, "", "")
+	return h.resolveSandbox(res, err)
 }
 
 // RunCaveInit initializes a new workspace directory with a pi.cave.json.

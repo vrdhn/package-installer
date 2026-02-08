@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"pi/pkg/bubblewrap"
 	"pi/pkg/cave"
 	"pi/pkg/cdl"
 	"pi/pkg/config"
@@ -38,20 +39,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	if res.IsCave {
+	if res.Sandbox != nil {
+		var exe string
+		var args []string
+		var env []string
+
+		// The decision to use bubblewrap is made here in main.
+		if os.Getenv("PI_NO_SANDBOX") == "" {
+			cmd := bubblewrap.CmdFromSandbox(res.Sandbox)
+			exe = cmd.Path
+			args = cmd.Args
+			env = cmd.Env
+		} else {
+			exe = res.Sandbox.Exe
+			args = append([]string{res.Sandbox.Exe}, res.Sandbox.Args...)
+			env = res.Sandbox.Env
+		}
+
 		// Verify file exists and is executable
-		info, err := os.Stat(res.Exe)
+		info, err := os.Stat(exe)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cave executable not found: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Executable not found: %v\n", err)
 			os.Exit(1)
 		}
 		if info.Mode()&0111 == 0 {
-			fmt.Fprintf(os.Stderr, "Cave executable is not executable: %s\n", res.Exe)
+			fmt.Fprintf(os.Stderr, "Executable is not executable: %s\n", exe)
 			os.Exit(1)
 		}
 
-		if err := syscall.Exec(res.Exe, res.Args, res.Env); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to exec cave: %v\n", err)
+		if err := syscall.Exec(exe, args, env); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to exec: %v\n", err)
 			os.Exit(1)
 		}
 		// syscall.Exec never returns on success
