@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/cache"
@@ -43,7 +44,7 @@ func NewStarlarkRecipe(name, source string, printFunc func(string)) (*StarlarkRe
 				if printFunc != nil {
 					printFunc(msg)
 				} else {
-					fmt.Printf("[%s] %s\n", thread.Name, msg)
+					slog.Info(msg, "recipe", thread.Name)
 				}
 			},
 		},
@@ -577,16 +578,16 @@ func (sr *StarlarkRecipe) Test(cfg config.Config) error {
 	}
 
 	for _, name := range testFuncs {
-		fmt.Printf("  Running %s... ", name)
+		slog.Info("Running test", "name", name)
 		_, err := starlark.Call(sr.thread, sr.globals[name], nil, nil)
 		if err != nil {
-			fmt.Println("FAILED")
+			slog.Error("Test failed", "name", name, "error", err)
 			if evalErr, ok := err.(*starlark.EvalError); ok {
 				return fmt.Errorf("test %s failed:\n%s", name, evalErr.Backtrace())
 			}
 			return fmt.Errorf("test %s failed: %w", name, err)
 		}
-		fmt.Println("OK")
+		slog.Info("Test OK", "name", name)
 	}
 
 	return nil

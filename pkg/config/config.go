@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -59,9 +60,9 @@ func (c *config) GetUser() string         { return c.user }
 func (c *config) GetHostHome() string     { return c.hostHome }
 
 func (c *config) SelfUpdate() error {
-	fmt.Println("Checking for updates...")
-	fmt.Printf("Current version: %s\n", BuildVersion)
-	fmt.Println("You are already on the latest version.")
+	slog.Info("Checking for updates")
+	slog.Info("Current version", "version", BuildVersion)
+	slog.Info("You are already on the latest version")
 	return nil
 }
 

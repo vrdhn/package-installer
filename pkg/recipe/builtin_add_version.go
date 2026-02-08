@@ -2,6 +2,7 @@ package recipe
 
 import (
 	"fmt"
+	"log/slog"
 	"pi/pkg/config"
 
 	"go.starlark.net/starlark"
@@ -72,7 +73,7 @@ func newAddVersionBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 		pkg.OS = osType
 		pkg.Arch = archType
 
-		fmt.Printf("[%s] add_version: name=%s version=%s os=%s arch=%s\n", sr.Name, pkg.Name, pkg.Version, pkg.OS, pkg.Arch)
+		slog.Debug("add_version", "recipe", sr.Name, "name", pkg.Name, "version", pkg.Version, "os", pkg.OS, "arch", pkg.Arch)
 
 		if env, ok := kwargs["env"].(*starlark.Dict); ok {
 			pkg.Env = make(map[string]string)

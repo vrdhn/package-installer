@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/common"
@@ -29,16 +30,18 @@ type Cave struct {
 // Mutable
 type manager struct {
 	SysConfig config.Config
+	Disp      display.Display
 	regMgr    *lazyjson.Manager[Registry]
 }
 
 type Manager = *manager
 
 // NewManager creates a new Cave Manager.
-func NewManager(cfg config.Config) Manager {
+func NewManager(cfg config.Config, disp display.Display) Manager {
 	regPath := filepath.Join(cfg.GetConfigDir(), "cave.json")
 	return &manager{
 		SysConfig: cfg,
+		Disp:      disp,
 		regMgr:    lazyjson.New[Registry](regPath),
 	}
 }
@@ -127,18 +130,18 @@ func (m *manager) Info(ctx context.Context) (*common.ExecutionResult, error) {
 	}
 	c, err := m.Find(cwd)
 	if err != nil {
-		fmt.Printf("Current directory is not in a pi workspace.\n")
+		m.Disp.Print("Current directory is not in a pi workspace.\n")
 		return &common.ExecutionResult{ExitCode: 0}, nil
 	}
-	fmt.Printf("Cave Name:  %s\n", c.Config.Name)
+	m.Disp.Print(fmt.Sprintf("Cave Name:  %s\n", c.Config.Name))
 	if c.Variant != "" {
-		fmt.Printf("Variant:    %s\n", c.Variant)
+		m.Disp.Print(fmt.Sprintf("Variant:    %s\n", c.Variant))
 	}
-	fmt.Printf("Workspace:  %s\n", c.Workspace)
-	fmt.Printf("Home Path:  %s\n", c.HomePath)
+	m.Disp.Print(fmt.Sprintf("Workspace:  %s\n", c.Workspace))
+	m.Disp.Print(fmt.Sprintf("Home Path:  %s\n", c.HomePath))
 	settings, _ := c.Config.Resolve("")
 	if len(settings.Pkgs) > 0 {
-		fmt.Printf("Packages:   %s\n", strings.Join(settings.Pkgs, ", "))
+		m.Disp.Print(fmt.Sprintf("Packages:   %s\n", strings.Join(settings.Pkgs, ", ")))
 	}
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
@@ -149,15 +152,15 @@ func (m *manager) List(ctx context.Context, disp display.Display) (*common.Execu
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
 
-	disp.Close()
+	m.Disp.Close()
 
 	if len(reg.Caves) == 0 {
-		fmt.Println("No caves registered.")
+		m.Disp.Print("No caves registered.\n")
 		return &common.ExecutionResult{ExitCode: 0}, nil
 	}
 
-	fmt.Printf("%-20s %-30s %s\n", "NAME", "VARIANTS", "WORKSPACE")
-	fmt.Println(strings.Repeat("-", 80))
+	m.Disp.Print(fmt.Sprintf("%-20s %-30s %s\n", "NAME", "VARIANTS", "WORKSPACE"))
+	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 80)))
 
 	for _, entry := range reg.Caves {
 		cfgPath := filepath.Join(entry.Workspace, "pi.cave.json")
@@ -174,7 +177,7 @@ func (m *manager) List(ctx context.Context, disp display.Display) (*common.Execu
 				variants = strings.Join(names, ", ")
 			}
 		}
-		fmt.Printf("%-20s %-30s %s\n", entry.Name, variants, entry.Workspace)
+		m.Disp.Print(fmt.Sprintf("%-20s %-30s %s\n", entry.Name, variants, entry.Workspace))
 	}
 
 	return &common.ExecutionResult{ExitCode: 0}, nil
@@ -263,7 +266,7 @@ func (m *manager) Init(ctx context.Context) (*common.ExecutionResult, error) {
 	if err := m.CreateInitConfig(cwd); err != nil {
 		return nil, err
 	}
-	fmt.Println("Initialized new workspace in", cwd)
+	slog.Info("Initialized new workspace", "path", cwd)
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -281,7 +284,7 @@ func (m *manager) Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.Execu
 		return nil, err
 	}
 
-	fmt.Printf("Syncing workspace '%s' (variant: %s)...\n", c.Config.Name, c.Variant)
+	slog.Info("Syncing workspace", "name", c.Config.Name, "variant", c.Variant)
 
 	// Ensure packages are installed
 	_, err = pkgsMgr.Prepare(ctx, settings.Pkgs)
@@ -289,7 +292,7 @@ func (m *manager) Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.Execu
 		return nil, fmt.Errorf("failed to sync packages: %w", err)
 	}
 
-	fmt.Println("Workspace synchronized successfully.")
+	slog.Info("Workspace synchronized successfully")
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -324,9 +327,9 @@ func (m *manager) AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionR
 		if err := c.Config.Save(cfgPath); err != nil {
 			return nil, fmt.Errorf("failed to save cave config: %w", err)
 		}
-		fmt.Printf("Added package %s to %s\n", pkgStr, cfgPath)
+		slog.Info("Added package", "package", pkgStr, "config", cfgPath)
 	} else {
-		fmt.Printf("Package %s already exists in configuration\n", pkgStr)
+		slog.Info("Package already exists in configuration", "package", pkgStr)
 	}
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }

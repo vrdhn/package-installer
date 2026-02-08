@@ -2,23 +2,26 @@ package disk
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
+	"pi/pkg/display"
 	"strings"
 )
 
 // Manager handles disk operations for pi's XDG directories.
 type manager struct {
-	cfg config.Config
+	cfg  config.Config
+	Disp display.Display
 }
 
 type Manager = *manager
 
 // NewManager creates a new disk manager.
-func NewManager(cfg config.Config) Manager {
-	return &manager{cfg: cfg}
+func NewManager(cfg config.Config, disp display.Display) Manager {
+	return &manager{cfg: cfg, Disp: disp}
 }
 
 // Usage represents disk usage information for a specific type.
@@ -32,13 +35,13 @@ type Usage struct {
 // Info displays disk usage statistics for all pi directories.
 func (m *manager) Info() (*common.ExecutionResult, error) {
 	stats, total := m.GetInfo()
-	fmt.Printf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path")
-	fmt.Println(strings.Repeat("-", 75))
+	m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path"))
+	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 75)))
 	for _, s := range stats {
-		fmt.Printf("%-15s %-10s %-10d %s\n", s.Label, FormatSize(s.Size), s.Items, s.Path)
+		m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10d %s\n", s.Label, FormatSize(s.Size), s.Items, s.Path))
 	}
-	fmt.Println(strings.Repeat("-", 75))
-	fmt.Printf("%-15s %-10s\n", "Total", FormatSize(total))
+	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 75)))
+	m.Disp.Print(fmt.Sprintf("%-15s %-10s\n", "Total", FormatSize(total)))
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -46,28 +49,28 @@ func (m *manager) Info() (*common.ExecutionResult, error) {
 func (m *manager) CleanDir() (*common.ExecutionResult, error) {
 	cleaned := m.Clean()
 	for _, dir := range cleaned {
-		fmt.Printf("Cleaning %s...\n", dir)
+		slog.Info("Cleaning", "path", dir)
 	}
-	fmt.Println("Clean complete.")
+	slog.Info("Clean complete")
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
 // UninstallData removes all pi-related XDG directories.
 func (m *manager) UninstallData(force bool) (*common.ExecutionResult, error) {
 	if !force {
-		fmt.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
+		m.Disp.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" {
-			fmt.Println("Aborted.")
+			m.Disp.Print("Aborted.\n")
 			return &common.ExecutionResult{ExitCode: 0}, nil
 		}
 	}
 	removed := m.Uninstall()
 	for _, dir := range removed {
-		fmt.Printf("Removing %s...\n", dir)
+		slog.Info("Removing", "path", dir)
 	}
-	fmt.Println("Uninstall complete. Local data removed.")
+	slog.Info("Uninstall complete. Local data removed")
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 

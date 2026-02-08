@@ -62,11 +62,11 @@ func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.Execution
 	m.Disp.Close()
 	SortPackageDefinitions(versions)
 
-	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
-	fmt.Println(strings.Repeat("-", 100))
+	m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE"))
+	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 100)))
 	for _, v := range versions {
 		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate)
+		m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate))
 	}
 
 	return &common.ExecutionResult{ExitCode: 0}, nil
@@ -103,11 +103,11 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 		versions = versions[len(versions)-5:]
 	}
 
-	fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE")
-	fmt.Println(strings.Repeat("-", 100))
+	m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE"))
+	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 100)))
 	for _, v := range versions {
 		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		fmt.Printf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate)
+		m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate))
 	}
 
 	return &common.ExecutionResult{ExitCode: 0}, nil

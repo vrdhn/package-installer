@@ -2,6 +2,7 @@ package recipe
 
 import (
 	"fmt"
+	"log/slog"
 
 	"go.starlark.net/starlark"
 )
@@ -18,7 +19,7 @@ func newAddPkgdefBuiltin(sr *StarlarkRecipe) *starlark.Builtin {
 		regex := asString(kwargs["regex"])
 		handler := kwargs["handler"].(starlark.Callable)
 
-		fmt.Printf("[%s] add_pkgdef: regex=%s handler=%s\n", sr.Name, regex, handler.Name())
+		slog.Debug("add_pkgdef", "recipe", sr.Name, "regex", regex, "handler", handler.Name())
 
 		if sr.registry == nil {
 			sr.registry = make(map[string]starlark.Callable)

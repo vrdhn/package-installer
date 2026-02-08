@@ -3,6 +3,7 @@ package display
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sync"
 )
@@ -33,22 +34,22 @@ func (d *consoleDisplay) StartTask(name string) Task {
 }
 
 func (d *consoleDisplay) Log(msg string) {
+	slog.Debug(msg)
+}
+
+func (d *consoleDisplay) Print(msg string) {
 	d.mu.Lock()
-	verbose := d.verbose
 	out := d.out
 	d.mu.Unlock()
-
-	if !verbose {
-		return
-	}
-
-	fmt.Fprintf(out, "[log] %s\n", msg)
+	fmt.Fprint(out, msg)
 }
 
 func (d *consoleDisplay) SetVerbose(v bool) {
 	d.mu.Lock()
 	d.verbose = v
 	d.mu.Unlock()
+	// We don't strictly need to do anything here if slog is already configured,
+	// but keeping it for compatibility with the interface if needed elsewhere.
 }
 
 func (d *consoleDisplay) Close() {
@@ -63,25 +64,19 @@ type consoleTask struct {
 }
 
 func (t *consoleTask) Log(msg string) {
-	t.print("[%s] %s\n", t.name, msg)
+	slog.Debug(msg, "task", t.name)
 }
 
 func (t *consoleTask) SetStage(name string, target string) {
 	t.stage = name
 	t.target = target
-	t.print("[%s] stage=%s target=%s\n", t.name, name, target)
+	slog.Debug("task stage", "task", t.name, "stage", name, "target", target)
 }
 
 func (t *consoleTask) Progress(percent int, message string) {
-	t.print("[%s] progress=%d message=%s\n", t.name, percent, message)
+	slog.Debug("task progress", "task", t.name, "percent", percent, "message", message)
 }
 
 func (t *consoleTask) Done() {
-	t.print("[%s] done\n", t.name)
-}
-
-func (t *consoleTask) print(format string, args ...any) {
-	t.disp.mu.Lock()
-	defer t.disp.mu.Unlock()
-	fmt.Fprintf(t.disp.out, format, args...)
+	slog.Debug("task done", "task", t.name)
 }

@@ -29,7 +29,7 @@ func (h *Handlers) Help(args []string) (ExecutionResult, error) {
 }
 
 func (h *Handlers) RunVersion(params *cdl.VersionParams) (ExecutionResult, error) {
-	fmt.Println(config.BuildVersion)
+	h.DispMgr.Print(fmt.Sprintln(config.BuildVersion))
 	return ExecutionResult{ExitCode: 0}, nil
 }
 

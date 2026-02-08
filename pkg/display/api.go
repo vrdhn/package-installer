@@ -20,6 +20,8 @@ type Display interface {
 	StartTask(name string) Task
 	// Log adds a direct log message to the display.
 	Log(msg string)
+	// Print adds a primary output message (e.g. table, info) to the display.
+	Print(msg string)
 	// SetVerbose enables or disables verbose logging.
 	SetVerbose(v bool)
 	// Close cleans up any resources and ensures final output is rendered.

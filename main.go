@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"pi/pkg/cave"
 	"pi/pkg/cdl"
@@ -16,6 +17,16 @@ import (
 )
 
 func main() {
+	// Setup logging
+	var gf cdl.GlobalFlags
+	cdl.ProcessGlobalFlags(os.Args[1:], &gf)
+
+	level := slog.LevelInfo
+	if gf.Verbose {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+
 	res, err := PiEngine(context.Background(), os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -67,9 +78,9 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	defer dispMgr.Close()
 
 	repoMgr := repository.NewManager(dispMgr, config)
-	caveMgr := cave.NewManager(config)
+	caveMgr := cave.NewManager(config, dispMgr)
 	pkgsMgr := pkgs.NewManager(repoMgr, dispMgr, config)
-	diskMgr := disk.NewManager(config)
+	diskMgr := disk.NewManager(config, dispMgr)
 
 	handlers := &engine.Handlers{
 		Ctx:     ctx,

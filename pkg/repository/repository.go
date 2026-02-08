@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/common"
@@ -80,7 +81,7 @@ func (m *manager) List(verbose bool) (*common.ExecutionResult, error) {
 		return nil, err
 	}
 
-	DisplayRegistryInfo(entries)
+	m.DisplayRegistryInfo(entries)
 
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
@@ -89,7 +90,7 @@ func (m *manager) Add(path string, verbose bool) (*common.ExecutionResult, error
 	if err := m.AddLocalRepo(path, verbose); err != nil {
 		return nil, err
 	}
-	fmt.Printf("Added repository from %s\n", path)
+	slog.Info("Added repository", "path", path)
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -97,7 +98,7 @@ func (m *manager) SyncRepo(verbose bool) (*common.ExecutionResult, error) {
 	if err := m.Sync(verbose); err != nil {
 		return nil, err
 	}
-	fmt.Println("Package index synchronized successfully.")
+	slog.Info("Package index synchronized successfully")
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
@@ -239,17 +240,13 @@ func (m *manager) Sync(verbose bool) error {
 	if err := m.LoadRepos(); err != nil {
 		return err
 	}
-	if verbose {
-		fmt.Println("Regenerating index...")
-	}
+	slog.Debug("Regenerating index")
 
 	var entries []IndexEntry
 
 	for _, repo := range m.repos {
 		if repo.URL == "builtin://" {
-			if verbose {
-				fmt.Println("Indexing builtin recipes...")
-			}
+			slog.Debug("Indexing builtin recipes")
 			err := fs.WalkDir(recipe.BuiltinRecipes, "recipes", func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err
@@ -289,7 +286,7 @@ func (m *manager) Sync(verbose bool) error {
 				continue
 			}
 			if verbose {
-				fmt.Printf("Indexing repo: %s (%s)\n", repo.Name, path)
+				slog.Debug("Indexing repo", "name", repo.Name, "path", path)
 			}
 			err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
 				if err != nil {
@@ -340,9 +337,7 @@ func (m *manager) Sync(verbose bool) error {
 	m.compiledPatterns = make(map[string]*regexp.Regexp)
 	m.resolveCache = make(map[string]resolvedRecipe)
 
-	if verbose {
-		fmt.Printf("Sync complete. Indexed %d patterns.\n", len(entries))
-	}
+	slog.Debug("Sync complete", "patterns", len(entries))
 	return nil
 }
 
@@ -352,9 +347,7 @@ func (m *manager) AddLocalRepo(path string, verbose bool) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	if verbose {
-		fmt.Printf("Statting %s\n", absPath)
-	}
+	slog.Debug("Statting", "path", absPath)
 	info, err := os.Stat(absPath)
 	if err != nil {
 		return fmt.Errorf("repository path does not exist: %s", absPath)
@@ -391,11 +384,7 @@ func (m *manager) AddLocalRepo(path string, verbose bool) error {
 
 	name := filepath.Base(absPath)
 
-	if verbose {
-		fmt.Printf("Found repository at %s\n", absPath)
-		fmt.Printf("Generated UUID: %s\n", uuid)
-		fmt.Printf("Repo Name: %s\n", name)
-	}
+	slog.Debug("Found repository", "path", absPath, "uuid", uuid, "name", name)
 
 	newRepo := RepoConfig{
 		Name: name,
@@ -463,11 +452,11 @@ func (m *manager) GetFullRegistryInfo(verbose bool) ([]IndexEntry, error) {
 	return entries, nil
 }
 
-func DisplayRegistryInfo(entries []IndexEntry) {
-	fmt.Printf("%-15s %-15s %-30s %s\n", "REPO", "RECIPE", "PATTERN", "HANDLER")
-	fmt.Println(strings.Repeat("-", 80))
+func (m *manager) DisplayRegistryInfo(entries []IndexEntry) {
+	m.disp.Print(fmt.Sprintf("%-15s %-15s %-30s %s\n", "REPO", "RECIPE", "PATTERN", "HANDLER"))
+	m.disp.Print(fmt.Sprintln(strings.Repeat("-", 80)))
 	for _, e := range entries {
-		fmt.Printf("%-15s %-15s %-30s %s\n", e.RepoName, e.RecipeName, e.Pattern, e.Handler)
+		m.disp.Print(fmt.Sprintf("%-15s %-15s %-30s %s\n", e.RepoName, e.RecipeName, e.Pattern, e.Handler))
 	}
 }
 
