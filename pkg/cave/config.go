@@ -7,35 +7,45 @@ import (
 	"pi/pkg/config"
 )
 
-// CaveSettings defines the configuration for a specific environment.
+// CaveSettings defines the environment configuration for a sandbox.
+// It includes package requirements and environment variables.
 type CaveSettings struct {
-	// Pkgs is a list of package requirements.
+	// Pkgs is a list of package references (e.g., "go@1.22") required for this environment.
 	Pkgs []config.PkgRef `json:"pkgs"`
 
-	// Env is a map of environment variables (e.g. "DEBUG": "1").
+	// Env is a map of environment variables to set within the sandbox.
 	Env map[string]string `json:"env,omitempty"`
 }
 
-// CaveConfig represents the content of pi.cave.json.
+// CaveConfig represents the structure of the project-local 'pi.cave.json' file.
+// It defines the workspace name, isolated home location, and various environment variants.
 type CaveConfig struct {
-	Name      string                  `json:"name"`
-	Workspace config.HostPath         `json:"workspace"`
-	Home      string                  `json:"home"`
-	Variants  map[string]CaveSettings `json:"variants"`
+	// Name is a unique name for this workspace.
+	Name string `json:"name"`
+	// Workspace is the host path to the project root.
+	Workspace config.HostPath `json:"workspace"`
+	// Home is the name or path of the directory used as $HOME inside the cave.
+	Home string `json:"home"`
+	// Variants defines different environment configurations (e.g., "", "test", "dev").
+	Variants map[string]CaveSettings `json:"variants"`
 }
 
-// CaveEntry represents an entry in the global caves.json.
+// CaveEntry is an entry in the global cave registry, used for quick lookup by name.
 type CaveEntry struct {
-	Name      string          `json:"name"`
+	// Name is the unique name of the cave.
+	Name string `json:"name"`
+	// Workspace is the host path to the project.
 	Workspace config.HostPath `json:"workspace"`
 }
 
-// Registry represents the content of $XDG_CONFIG_DIR/pi/cave.json.
+// Registry represents the structure of the global '$XDG_CONFIG_DIR/pi/cave.json' file.
+// It maintains a list of all caves known to the system.
 type Registry struct {
+	// Caves is the list of registered cave entries.
 	Caves []CaveEntry `json:"caves"`
 }
 
-// LoadConfig reads a CaveConfig from a file path.
+// LoadConfig reads and parses a CaveConfig from the specified filesystem path.
 func LoadConfig(path string) (*CaveConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -51,7 +61,7 @@ func LoadConfig(path string) (*CaveConfig, error) {
 	return &cfg, nil
 }
 
-// Validate ensures the configuration is valid.
+// Validate checks the CaveConfig for required fields.
 func (c *CaveConfig) Validate() error {
 	if c.Name == "" {
 		return fmt.Errorf("missing 'name'")
@@ -62,7 +72,7 @@ func (c *CaveConfig) Validate() error {
 	return nil
 }
 
-// Save writes the CaveConfig to a file path.
+// Save serializes the CaveConfig and writes it to the specified path.
 func (c *CaveConfig) Save(path string) error {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
@@ -71,7 +81,8 @@ func (c *CaveConfig) Save(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// Resolve returns the settings for a specific variant, merging with the default ("").
+// Resolve merges the settings for a specific variant with the default base settings (empty variant).
+// Variant settings override or append to the base settings.
 func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 	base, ok := c.Variants[""]
 	if !ok {

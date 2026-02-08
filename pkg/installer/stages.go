@@ -10,7 +10,8 @@ import (
 	"pi/pkg/downloader"
 )
 
-// DownloadStage downloads the package if it's not already in cache.
+// DownloadStage retrieves the package archive from the remote URL.
+// It uses the local cache to avoid redundant downloads if the file already exists.
 func DownloadStage(ctx context.Context, plan *Plan, task display.Task) error {
 	task.SetStage("Download", plan.DownloadPath)
 	d := downloader.NewDefaultDownloader()
@@ -29,7 +30,8 @@ func DownloadStage(ctx context.Context, plan *Plan, task display.Task) error {
 	return err
 }
 
-// ExtractStage extracts the package if it's not already in cache.
+// ExtractStage unpacks the package archive into the designated installation directory.
+// It uses a temporary directory during extraction to ensure the final installation is atomic.
 func ExtractStage(ctx context.Context, plan *Plan, task display.Task) error {
 	task.SetStage("Extract", plan.InstallPath)
 	err := cache.Ensure(plan.InstallPath, func() error {
@@ -60,7 +62,8 @@ func ExtractStage(ctx context.Context, plan *Plan, task display.Task) error {
 	return err
 }
 
-// Install runs all stages for the given plan.
+// Install coordinates the full installation process, including downloading and extracting
+// the package. It skips these steps if the package is already present on disk.
 func Install(ctx context.Context, plan *Plan, task display.Task) error {
 	// 0. Check if already installed
 	if _, err := os.Stat(plan.InstallPath); err == nil {

@@ -1,3 +1,5 @@
+// Package installer handles the physical placement of packages on the host filesystem.
+// It manages the download, extraction, and integrity verification of package archives.
 package installer
 
 import (
@@ -10,20 +12,23 @@ import (
 	"pi/pkg/recipe"
 )
 
-// Plan contains all information needed to perform an installation.
-// Immutable
+// Plan contains the full specification for a package installation.
 type Plan struct {
+	// Package is the metadata of the package being installed.
 	Package      recipe.PackageDefinition
+	// DownloadPath is where the archive will be saved on the host.
 	DownloadPath string
+	// ExtractPath is a temporary location used during the extraction phase.
 	ExtractPath  string
-	// The final directory where the package is "installed"
+	// InstallPath is the final destination directory for the package.
 	InstallPath string
 }
 
-// Stage represents a single step in the installation process.
+// Stage represents a single, atomic step in the multi-stage installation pipeline.
 type Stage func(ctx context.Context, plan *Plan, task display.Task) error
 
-// NewPlan creates an installation plan for a package definition using provided config.
+// NewPlan calculates the filesystem paths and creates an installation plan
+// based on the package definition and system configuration.
 func NewPlan(cfg config.Config, pkg recipe.PackageDefinition) (*Plan, error) {
 	// Create subdirectories if they don't exist
 	if err := os.MkdirAll(cfg.GetDownloadDir(), 0755); err != nil {

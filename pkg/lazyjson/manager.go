@@ -1,3 +1,5 @@
+// Package lazyjson provides a thread-safe, lazy-loading manager for JSON files.
+// It tracks modifications (dirty state) and ensures atomic writes when saving to disk.
 package lazyjson
 
 import (
@@ -9,7 +11,8 @@ import (
 	"sync"
 )
 
-// Manager provides lazy-loading and dirty-tracking for JSON-backed data structures.
+// Manager provides high-level control over a JSON-backed data structure.
+// It handles concurrent access and ensures data is only loaded from disk when first requested.
 type Manager[T any] struct {
 	filepath string
 	data     *T

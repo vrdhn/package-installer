@@ -57,6 +57,7 @@ const (
 	keyConfig    = "config"
 )
 
+// Execute identifies and runs the appropriate handler for a given package name.
 func (sr *StarlarkRecipe) Execute(cfg config.Config, pkgName string, versionQuery string, fetch Fetcher) ([]PackageDefinition, error) {
 	if !sr.registryLoaded {
 		if err := sr.loadRegistry(); err != nil {
@@ -79,7 +80,7 @@ func (sr *StarlarkRecipe) Execute(cfg config.Config, pkgName string, versionQuer
 	return sr.executeHandler(cfg, pkgName, versionQuery, fetch, regexKey, handler)
 }
 
-// ExecuteRegex runs the handler registered for a specific regex.
+// ExecuteRegex runs the specific handler registered for the provided regex pattern.
 func (sr *StarlarkRecipe) ExecuteRegex(cfg config.Config, pkgName string, versionQuery string, fetch Fetcher, regexKey string) ([]PackageDefinition, error) {
 	if !sr.registryLoaded {
 		if err := sr.loadRegistry(); err != nil {
@@ -132,7 +133,7 @@ func (sr *StarlarkRecipe) executeHandler(cfg config.Config, pkgName string, vers
 	return *pkgs, nil
 }
 
-// Registry returns registered regex patterns.
+// Registry returns a sorted list of all regex patterns registered by this recipe.
 func (sr *StarlarkRecipe) Registry(cfg config.Config) ([]string, error) {
 	if !sr.registryLoaded {
 		if err := sr.loadRegistry(); err != nil {
@@ -148,7 +149,7 @@ func (sr *StarlarkRecipe) Registry(cfg config.Config) ([]string, error) {
 	return keys, nil
 }
 
-// GetRegistryInfo returns the registry map with handler names.
+// GetRegistryInfo returns a map of registered patterns to the names of their Starlark handler functions.
 func (sr *StarlarkRecipe) GetRegistryInfo(cfg config.Config) (map[string]string, error) {
 	_, err := sr.Registry(cfg)
 	if err != nil {
@@ -555,7 +556,8 @@ func (sr *StarlarkRecipe) storeHandlerCache(cfg config.Config, pkgName string, v
 	return os.WriteFile(path, data, 0644)
 }
 
-// Test runs all functions in the recipe that start with "test_".
+// Test executes all functions in the recipe that have the prefix "test_".
+// It is used for verifying the discovery logic of a recipe.
 func (sr *StarlarkRecipe) Test(cfg config.Config) error {
 	if !sr.registryLoaded {
 		if err := sr.loadRegistry(); err != nil {

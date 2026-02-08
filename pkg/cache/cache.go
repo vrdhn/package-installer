@@ -1,3 +1,5 @@
+// Package cache provides a simple filesystem cache with locking and TTL support.
+// It ensures that concurrent processes do not perform redundant work for the same resource.
 package cache
 
 import (
@@ -5,8 +7,8 @@ import (
 	"time"
 )
 
-// IsFresh checks if the target path exists and is not older than ttl.
-// A ttl of 0 means the file never expires.
+// IsFresh checks if the target path exists and was modified within the specified duration (TTL).
+// A TTL of 0 means the file is considered fresh as long as it exists.
 func IsFresh(target string, ttl time.Duration) bool {
 	info, err := os.Stat(target)
 	if err != nil {

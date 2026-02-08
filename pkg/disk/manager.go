@@ -1,3 +1,5 @@
+// Package disk provides utilities for managing the local storage used by pi.
+// It handles disk usage reporting, cache cleanup, and complete data uninstallation.
 package disk
 
 import (
@@ -11,28 +13,46 @@ import (
 	"strings"
 )
 
-// Manager handles disk operations for pi's XDG directories.
+// Manager defines the operations for managing pi's local storage.
+type Manager interface {
+	// Info returns an execution result that displays disk usage statistics.
+	Info() (*common.ExecutionResult, error)
+	// CleanDir removes temporary and cached data, such as downloaded archives and discovery results.
+	CleanDir() (*common.ExecutionResult, error)
+	// UninstallData removes all pi-related data, including configurations and sandboxed environments.
+	UninstallData(force bool) (*common.ExecutionResult, error)
+	// GetInfo calculates and returns the current disk usage statistics.
+	GetInfo() (stats []Usage, totalBytes int64)
+	// Clean performs the physical removal of temporary and cached directories.
+	Clean() (cleanedDirs []string)
+	// Uninstall performs the physical removal of all pi data directories.
+	Uninstall() (removedDirs []string)
+}
+
+// manager implements the Manager interface.
 type manager struct {
 	cfg  config.Config
 	Disp display.Display
 }
 
-type Manager = *manager
-
-// NewManager creates a new disk manager.
+// NewManager creates a new disk manager with the specified configuration and display.
 func NewManager(cfg config.Config, disp display.Display) Manager {
 	return &manager{cfg: cfg, Disp: disp}
 }
 
-// Usage represents disk usage information for a specific type.
+// Usage represents disk usage information for a specific category of data.
 type Usage struct {
+	// Label is the display name of the category (e.g., "Packages").
 	Label string
-	Size  int64
+	// Size is the total size in bytes.
+	Size int64
+	// Items is the number of individual files in the category.
 	Items int
-	Path  string
+	// Path is the filesystem path where this data is stored.
+	Path string
 }
 
-// Info displays disk usage statistics for all pi directories.
+// Info displays a table of disk usage statistics to the user.
 func (m *manager) Info() (*common.ExecutionResult, error) {
 	stats, total := m.GetInfo()
 	m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path"))

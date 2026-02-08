@@ -1,3 +1,6 @@
+// Package repl implements a Read-Eval-Print Loop for developing and testing Starlark recipes.
+// It provides interactive commands to load recipes, list supported patterns, and
+// execute discovery handlers with real-time feedback.
 package repl
 
 import (
@@ -33,7 +36,7 @@ type recipeRepl struct {
 	patterns []string
 }
 
-// Run starts the recipe development REPL.
+// Run starts an interactive recipe development REPL for the recipe at the specified path.
 func Run(ctx context.Context, cfg config.Config, path string) error {
 	repl := &recipeRepl{
 		in:   os.Stdin,

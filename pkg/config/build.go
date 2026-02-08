@@ -11,11 +11,13 @@ import (
 // Build information.
 // These variables are set at build time using ldflags.
 var (
-	BuildVersion   = "unknown"
+	// BuildVersion is the semantic version of the current build.
+	BuildVersion = "unknown"
+	// BuildTimestamp is the time when the binary was compiled.
 	BuildTimestamp = "unknown"
 )
 
-// GetBuildInfo returns a formatted string with build details.
+// GetBuildInfo returns a human-readable string containing version, build time, and platform details.
 func GetBuildInfo() string {
 	ts := BuildTimestamp
 	if t, err := time.Parse(time.RFC3339, BuildTimestamp); err == nil {

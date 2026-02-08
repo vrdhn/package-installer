@@ -1,3 +1,6 @@
+// Package bubblewrap provides a wrapper around the Linux bubblewrap (bwrap) utility
+// for creating unprivileged sandboxes. It handles filesystem bind mounts,
+// environment variable management, and command execution within the sandbox.
 package bubblewrap
 
 import (
@@ -15,37 +18,39 @@ import (
 	"pi/pkg/pkgs"
 )
 
-// Arguments to bubblewrap.
-
+// BindType represents the type of bind mount to perform (e.g., read-only, read-write).
 type BindType = string
 
 const (
-	// SRC DEST Bind mount the host path SRC on DEST
+	// BIND mounts the host path SRC on DEST (read-write).
 	BIND BindType = "--bind"
-	// SRC DEST Equal to --bind but ignores non-existent SRC
+	// BIND_TRY is equal to --bind but ignores non-existent SRC.
 	BIND_TRY BindType = "--bind-try"
-	// SRC DEST Bind mount the host path SRC on DEST, allowing device access
+	// BIND_DEV mounts the host path SRC on DEST, allowing device access.
 	BIND_DEV BindType = "--dev-bind"
-	// SRC DEST Equal to --dev-bind but ignores non-existent SRC
+	// BIND_DEV_TRY is equal to --dev-bind but ignores non-existent SRC.
 	BIND_DEV_TRY BindType = "--dev-bind-try"
-	// SRC DEST Bind mount the host path SRC readonly on DEST
+	// BIND_RO mounts the host path SRC readonly on DEST.
 	BIND_RO BindType = "--ro-bind"
-	// SRC DEST Equal to --ro-bind but ignores non-existent SRC
+	// BIND_RO_TRY is equal to --ro-bind but ignores non-existent SRC.
 	BIND_RO_TRY BindType = "--ro-bind-try"
-	// FD DEST Bind open directory or path fd on DEST
+	// BIND_FD mounts an open directory or path fd on DEST.
 	BIND_FD BindType = "--bind-fd"
-	// FD DEST Bind open directory or path fd read-only on DEST
+	// BIND_RO_FD mounts an open directory or path fd read-only on DEST.
 	BIND_RO_FD BindType = "--ro-bind-fd"
-	// FD DEST Copy from FD to file which is bind-mounted on DEST
-	BIND_DATA BindType = "--bind-data" // Note: space removed to match usage
-	// FD DEST Copy from FD to file which is readonly bind-mounted on DEST
-	BIND_DATA_RO BindType = "--ro-bind-data" // Note: space removed
+	// BIND_DATA copies from FD to file which is bind-mounted on DEST.
+	BIND_DATA BindType = "--bind-data"
+	// BIND_DATA_RO copies from FD to file which is readonly bind-mounted on DEST.
+	BIND_DATA_RO BindType = "--ro-bind-data"
 
-	// Virtual filesystems
-	PROC  BindType = "--proc"
-	DEV   BindType = "--dev"
+	// PROC mounts a new proc instance on DEST.
+	PROC BindType = "--proc"
+	// DEV mounts a new devtmpfs on DEST.
+	DEV BindType = "--dev"
+	// TMPFS mounts a new tmpfs on DEST.
 	TMPFS BindType = "--tmpfs"
-	DIR   BindType = "--dir"
+	// DIR creates a new directory at DEST.
+	DIR BindType = "--dir"
 )
 
 type bindPair struct {
@@ -54,26 +59,17 @@ type bindPair struct {
 	bindType    BindType
 }
 
+// Bubblewrap represents a pending sandbox execution configuration.
 type Bubblewrap struct {
-	// keep this sorted by cave_target
-	binds map[string]bindPair
-
-	// environment variables to set
-	envs map[string]string
-
-	// environment variables to unset
-	unsets []string
-
-	// flags like --unshare-pid
-	flags []string
-
-	// the full path to executable, like /usr/bin/bash
+	binds      map[string]bindPair
+	envs       map[string]string
+	unsets     []string
+	flags      []string
 	executable string
-
-	// Note that first argument is NOT argv0
-	cmdline []string
+	cmdline    []string
 }
 
+// Create initializes a new Bubblewrap configuration with the current environment.
 func Create() *Bubblewrap {
 
 	envs := make(map[string]string)

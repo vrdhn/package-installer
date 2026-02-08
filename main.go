@@ -1,3 +1,5 @@
+// pi is a universal, workspace-based package installer that manages dependencies
+// across various languages and runtimes using isolated sandboxes.
 package main
 
 import (
@@ -16,6 +18,10 @@ import (
 	"syscall"
 )
 
+// main is the entry point for the pi CLI.
+// It initializes logging, parses global flags, and executes the command engine.
+// If the command requires a cave (sandbox), it performs the final syscall.Exec
+// to transition the process into the isolated environment.
 func main() {
 	// Setup logging
 	var gf cdl.GlobalFlags
@@ -53,6 +59,9 @@ func main() {
 	os.Exit(res.ExitCode)
 }
 
+// PiEngine bootstraps the pi environment and executes a command.
+// It initializes the configuration, command parser, and various managers,
+// returning an ExecutionResult that describes the outcome or a request to launch a cave.
 func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error) {
 
 	config, err := config.Init()

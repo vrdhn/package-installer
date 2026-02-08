@@ -1,3 +1,5 @@
+// Package archive provides utilities for extracting various archive formats.
+// It supports .zip, .tar, .tar.gz, .tgz, and .tar.zst, with protection against common archive vulnerabilities.
 package archive
 
 import (
@@ -14,8 +16,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Extensions returns a list of file extensions that the archive module can extract
-// for the given operating system.
+// Extensions returns the list of archive extensions supported by the current platform.
 func Extensions(os config.OSType) []string {
 	switch os {
 	case config.OSWindows:
@@ -29,12 +30,12 @@ func Extensions(os config.OSType) []string {
 	}
 }
 
-// SupportedExtensions returns a list of all file extensions that the archive module can extract.
+// SupportedExtensions returns a comprehensive list of all file extensions this package can handle.
 func SupportedExtensions() []string {
 	return []string{".zip", ".tar", ".tar.gz", ".tgz", ".tar.zst"}
 }
 
-// IsSupported returns true if the filename has a supported archive extension for the given OS.
+// IsSupported checks if a filename represents a supported archive format for the target OS.
 func IsSupported(os config.OSType, filename string) bool {
 	for _, ext := range Extensions(os) {
 		if strings.HasSuffix(filename, ext) {
@@ -44,8 +45,7 @@ func IsSupported(os config.OSType, filename string) bool {
 	return false
 }
 
-// Extract extracts the contents of the archive at src into the directory dest.
-// It supports .zip, .tar, .tar.gz, .tgz, and .tar.zst formats.
+// Extract unpacks the archive file at src into the destination directory dest.
 func Extract(src string, dest string) error {
 	if strings.HasSuffix(src, ".zip") {
 		return extractZip(src, dest)

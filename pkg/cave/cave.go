@@ -1,3 +1,6 @@
+// Package cave provides the sandbox (cave) management logic.
+// It handles workspace discovery, sandbox initialization, and command execution
+// within isolated environments using bubblewrap.
 package cave
 
 import (
@@ -16,25 +19,47 @@ import (
 	"strings"
 )
 
-// Cave represents an active sandbox context.
-// Mutable
+// Cave represents an active sandbox context and its configuration.
 type Cave struct {
-	ID        string
+	// ID is a unique identifier for the cave (usually a hash of the workspace path).
+	ID string
+	// Workspace is the host path to the project root.
 	Workspace config.HostPath
-	HomePath  config.HostPath
-	Variant   string
-	Config    *CaveConfig
+	// HomePath is the host path to the isolated HOME directory for this cave.
+	HomePath config.HostPath
+	// Variant is the currently active configuration variant (e.g., "dev", "prod").
+	Variant string
+	// Config is the parsed pi.cave.json configuration.
+	Config *CaveConfig
 }
 
-// Manager handles cave discovery and loading.
-// Mutable
+// Manager defines the operations for discovering and managing caves.
+type Manager interface {
+	// Find locates a cave configuration by walking up from the given directory
+	// or checking environment variables.
+	Find(cwd string) (*Cave, error)
+	// Info returns information about the current active cave.
+	Info(ctx context.Context) (*common.ExecutionResult, error)
+	// List returns a list of all registered caves in the global registry.
+	List(ctx context.Context, disp display.Display) (*common.ExecutionResult, error)
+	// Use starts a cave session by its registered name.
+	Use(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error)
+	// RunCommand prepares an execution result for running a command inside a cave.
+	RunCommand(ctx context.Context, backend Backend, pkgsMgr pkgs.Manager, variant string, commandStr string) (*common.ExecutionResult, error)
+	// Init initializes a new pi.cave.json in the current directory.
+	Init(ctx context.Context) (*common.ExecutionResult, error)
+	// Sync ensures all packages required by the current cave are installed.
+	Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.ExecutionResult, error)
+	// AddPkg adds a new package requirement to the cave configuration.
+	AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionResult, error)
+}
+
+// manager implements the Manager interface.
 type manager struct {
 	SysConfig config.Config
 	Disp      display.Display
 	regMgr    *lazyjson.Manager[Registry]
 }
-
-type Manager = *manager
 
 // NewManager creates a new Cave Manager.
 func NewManager(cfg config.Config, disp display.Display) Manager {

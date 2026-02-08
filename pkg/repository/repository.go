@@ -1,3 +1,6 @@
+// Package repository manages the discovery and indexing of package recipes.
+// It handles multiple recipe repositories (local or remote) and maintains
+// a compiled index for fast package-to-recipe resolution.
 package repository
 
 import (
@@ -18,18 +21,28 @@ import (
 	"github.com/google/uuid"
 )
 
+// RepoConfig represents the configuration for a single recipe repository.
 type RepoConfig struct {
-	Name string    `json:"name"`
-	URL  string    `json:"url"`
+	// Name is the display name of the repository.
+	Name string `json:"name"`
+	// URL is the location of the repository (local path or remote URL).
+	URL string `json:"url"`
+	// UUID is a unique identifier for the repository.
 	UUID uuid.UUID `json:"uuid"`
 }
 
+// IndexEntry represents a mapping from a package pattern to a specific recipe and handler.
 type IndexEntry struct {
-	RepoUUID   uuid.UUID `json:"repo_uuid"`
-	RepoName   string    `json:"-"` // Not stored, resolved on load
-	RecipeName string    `json:"recipe_name"`
-	Pattern    string    `json:"pattern"`
-	Handler    string    `json:"handler"`
+	// RepoUUID is the identifier of the repository where the recipe is located.
+	RepoUUID uuid.UUID `json:"repo_uuid"`
+	// RepoName is the name of the repository (resolved at runtime).
+	RepoName string `json:"-"`
+	// RecipeName is the name of the Starlark recipe file (without .star).
+	RecipeName string `json:"recipe_name"`
+	// Pattern is the regex pattern that this handler supports.
+	Pattern string `json:"pattern"`
+	// Handler is the name of the Starlark function that handles this pattern.
+	Handler string `json:"handler"`
 }
 
 type repoRegistry struct {
@@ -42,7 +55,45 @@ type resolvedRecipe struct {
 	regexKey   string
 }
 
-// Mutable
+// Manager defines the operations for managing repositories and resolving packages.
+type Manager interface {
+	// List returns the current registry information.
+	List(verbose bool) (*common.ExecutionResult, error)
+	// Add adds a new local repository at the given path.
+	Add(path string, verbose bool) (*common.ExecutionResult, error)
+	// SyncRepo regenerates the index for all registered repositories.
+	SyncRepo(verbose bool) (*common.ExecutionResult, error)
+	// LoadRepos loads all registered repositories into memory.
+	LoadRepos() error
+	// LoadIndex loads the package index from disk.
+	LoadIndex() error
+	// Sync performs the actual indexing of recipes in all repositories.
+	Sync(verbose bool) error
+	// AddLocalRepo validates and registers a local directory as a repository.
+	AddLocalRepo(path string, verbose bool) error
+	// GetRecipeRegistryInfo extracts indexing information from a Starlark recipe.
+	GetRecipeRegistryInfo(name, src string) (map[string]string, error)
+	// GetFullRegistryInfo returns the sorted list of all index entries.
+	GetFullRegistryInfo(verbose bool) ([]IndexEntry, error)
+	// ListRepos returns the list of all configured repositories.
+	ListRepos() []RepoConfig
+	// GetRepoByUUID finds a repository by its unique identifier.
+	GetRepoByUUID(uuid uuid.UUID) (RepoConfig, bool)
+	// GetRepoByName finds a repository by its display name.
+	GetRepoByName(name string) (RepoConfig, bool)
+	// GetRecipe returns the source code of a recipe by name.
+	GetRecipe(name string) (string, error)
+	// ListRecipes returns the names of all loaded recipes.
+	ListRecipes() []string
+	// Resolve identifies the recipe and pattern matching a package name.
+	Resolve(pkgName string, cfg config.Config) (recipeName string, regexKey string, err error)
+	// ResolveQuery finds all index entries matching a query string.
+	ResolveQuery(query string) ([]ResolvedQuery, error)
+	// DisplayRegistryInfo displays index entries to the user.
+	DisplayRegistryInfo(entries []IndexEntry)
+}
+
+// manager implements the Manager interface.
 type manager struct {
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
@@ -57,8 +108,7 @@ type manager struct {
 	compiledPatterns map[string]*regexp.Regexp
 }
 
-type Manager = *manager
-
+// NewManager creates a new repository manager with the provided display and configuration.
 func NewManager(disp display.Display, cfg config.Config) Manager {
 	repoPath := filepath.Join(cfg.GetConfigDir(), "repo.json")
 	m := &manager{
@@ -586,11 +636,16 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 	return matches[0].recipe, matches[0].regex, nil
 }
 
+// ResolvedQuery represents a matched index entry for a package query.
 type ResolvedQuery struct {
-	RepoUUID   uuid.UUID
-	RepoName   string
+	// RepoUUID is the identifier of the repository.
+	RepoUUID uuid.UUID
+	// RepoName is the display name of the repository.
+	RepoName string
+	// RecipeName is the name of the recipe.
 	RecipeName string
-	Pattern    string
+	// Pattern is the matched regex pattern.
+	Pattern string
 }
 
 func (m *manager) ResolveQuery(query string) ([]ResolvedQuery, error) {

@@ -1,3 +1,5 @@
+// Package resolver implements the logic for selecting the best build of a package
+// from the set of versions discovered by a recipe.
 package resolver
 
 import (
@@ -15,7 +17,8 @@ import (
 	"time"
 )
 
-// List returns all available packages for the given recipe and version query.
+// List returns all available builds for a package provided by a specific recipe.
+// It executes the recipe's discovery logic and returns the raw results.
 func List(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
 	task.SetStage("List", r.GetName())
 
@@ -24,7 +27,9 @@ func List(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName strin
 	})
 }
 
-// Resolve finds the best matching package for the given recipe and version constraint.
+// Resolve finds the optimal package build matching the user's requirements.
+// It filters the discovered versions based on the current system's OS and architecture,
+// release status keywords (latest, stable, lts), and archive extension compatibility.
 func Resolve(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
 	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
 	if err != nil {

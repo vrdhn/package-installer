@@ -1,3 +1,5 @@
+// Package engine implements the core execution logic for pi commands.
+// It translates parsed CLI actions into operations performed by various system managers.
 package engine
 
 import "pi/pkg/common"

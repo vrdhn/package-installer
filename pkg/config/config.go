@@ -30,19 +30,33 @@ type config struct {
 	hostHome string
 }
 
+// Config provides access to application-wide paths and system environment information.
 type Config interface {
+	// GetCacheDir returns the base directory for cached data.
 	GetCacheDir() string
+	// GetConfigDir returns the base directory for configuration files.
 	GetConfigDir() string
+	// GetStateDir returns the base directory for persistent state.
 	GetStateDir() string
+	// GetPkgDir returns the directory where packages are installed.
 	GetPkgDir() string
+	// GetDownloadDir returns the directory where archives are downloaded.
 	GetDownloadDir() string
+	// GetRecipeDir returns the directory where recipes are stored.
 	GetRecipeDir() string
+	// GetHomeDir returns the base directory for sandboxed home environments.
 	GetHomeDir() string
+	// GetDiscoveryDir returns the directory for caching recipe discovery results.
 	GetDiscoveryDir() string
+	// GetOS returns the current system's operating system.
 	GetOS() OSType
+	// GetArch returns the current system's CPU architecture.
 	GetArch() ArchType
+	// GetUser returns the current user's username.
 	GetUser() string
+	// GetHostHome returns the path to the user's actual home directory on the host.
 	GetHostHome() string
+	// SelfUpdate performs an update of the pi tool itself.
 	SelfUpdate() error
 }
 
@@ -74,7 +88,8 @@ func (c *config) updateDerived() {
 	c.discoveryDir = filepath.Join(c.cacheDir, "discovery")
 }
 
-// Init initializes the configuration using XDG base directories.
+// Init initializes the configuration by detecting the system environment
+// and setting up XDG-compliant base directories.
 func Init() (Config, error) {
 	osType, _ := ParseOS(runtime.GOOS)
 	archType, _ := ParseArch(runtime.GOARCH)

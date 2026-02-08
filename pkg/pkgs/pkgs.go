@@ -52,6 +52,7 @@ func Parse(s config.PkgRef) (*Package, error) {
 	return p, nil
 }
 
+// String returns the string representation of the package (e.g., "name=version").
 func (p *Package) String() string {
 	res := p.Name
 	if p.Version != "" {
@@ -60,8 +61,9 @@ func (p *Package) String() string {
 	return res
 }
 
-// DiscoverSymlinks finds all files matching patterns in the install path and returns them as symlinks.
-// Patterns are like {"bin/*": ".local/bin"}.
+// DiscoverSymlinks finds files within the installPath that match specified patterns
+// and returns them as a slice of Symlink definitions.
+// Patterns support directory expansion via "/*" suffixes (e.g., {"bin/*": ".local/bin"}).
 func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink, error) {
 	if len(patterns) == 0 {
 		// Default behavior: bin/* -> .local/bin
@@ -108,7 +110,8 @@ func DiscoverSymlinks(installPath string, patterns map[string]string) ([]Symlink
 	return symlinks, nil
 }
 
-// CreateSymlinks creates the symlinks in the specified home directory.
+// CreateSymlinks physically creates symlinks on the host filesystem within the homePath.
+// It ensures parent directories exist and replaces any existing files at the target location.
 func CreateSymlinks(homePath string, symlinks []Symlink) error {
 	for _, s := range symlinks {
 		linkPath := filepath.Join(homePath, s.Target)

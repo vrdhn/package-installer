@@ -1,3 +1,6 @@
+// Package pkgs handles the resolution, installation, and management of individual packages.
+// It coordinates between repositories, recipes, and the installer to ensure
+// packages are correctly placed on disk and ready for use in sandboxes.
 package pkgs
 
 import (
@@ -15,10 +18,30 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
-// Mutable
+// Manager defines the operations for managing package installations and synchronization.
+type Manager interface {
+	// SyncPkgs synchronizes package information from repositories matching the query.
+	SyncPkgs(ctx context.Context, query string) (*common.ExecutionResult, error)
+	// ListPkgs returns a list of installed or available packages matching the query.
+	ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error)
+	// Prepare ensures a set of packages are installed and returns instructions for sandboxing.
+	Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*Result, error)
+	// ListFromSource executes a recipe to find all available versions of a package.
+	ListFromSource(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error)
+	// Sync retrieves and indexes all versions for packages matching the query.
+	Sync(ctx context.Context, query string) error
+	// List returns the matching versions from the local package index.
+	List(ctx context.Context, query string) ([]PackageDefinition, error)
+	// ListIndex returns supported patterns for all known recipes without executing them.
+	ListIndex(ctx context.Context) ([]RecipeIndexEntry, error)
+	// UpdateVersions updates the local index for a specific repository and pattern.
+	UpdateVersions(repoUUID uuid.UUID, pattern string, versions []recipe.PackageDefinition) error
+}
+
 type manager struct {
 	Repo      repository.Manager
 	Disp      display.Display
@@ -26,14 +49,15 @@ type manager struct {
 	pkgMgr    *lazyjson.Manager[PackageRegistry]
 }
 
-type Manager = *manager
-
-// RecipeIndexEntry represents a lazy recipe registration entry.
+// RecipeIndexEntry represents a discovery entry for a recipe and its supported patterns.
 type RecipeIndexEntry struct {
-	Recipe   string
+	// Recipe is the name of the recipe file.
+	Recipe string
+	// Patterns is the list of package patterns supported by the recipe.
 	Patterns []string
 }
 
+// NewManager creates a new package manager with the given repository manager and system config.
 func NewManager(repo repository.Manager, disp display.Display, cfg config.Config) Manager {
 	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
 	return &manager{
