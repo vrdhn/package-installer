@@ -270,6 +270,8 @@ func (m *manager) registerRepo(repo RepoConfig) error {
 }
 
 func (m *manager) GetRecipe(name string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	content, ok := m.recipes[name]
 	if !ok {
 		return "", fmt.Errorf("recipe not found: %s", name)
@@ -278,6 +280,8 @@ func (m *manager) GetRecipe(name string) (string, error) {
 }
 
 func (m *manager) ListRecipes() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var list []string
 	for name := range m.recipes {
 		list = append(list, name)
@@ -290,9 +294,12 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 		return "", "", err
 	}
 
+	m.mu.RLock()
 	if res, ok := m.resolveCache[pkgName]; ok {
+		m.mu.RUnlock()
 		return res.recipeName, res.regexKey, nil
 	}
+	m.mu.RUnlock()
 
 	originalPkgName := pkgName
 	repoFilter, pkgName := m.parsePackageQuery(pkgName)
@@ -309,10 +316,12 @@ func (m *manager) Resolve(pkgName string, cfg config.Config) (string, string, er
 		return "", "", m.ambiguityError(originalPkgName, matches)
 	}
 
+	m.mu.Lock()
 	m.resolveCache[originalPkgName] = resolvedRecipe{
 		recipeName: matches[0].recipe,
 		regexKey:   matches[0].regex,
 	}
+	m.mu.Unlock()
 
 	return matches[0].recipe, matches[0].regex, nil
 }
@@ -355,14 +364,22 @@ func (m *manager) findMatches(repoFilter, pkgName string) ([]match, error) {
 }
 
 func (m *manager) getCompiledPattern(pattern string) (*regexp.Regexp, error) {
+	m.mu.RLock()
 	if re, ok := m.compiledPatterns[pattern]; ok {
+		m.mu.RUnlock()
 		return re, nil
 	}
+	m.mu.RUnlock()
+
 	re, err := recipe.CompileAnchored(pattern)
 	if err != nil {
 		return nil, err
 	}
+
+	m.mu.Lock()
 	m.compiledPatterns[pattern] = re
+	m.mu.Unlock()
+
 	return re, nil
 }
 

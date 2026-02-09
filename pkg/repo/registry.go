@@ -149,7 +149,9 @@ func (m *manager) loadBuiltins() error {
 		if err != nil {
 			return err
 		}
+		m.mu.Lock()
 		m.recipes[name] = string(content)
+		m.mu.Unlock()
 		return nil
 	})
 }
@@ -164,7 +166,9 @@ func (m *manager) loadLocalRepo(repo RepoConfig) {
 		if err != nil {
 			return err
 		}
+		m.mu.Lock()
 		m.recipes[name] = string(content)
+		m.mu.Unlock()
 		return nil
 	})
 	if err != nil {

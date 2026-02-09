@@ -4,6 +4,7 @@ import (
 	"pi/pkg/config"
 	"pi/pkg/lazyjson"
 	"regexp"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -44,6 +45,7 @@ type resolvedRecipe struct {
 
 // Manager is the implementation of repository management.
 type manager struct {
+	mu      sync.RWMutex
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
 	cfg     config.Config
