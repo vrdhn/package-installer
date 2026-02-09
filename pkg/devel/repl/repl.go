@@ -1,6 +1,4 @@
 // Package repl implements a Read-Eval-Print Loop for developing and testing Starlark recipes.
-// It provides interactive commands to load recipes, list supported patterns, and
-// execute discovery handlers with real-time feedback.
 package repl
 
 import (
@@ -172,8 +170,7 @@ func (r *recipeRepl) runRecipe(ctx context.Context, pkgStr string, regexOverride
 	}
 
 	selected := recipe.NewPinnedRecipe(sr, regex)
-	task := newReplTask(fmt.Sprintf("%s (%s)", r.name, p.Name), r.out)
-	pkgs, err := resolver.List(ctx, r.cfg, selected, p.Name, p.Version, task)
+	pkgs, err := resolver.List(ctx, r.cfg, selected, p.Name, p.Version)
 	if err != nil {
 		return err
 	}
@@ -320,36 +317,3 @@ func printPackageSample(w io.Writer, pkgs []recipe.PackageDefinition, limit int)
 		fmt.Fprintf(w, "... (%d more)\n", len(pkgs)-limit)
 	}
 }
-
-type replTask struct {
-	name string
-	out  io.Writer
-}
-
-func newReplTask(name string, out io.Writer) *replTask {
-	return &replTask{name: name, out: out}
-}
-
-func (t *replTask) Log(msg string) {
-	fmt.Fprintf(t.out, "[%s] %s\n", t.name, msg)
-}
-
-func (t *replTask) SetStage(name string, target string) {
-	if name == "" {
-		return
-	}
-	if target != "" {
-		fmt.Fprintf(t.out, "[%s] %s: %s\n", t.name, name, target)
-	} else {
-		fmt.Fprintf(t.out, "[%s] %s\n", t.name, name)
-	}
-}
-
-func (t *replTask) Progress(percent int, message string) {
-	if message == "" {
-		return
-	}
-	fmt.Fprintf(t.out, "[%s] %d%% %s\n", t.name, percent, message)
-}
-
-func (t *replTask) Done() {}

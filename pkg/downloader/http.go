@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"pi/pkg/display"
 	"time"
-
-	"github.com/dustin/go-humanize"
 )
 
 // Immutable
@@ -28,7 +25,7 @@ func (h *httpHandler) Schemes() []string {
 	return []string{"http", "https"}
 }
 
-func (h *httpHandler) Download(ctx context.Context, uri string, w io.Writer, task display.Task) error {
+func (h *httpHandler) Download(ctx context.Context, uri string, w io.Writer) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return err
@@ -47,9 +44,9 @@ func (h *httpHandler) Download(ctx context.Context, uri string, w io.Writer, tas
 	size := resp.ContentLength
 
 	pw := &progressWriter{
-		task:  task,
 		total: size,
 		start: time.Now(),
+		uri:   uri,
 	}
 
 	_, err = io.Copy(io.MultiWriter(w, pw), resp.Body)
@@ -58,10 +55,10 @@ func (h *httpHandler) Download(ctx context.Context, uri string, w io.Writer, tas
 
 // Mutable
 type progressWriter struct {
-	task    display.Task
 	total   int64
 	written int64
 	start   time.Time
+	uri     string
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
@@ -69,16 +66,10 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	pw.written += int64(n)
 
 	if pw.total > 0 {
-		percent := int((float64(pw.written) / float64(pw.total)) * 100)
 		elapsed := time.Since(pw.start).Seconds()
-		speed := float64(pw.written) / elapsed
-		msg := fmt.Sprintf("%s / %s (%s/s)",
-			humanize.Bytes(uint64(pw.written)),
-			humanize.Bytes(uint64(pw.total)),
-			humanize.Bytes(uint64(speed)))
-		pw.task.Progress(percent, msg)
-	} else {
-		pw.task.Progress(0, fmt.Sprintf("%s downloaded", humanize.Bytes(uint64(pw.written))))
+		if elapsed > 1 {
+			// Log progress if needed
+		}
 	}
 
 	return n, nil

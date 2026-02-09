@@ -2,7 +2,6 @@ package repo
 
 import (
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/lazyjson"
 	"regexp"
 
@@ -47,7 +46,6 @@ type resolvedRecipe struct {
 type manager struct {
 	recipes map[string]string // recipe name -> source
 	repos   []RepoConfig
-	disp    display.Display
 	cfg     config.Config
 	repoMgr lazyjson.Manager[repoRegistry]
 

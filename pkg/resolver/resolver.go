@@ -5,12 +5,12 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/archive"
 	"pi/pkg/cache"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/downloader"
 	"pi/pkg/recipe"
 	"strings"
@@ -19,24 +19,24 @@ import (
 
 // List returns all available builds for a package provided by a specific recipe.
 // It executes the recipe's discovery logic and returns the raw results.
-func List(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
-	task.SetStage("List", r.GetName())
+func List(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string) ([]recipe.PackageDefinition, error) {
+	slog.Debug("Listing package versions", "recipe", r.GetName(), "package", pkgName)
 
 	return r.Execute(cfg, pkgName, version, func(url string) ([]byte, error) {
-		return fetchData(ctx, cfg, url, task)
+		return fetchData(ctx, cfg, url)
 	})
 }
 
 // Resolve finds the optimal package build matching the user's requirements.
 // It filters the discovered versions based on the current system's OS and architecture,
 // release status keywords (latest, stable, lts), and archive extension compatibility.
-func Resolve(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
-	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
+func Resolve(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string) (*recipe.PackageDefinition, error) {
+	pkgs, err := List(ctx, cfg, r, pkgName, version)
 	if err != nil {
 		return nil, err
 	}
 
-	task.SetStage("Resolve", r.GetName())
+	slog.Debug("Resolving best match", "recipe", r.GetName(), "package", pkgName, "version", version)
 
 	// Filter by OS/Arch and Version and Extension
 	targetOS := cfg.GetOS()
@@ -85,11 +85,11 @@ func Resolve(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkg
 		return nil, fmt.Errorf("no matching package found for %s version %s on %s/%s", r.GetName(), version, targetOS, targetArch)
 	}
 
-	task.Log(fmt.Sprintf("Resolved %s to version %s", r.GetName(), bestMatch.Version))
+	slog.Info("Resolved package", "recipe", r.GetName(), "version", bestMatch.Version)
 	return bestMatch, nil
 }
 
-func fetchData(ctx context.Context, cfg config.Config, url string, task display.Task) ([]byte, error) {
+func fetchData(ctx context.Context, cfg config.Config, url string) ([]byte, error) {
 	// 1. Create discovery directory
 	if err := os.MkdirAll(cfg.GetDiscoveryDir(), 0755); err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func fetchData(ctx context.Context, cfg config.Config, url string, task display.
 
 	// 3. Ensure with TTL (1 hour)
 	err := cache.EnsureWithTTL(cachePath, 1*time.Hour, func() error {
-		task.Log(fmt.Sprintf("Fetching data from %s", url))
+		slog.Info("Fetching data", "url", url)
 		d := downloader.NewDefaultDownloader()
 
 		f, err := os.Create(cachePath)
@@ -111,7 +111,7 @@ func fetchData(ctx context.Context, cfg config.Config, url string, task display.
 		}
 		defer f.Close()
 
-		return d.Download(ctx, url, f, task)
+		return d.Download(ctx, url, f)
 	})
 
 	if err != nil {

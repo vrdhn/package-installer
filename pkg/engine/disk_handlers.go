@@ -2,6 +2,7 @@ package engine
 
 import (
 	"pi/pkg/cdl"
+	"pi/pkg/common"
 )
 
 // RunDiskInfo displays disk usage summary for all pi-managed directories.
@@ -24,10 +25,15 @@ func (h *Handlers) RunDiskClean(params *cdl.DiskCleanParams) (ExecutionResult, e
 
 // RunDiskUninstall wipes all pi data (cache, state, and config) from the system.
 func (h *Handlers) RunDiskUninstall(params *cdl.DiskUninstallParams) (ExecutionResult, error) {
-	if !params.Force {
-		h.DispMgr.Close()
+	if !params.Confirm {
+		return ExecutionResult{
+			ExitCode: 1,
+			Output: &common.Output{
+				Message: "Operation requires confirmation. Please run with --confirm.",
+			},
+		}, nil
 	}
-	res, err := h.DiskMgr.UninstallData(params.Force)
+	res, err := h.DiskMgr.UninstallData()
 	if res == nil {
 		return ExecutionResult{}, err
 	}

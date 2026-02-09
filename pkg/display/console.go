@@ -4,16 +4,14 @@ package display
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
-	"sync"
+	"pi/pkg/common"
+	"strings"
 )
 
-// consoleDisplay handles terminal output and task orchestration.
+// consoleDisplay handles terminal output.
 type consoleDisplay struct {
-	mu      sync.Mutex
-	out     io.Writer
-	verbose bool
+	out io.Writer
 }
 
 // NewConsole creates a Display that writes to standard error.
@@ -30,65 +28,72 @@ func NewWriterDisplay(w io.Writer) Display {
 	}
 }
 
-// StartTask creates a new console-based task tracker.
-func (d *consoleDisplay) StartTask(name string) Task {
-	return &consoleTask{
-		name: name,
-		disp: d,
+// Print writes a message directly to the output writer.
+func (d *consoleDisplay) Print(msg string) {
+	fmt.Fprint(d.out, msg)
+}
+
+// RenderOutput displays structured data from an Output struct to the console.
+func (d *consoleDisplay) RenderOutput(out *common.Output) {
+	if out == nil {
+		return
+	}
+
+	if out.Message != "" {
+		d.Print(fmt.Sprintln(out.Message))
+	}
+
+	if len(out.KV) > 0 {
+		for _, kv := range out.KV {
+			d.Print(fmt.Sprintf("%-12s %s\n", kv.Key+":", kv.Value))
+		}
+	}
+
+	if out.Table != nil {
+		d.renderTable(out.Table)
 	}
 }
 
-// Log writes a message to slog at Debug level.
-func (d *consoleDisplay) Log(msg string) {
-	slog.Debug(msg)
-}
+func (d *consoleDisplay) renderTable(t *common.Table) {
+	if len(t.Header) == 0 {
+		return
+	}
 
-// Print writes a message directly to the output writer.
-func (d *consoleDisplay) Print(msg string) {
-	d.mu.Lock()
-	out := d.out
-	d.mu.Unlock()
-	fmt.Fprint(out, msg)
-}
+	// Simple column width calculation
+	widths := make([]int, len(t.Header))
+	for i, h := range t.Header {
+		widths[i] = len(h)
+	}
+	for _, row := range t.Rows {
+		for i, cell := range row {
+			if i < len(widths) && len(cell) > widths[i] {
+				widths[i] = len(cell)
+			}
+		}
+	}
 
-// SetVerbose toggles verbose output mode.
-func (d *consoleDisplay) SetVerbose(v bool) {
-	d.mu.Lock()
-	d.verbose = v
-	d.mu.Unlock()
-}
+	// Print header
+	var sb strings.Builder
+	for i, h := range t.Header {
+		fmt.Fprintf(&sb, "%-*s  ", widths[i], h)
+	}
+	d.Print(sb.String() + "\n")
 
-// Close is a no-op for the console display.
-func (d *consoleDisplay) Close() {
-	// no-op
-}
+	// Print separator
+	totalWidth := 0
+	for _, w := range widths {
+		totalWidth += w + 2
+	}
+	d.Print(strings.Repeat("-", totalWidth) + "\n")
 
-// consoleTask implements the progress tracking for a single task.
-type consoleTask struct {
-	name   string
-	disp   *consoleDisplay
-	stage  string
-	target string
-}
-
-// Log writes a task-specific debug message.
-func (t *consoleTask) Log(msg string) {
-	slog.Debug(msg, "task", t.name)
-}
-
-// SetStage records and logs a new processing stage for the task.
-func (t *consoleTask) SetStage(name string, target string) {
-	t.stage = name
-	t.target = target
-	slog.Debug("task stage", "task", t.name, "stage", name, "target", target)
-}
-
-// Progress logs the numerical progress of the task.
-func (t *consoleTask) Progress(percent int, message string) {
-	slog.Debug("task progress", "task", t.name, "percent", percent, "message", message)
-}
-
-// Done logs task completion.
-func (t *consoleTask) Done() {
-	slog.Debug("task done", "task", t.name)
+	// Print rows
+	for _, row := range t.Rows {
+		sb.Reset()
+		for i, cell := range row {
+			if i < len(widths) {
+				fmt.Fprintf(&sb, "%-*s  ", widths[i], cell)
+			}
+		}
+		d.Print(sb.String() + "\n")
+	}
 }

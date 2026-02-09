@@ -6,19 +6,23 @@ import (
 	"log/slog"
 	"os"
 	"pi/pkg/common"
-	"strings"
 )
 
 func (m *manager) Info() (*common.ExecutionResult, error) {
 	stats, total := m.GetInfo()
-	m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path"))
-	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 75)))
-	for _, s := range stats {
-		m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10d %s\n", s.Label, FormatSize(s.Size), s.Items, s.Path))
+	table := &common.Table{
+		Header: []string{"Type", "Size", "Items", "Path"},
 	}
-	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 75)))
-	m.Disp.Print(fmt.Sprintf("%-15s %-10s\n", "Total", FormatSize(total)))
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	for _, s := range stats {
+		table.Rows = append(table.Rows, []string{s.Label, FormatSize(s.Size), fmt.Sprintf("%d", s.Items), s.Path})
+	}
+
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Table:   table,
+			Message: fmt.Sprintf("Total: %s", FormatSize(total)),
+		},
+	}, nil
 }
 
 func (m *manager) CleanDir() (*common.ExecutionResult, error) {
@@ -26,26 +30,23 @@ func (m *manager) CleanDir() (*common.ExecutionResult, error) {
 	for _, dir := range cleaned {
 		slog.Info("Cleaning", "path", dir)
 	}
-	slog.Info("Clean complete")
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: "Clean complete",
+		},
+	}, nil
 }
 
-func (m *manager) UninstallData(force bool) (*common.ExecutionResult, error) {
-	if !force {
-		m.Disp.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" {
-			m.Disp.Print("Aborted.\n")
-			return &common.ExecutionResult{ExitCode: 0}, nil
-		}
-	}
+func (m *manager) UninstallData() (*common.ExecutionResult, error) {
 	removed := m.Uninstall()
 	for _, dir := range removed {
 		slog.Info("Removing", "path", dir)
 	}
-	slog.Info("Uninstall complete. Local data removed")
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: "Uninstall complete. Local data removed",
+		},
+	}, nil
 }
 
 func (m *manager) GetInfo() ([]Usage, int64) {

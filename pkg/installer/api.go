@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/recipe"
 )
 
@@ -25,7 +24,7 @@ type Plan struct {
 }
 
 // Stage represents a single, atomic step in the multi-stage installation pipeline.
-type Stage func(ctx context.Context, plan *Plan, task display.Task) error
+type Stage func(ctx context.Context, plan *Plan) error
 
 // NewPlan calculates the filesystem paths and creates an installation plan
 // based on the package definition and system configuration.

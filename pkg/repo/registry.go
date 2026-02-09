@@ -1,8 +1,8 @@
 package repo
 
 import (
-	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"pi/pkg/recipe"
@@ -145,7 +145,6 @@ func (m *manager) loadBuiltins() error {
 			return err
 		}
 		name := strings.TrimSuffix(filepath.Base(path), ".star")
-		m.disp.Log(fmt.Sprintf("Loading builtin recipe: %s", name))
 		content, err := fs.ReadFile(recipe.BuiltinRecipes, path)
 		if err != nil {
 			return err
@@ -169,7 +168,7 @@ func (m *manager) loadLocalRepo(repo RepoConfig) {
 		return nil
 	})
 	if err != nil {
-		m.disp.Log(fmt.Sprintf("Failed to load local repo %s: %v", repo.Name, err))
+		slog.Error("Failed to load local repo", "repo", repo.Name, "error", err)
 	}
 }
 

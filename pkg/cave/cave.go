@@ -1,6 +1,4 @@
 // Package cave provides the sandbox (cave) management logic.
-// It handles workspace discovery, sandbox initialization, and command execution
-// within isolated environments using bubblewrap.
 package cave
 
 import (
@@ -14,38 +12,22 @@ import (
 	"pi/pkg/bubblewrap"
 	"pi/pkg/common"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/lazyjson"
 	"pi/pkg/pkgs"
 	"strings"
 )
 
-// Manager defines the operations for discovering and managing caves.
-type manager struct {
-	Config config.Config
-	Disp   display.Display
-	regMgr lazyjson.Manager[common.Registry]
-}
-
-// Manager is a pointer to the internal manager implementation.
-type Manager = *manager
-
 // NewManager creates a new Cave Manager.
-func NewManager(cfg config.Config, disp display.Display) Manager {
+func NewManager(cfg config.Config) Manager {
 	regPath := filepath.Join(cfg.GetConfigDir(), "cave.json")
 	return &manager{
 		Config: cfg,
-		Disp:   disp,
-		regMgr: lazyjson.New[common.Registry](regPath),
+		regMgr: lazyjson.New[Registry](regPath),
 	}
 }
 
 // Find looks for a pi.cave.json.
-// Priority:
-// 1. PI_WORKSPACE environment variable
-// 2. PI_CAVENAME environment variable (lookup in registry)
-// 3. Walking up from cwd
-func (m *manager) Find(cwd string) (*common.Cave, error) {
+func (m *manager) Find(cwd string) (*Cave, error) {
 	root, variant := m.findRootFromEnv()
 
 	if root == "" {
@@ -57,7 +39,7 @@ func (m *manager) Find(cwd string) (*common.Cave, error) {
 	}
 
 	cfgPath := filepath.Join(root, "pi.cave.json")
-	cfg, err := common.LoadCaveConfig(cfgPath)
+	cfg, err := LoadCaveConfig(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave config: %w", err)
 	}
@@ -69,7 +51,7 @@ func (m *manager) Find(cwd string) (*common.Cave, error) {
 
 	homePath := m.resolveHomePath(root, cfg)
 
-	return &common.Cave{
+	return &Cave{
 		ID:        filepath.Base(homePath),
 		Workspace: workspace,
 		HomePath:  homePath,
@@ -110,7 +92,7 @@ func (m *manager) findRootByName(name string) string {
 	return ""
 }
 
-func (m *manager) resolveHomePath(root string, cfg *common.CaveConfig) string {
+func (m *manager) resolveHomePath(root string, cfg *CaveConfig) string {
 	if cfg.Home != "" {
 		if filepath.IsAbs(cfg.Home) {
 			return cfg.Home
@@ -129,41 +111,56 @@ func (m *manager) Info(ctx context.Context) (*common.ExecutionResult, error) {
 	}
 	c, err := m.Find(cwd)
 	if err != nil {
-		m.Disp.Print("Current directory is not in a pi workspace.\n")
-		return &common.ExecutionResult{ExitCode: 0}, nil
+		return &common.ExecutionResult{
+			Output: &common.Output{
+				Message: "Current directory is not in a pi workspace.",
+			},
+		}, nil
 	}
-	m.Disp.Print(fmt.Sprintf("Cave Name:  %s\n", c.Config.Name))
+
+	out := &common.Output{
+		KV: []common.KeyValue{
+			{Key: "Cave Name", Value: c.Config.Name},
+			{Key: "Workspace", Value: c.Workspace},
+			{Key: "Home Path", Value: c.HomePath},
+		},
+	}
+
 	if c.Variant != "" {
-		m.Disp.Print(fmt.Sprintf("Variant:    %s\n", c.Variant))
+		out.KV = append(out.KV, common.KeyValue{Key: "Variant", Value: c.Variant})
 	}
-	m.Disp.Print(fmt.Sprintf("Workspace:  %s\n", c.Workspace))
-	m.Disp.Print(fmt.Sprintf("Home Path:  %s\n", c.HomePath))
-	settings, _ := c.Config.Resolve("")
+
+	settings, _ := c.Config.Resolve(c.Variant)
 	if len(settings.Pkgs) > 0 {
-		m.Disp.Print(fmt.Sprintf("Packages:   %s\n", strings.Join(settings.Pkgs, ", ")))
+		out.KV = append(out.KV, common.KeyValue{Key: "Packages", Value: strings.Join(settings.Pkgs, ", ")})
 	}
-	return &common.ExecutionResult{ExitCode: 0}, nil
+
+	return &common.ExecutionResult{
+		Output: out,
+	}, nil
 }
 
-func (m *manager) List(ctx context.Context, disp display.Display) (*common.ExecutionResult, error) {
+func (m *manager) List(ctx context.Context) (*common.ExecutionResult, error) {
 	reg, err := m.regMgr.Get()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cave registry: %w", err)
 	}
 
-	m.Disp.Close()
-
 	if len(reg.Caves) == 0 {
-		m.Disp.Print("No caves registered.\n")
-		return &common.ExecutionResult{ExitCode: 0}, nil
+		return &common.ExecutionResult{
+			Output: &common.Output{
+				Message: "No caves registered.",
+			},
+		}, nil
 	}
 
-	m.Disp.Print(fmt.Sprintf("%-20s %-30s %s\n", "NAME", "VARIANTS", "WORKSPACE"))
-	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 80)))
+	table := &common.Table{
+		Header: []string{"NAME", "VARIANTS", "WORKSPACE"},
+	}
 
 	for _, entry := range reg.Caves {
 		cfgPath := filepath.Join(entry.Workspace, "pi.cave.json")
-		cfg, err := common.LoadCaveConfig(cfgPath)
+		cfg, err := LoadCaveConfig(cfgPath)
 		variants := "-"
 		if err == nil {
 			var names []string
@@ -176,10 +173,14 @@ func (m *manager) List(ctx context.Context, disp display.Display) (*common.Execu
 				variants = strings.Join(names, ", ")
 			}
 		}
-		m.Disp.Print(fmt.Sprintf("%-20s %-30s %s\n", entry.Name, variants, entry.Workspace))
+		table.Rows = append(table.Rows, []string{entry.Name, variants, entry.Workspace})
 	}
 
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Table: table,
+		},
+	}, nil
 }
 
 func (m *manager) Use(ctx context.Context, pkgsMgr pkgs.Manager, target string) (*common.ExecutionResult, error) {
@@ -240,13 +241,32 @@ func (m *manager) RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant 
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare packages: %w", err)
 	}
+
+	// Create symlinks for packages in host Cave Home
+	if err := pkgs.CreateSymlinks(c.HomePath, prep.Symlinks); err != nil {
+		return nil, fmt.Errorf("failed to create symlinks: %w", err)
+	}
+
 	// For 'run', we take the 'command' arg. For 'enter', it's empty.
 	var command []string
 	if commandStr != "" {
 		command = strings.Fields(commandStr)
 	}
 
-	sandbox, err := bubblewrap.ResolveLaunch(ctx, m.Config, c, settings, prep, command)
+	caveName := c.Config.Name
+	if c.Variant != "" {
+		caveName = fmt.Sprintf("%s:%s", caveName, c.Variant)
+	}
+
+	info := bubblewrap.SandboxInfo{
+		ID:        c.ID,
+		Workspace: c.Workspace,
+		HomePath:  c.HomePath,
+		CaveName:  caveName,
+		Env:       settings.Env,
+	}
+
+	sandbox, err := bubblewrap.ResolveLaunch(ctx, m.Config, info, prep, command)
 	if err != nil {
 		return nil, err
 	}
@@ -264,8 +284,11 @@ func (m *manager) Init(ctx context.Context) (*common.ExecutionResult, error) {
 	if err := m.CreateInitConfig(cwd); err != nil {
 		return nil, err
 	}
-	slog.Info("Initialized new workspace", "path", cwd)
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: fmt.Sprintf("Initialized new workspace at %s", cwd),
+		},
+	}, nil
 }
 
 func (m *manager) Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.ExecutionResult, error) {
@@ -290,8 +313,11 @@ func (m *manager) Sync(ctx context.Context, pkgsMgr pkgs.Manager) (*common.Execu
 		return nil, fmt.Errorf("failed to sync packages: %w", err)
 	}
 
-	slog.Info("Workspace synchronized successfully")
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: "Workspace synchronized successfully",
+		},
+	}, nil
 }
 
 func (m *manager) AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionResult, error) {
@@ -309,7 +335,7 @@ func (m *manager) AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionR
 	// Add package to default variant config
 	base, ok := c.Config.Variants[""]
 	if !ok {
-		base = common.CaveSettings{}
+		base = CaveSettings{}
 	}
 	found := false
 	for _, p := range base.Pkgs {
@@ -325,11 +351,18 @@ func (m *manager) AddPkg(ctx context.Context, pkgStr string) (*common.ExecutionR
 		if err := c.Config.Save(cfgPath); err != nil {
 			return nil, fmt.Errorf("failed to save cave config: %w", err)
 		}
-		slog.Info("Added package", "package", pkgStr, "config", cfgPath)
+		return &common.ExecutionResult{
+			Output: &common.Output{
+				Message: fmt.Sprintf("Added package %s to %s", pkgStr, cfgPath),
+			},
+		}, nil
 	} else {
-		slog.Info("Package already exists in configuration", "package", pkgStr)
+		return &common.ExecutionResult{
+			Output: &common.Output{
+				Message: fmt.Sprintf("Package %s already exists in configuration", pkgStr),
+			},
+		}, nil
 	}
-	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
 // CreateInitConfig creates a default pi.cave.json in the specified directory.
@@ -341,13 +374,13 @@ func (m *manager) CreateInitConfig(dir string) error {
 
 	name := filepath.Base(absDir)
 
-	cfg := &common.CaveConfig{
+	cfg := &CaveConfig{
 		Name:      name,
 		Workspace: absDir,
 		Home:      name,
-		Variants: map[string]common.CaveSettings{
+		Variants: map[string]CaveSettings{
 			"": {
-				Pkgs: []common.PkgRef{},
+				Pkgs: []string{},
 			},
 		},
 	}
@@ -365,8 +398,8 @@ func (m *manager) CreateInitConfig(dir string) error {
 }
 
 // SyncRegistry updates the global cave.json with the provided config.
-func (m *manager) SyncRegistry(cfg *common.CaveConfig) error {
-	err := m.regMgr.Modify(func(reg *common.Registry) error {
+func (m *manager) SyncRegistry(cfg *CaveConfig) error {
+	err := m.regMgr.Modify(func(reg *Registry) error {
 		found := false
 		for i, entry := range reg.Caves {
 			if entry.Name == cfg.Name {
@@ -377,7 +410,7 @@ func (m *manager) SyncRegistry(cfg *common.CaveConfig) error {
 		}
 
 		if !found {
-			reg.Caves = append(reg.Caves, common.CaveEntry{
+			reg.Caves = append(reg.Caves, CaveEntry{
 				Name:      cfg.Name,
 				Workspace: cfg.Workspace,
 			})

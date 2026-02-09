@@ -99,7 +99,7 @@ type DiskInfoParams struct {
 
 type DiskUninstallParams struct {
 	GlobalFlags
-	Force bool
+	Confirm bool
 }
 
 type PkgListParams struct {
@@ -128,11 +128,6 @@ type RepoSyncParams struct {
 	_ struct{}
 }
 
-type SelfUpdateParams struct {
-	GlobalFlags
-	_ struct{}
-}
-
 type VersionParams struct {
 	GlobalFlags
 	_ struct{}
@@ -157,7 +152,6 @@ type Handlers[T any] interface {
 	RunRepoAdd(params *RepoAddParams) (T, error)
 	RunRepoList(params *RepoListParams) (T, error)
 	RunRepoSync(params *RepoSyncParams) (T, error)
-	RunSelfUpdate(params *SelfUpdateParams) (T, error)
 	RunVersion(params *VersionParams) (T, error)
 }
 
@@ -391,22 +385,12 @@ var CliCommands = []CommandDef{
 				Desc:        "Wipe all pi data (cache, state, and config)",
 				Safe:        false,
 				Flags: []FlagDef{
-					{Name: "force", Short: "f", Type: "bool", Desc: "Skip confirmation prompt"},
+					{Name: "confirm", Short: "c", Type: "bool", Desc: "Confirm uninstallation"},
 				},
 				Examples: []string{
 					"pi disk uninstall",
 				},
 			},
-		},
-	},
-
-	CommandDef{
-		Name:        "self-update",
-		FullCommand: "self-update",
-		Desc:        "Update pi to the latest version",
-		Safe:        false,
-		Examples: []string{
-			"pi self-update",
 		},
 	},
 
@@ -531,8 +515,6 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handleRepoList[T](inv, gf), resolvedCmd, nil
 	case "repo/sync":
 		return handleRepoSync[T](inv, gf), resolvedCmd, nil
-	case "self-update":
-		return handleSelfUpdate[T](inv, gf), resolvedCmd, nil
 	case "version":
 		return handleVersion[T](inv, gf), resolvedCmd, nil
 	default:
@@ -642,7 +624,7 @@ func handleDiskInfo[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 func handleDiskUninstall[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params := &DiskUninstallParams{}
 	params.GlobalFlags = gf
-	params.Force = BoolFlag(inv.Flags, "force")
+	params.Confirm = BoolFlag(inv.Flags, "confirm")
 	return func(h Handlers[T]) (T, error) {
 		return h.RunDiskUninstall(params)
 	}
@@ -684,13 +666,6 @@ func handleRepoSync[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 	params.GlobalFlags = gf
 	return func(h Handlers[T]) (T, error) {
 		return h.RunRepoSync(params)
-	}
-}
-func handleSelfUpdate[T any](inv *Invocation, gf GlobalFlags) Action[T] {
-	params := &SelfUpdateParams{}
-	params.GlobalFlags = gf
-	return func(h Handlers[T]) (T, error) {
-		return h.RunSelfUpdate(params)
 	}
 }
 func handleVersion[T any](inv *Invocation, gf GlobalFlags) Action[T] {

@@ -4,6 +4,7 @@ package pkgs
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/installer"
@@ -29,17 +30,7 @@ func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.Execution
 		return nil, err
 	}
 
-	m.Disp.Close()
-	SortPackageDefinitions(versions)
-
-	m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE"))
-	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 100)))
-	for _, v := range versions {
-		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate))
-	}
-
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return m.renderPackageTable(versions), nil
 }
 
 func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*common.ExecutionResult, error) {
@@ -50,8 +41,6 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 	if err != nil {
 		return nil, err
 	}
-
-	m.Disp.Close()
 
 	if !showAll {
 		myOS := m.Config.GetOS()
@@ -71,14 +60,24 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 		versions = versions[len(versions)-5:]
 	}
 
-	m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", "REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE"))
-	m.Disp.Print(fmt.Sprintln(strings.Repeat("-", 100)))
+	return m.renderPackageTable(versions), nil
+}
+
+func (m *manager) renderPackageTable(versions []PackageDefinition) *common.ExecutionResult {
+	table := &common.Table{
+		Header: []string{"REPO", "NAME", "VERSION", "OS", "ARCH", "RELEASE", "DATE"},
+	}
 	for _, v := range versions {
 		repo, _ := m.Repo.GetRepoByUUID(v.RepoUUID)
-		m.Disp.Print(fmt.Sprintf("%-10s %-15s %-15s %-8s %-8s %-20s %s\n", repo.Name, v.Name, v.Version, v.OS, v.Arch, v.ReleaseStatus, v.ReleaseDate))
+		table.Rows = append(table.Rows, []string{
+			repo.Name, v.Name, v.Version, v.OS.String(), v.Arch.String(), v.ReleaseStatus, v.ReleaseDate,
+		})
 	}
-
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Table: table,
+		},
+	}
 }
 
 func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*common.PreparationResult, error) {
@@ -133,16 +132,15 @@ func (m *manager) preparePkg(ctx context.Context, pkgStr config.PkgRef) ([]commo
 		return nil, nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
 	}
 
-	task := m.Disp.StartTask(p.String())
-	defer task.Done()
+	slog.Info("Preparing package", "package", p.String())
 
-	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 	}
 	selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
 
-	pkgDef, err := resolver.Resolve(ctx, m.Config, selected, p.Name, p.Version, task)
+	pkgDef, err := resolver.Resolve(ctx, m.Config, selected, p.Name, p.Version)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
 	}
@@ -152,7 +150,7 @@ func (m *manager) preparePkg(ctx context.Context, pkgStr config.PkgRef) ([]commo
 		return nil, nil, fmt.Errorf("planning failed for %s: %v", p.String(), err)
 	}
 
-	if err := installer.Install(ctx, plan, task); err != nil {
+	if err := installer.Install(ctx, plan); err != nil {
 		return nil, nil, fmt.Errorf("installation failed for %s: %v", p.String(), err)
 	}
 
@@ -185,17 +183,13 @@ func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.P
 		return nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
 	}
 
-	task := m.Disp.StartTask("Listing " + p.String())
-	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, nil)
 	if err != nil {
-		task.Done()
 		return nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
 	}
 
 	selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
-	pkgs, err := resolver.List(ctx, m.Config, selected, p.Name, p.Version, task)
-	task.Done()
-	return pkgs, err
+	return resolver.List(ctx, m.Config, selected, p.Name, p.Version)
 }
 
 func (m *manager) Sync(ctx context.Context, query string) error {
@@ -223,21 +217,20 @@ func (m *manager) syncMatch(ctx context.Context, match repo.ResolvedQuery) error
 		return err
 	}
 
-	task := m.Disp.StartTask(fmt.Sprintf("Syncing %s/%s", match.RepoName, match.Pattern))
-	defer task.Done()
+	slog.Info("Syncing package", "repo", match.RepoName, "pattern", match.Pattern)
 
-	recipeObj, err := recipe.NewStarlarkRecipe(match.RecipeName, src, task.Log)
+	recipeObj, err := recipe.NewStarlarkRecipe(match.RecipeName, src, nil)
 	if err != nil {
 		return err
 	}
 
 	selected := recipe.NewPinnedRecipe(recipeObj, match.Pattern)
-	pkgs, err := resolver.List(ctx, m.Config, selected, match.Pattern, "", task)
+	pkgs, err := resolver.List(ctx, m.Config, selected, match.Pattern, "")
 	if err != nil {
 		return err
 	}
 
-	task.Log(fmt.Sprintf("Found %d versions for %s", len(pkgs), match.Pattern))
+	slog.Debug("Found versions", "count", len(pkgs), "pattern", match.Pattern)
 
 	return m.UpdateVersions(match.RepoUUID, match.Pattern, pkgs)
 }

@@ -22,7 +22,7 @@ func (h *Handlers) RunCaveInfo(params *cdl.CaveInfoParams) (ExecutionResult, err
 
 // RunCaveList lists all registered caves and their variants.
 func (h *Handlers) RunCaveList(params *cdl.CaveListParams) (ExecutionResult, error) {
-	res, err := h.CaveMgr.List(h.Ctx, h.DispMgr)
+	res, err := h.CaveMgr.List(h.Ctx)
 	if res == nil {
 		return ExecutionResult{}, err
 	}

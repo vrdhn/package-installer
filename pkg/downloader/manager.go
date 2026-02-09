@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"pi/pkg/display"
 	"strings"
 )
 
@@ -29,7 +28,7 @@ func (m *manager) Register(h SchemeHandler) {
 	}
 }
 
-func (m *manager) Download(ctx context.Context, uri string, w io.Writer, task display.Task) error {
+func (m *manager) Download(ctx context.Context, uri string, w io.Writer) error {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return fmt.Errorf("invalid uri: %w", err)
@@ -41,5 +40,5 @@ func (m *manager) Download(ctx context.Context, uri string, w io.Writer, task di
 		return fmt.Errorf("unsupported scheme: %s", scheme)
 	}
 
-	return handler.Download(ctx, uri, w, task)
+	return handler.Download(ctx, uri, w)
 }

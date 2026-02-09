@@ -1,6 +1,4 @@
 // Package repo manages the discovery and indexing of package recipes.
-// It handles multiple recipe repositories (local or remote) and maintains
-// a compiled index for fast package-to-recipe resolution.
 package repo
 
 import (
@@ -11,7 +9,6 @@ import (
 	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/lazyjson"
 	"pi/pkg/recipe"
 	"regexp"
@@ -24,43 +21,60 @@ import (
 // Manager is a pointer to the internal manager implementation.
 type Manager = *manager
 
-// NewManager creates a new repository manager with the provided display and configuration.
-func NewManager(disp display.Display, cfg config.Config) Manager {
+// NewManager creates a new repository manager with the provided configuration.
+func NewManager(cfg config.Config) Manager {
 	repoPath := filepath.Join(cfg.GetConfigDir(), "repo.json")
 	return &manager{
 		recipes:          make(map[string]string),
 		resolveCache:     make(map[string]resolvedRecipe),
 		compiledPatterns: make(map[string]*regexp.Regexp),
-		disp:             disp,
 		cfg:              cfg,
 		repoMgr:          lazyjson.New[repoRegistry](repoPath),
 	}
 }
 
 func (m *manager) List(verbose bool) (*common.ExecutionResult, error) {
-	m.disp.Close()
 	entries, err := m.GetFullRegistryInfo(verbose)
 	if err != nil {
 		return nil, err
 	}
-	m.DisplayRegistryInfo(entries)
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return m.renderRegistryTable(entries), nil
+}
+
+func (m *manager) renderRegistryTable(entries []IndexEntry) *common.ExecutionResult {
+	table := &common.Table{
+		Header: []string{"REPO", "RECIPE", "PATTERN", "HANDLER"},
+	}
+	for _, e := range entries {
+		table.Rows = append(table.Rows, []string{e.RepoName, e.RecipeName, e.Pattern, e.Handler})
+	}
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Table: table,
+		},
+	}
 }
 
 func (m *manager) Add(path string, verbose bool) (*common.ExecutionResult, error) {
 	if err := m.AddLocalRepo(path, verbose); err != nil {
 		return nil, err
 	}
-	slog.Info("Added repository", "path", path)
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: fmt.Sprintf("Added repository at %s", path),
+		},
+	}, nil
 }
 
 func (m *manager) SyncRepo(verbose bool) (*common.ExecutionResult, error) {
 	if err := m.Sync(verbose); err != nil {
 		return nil, err
 	}
-	slog.Info("Package index synchronized successfully")
-	return &common.ExecutionResult{ExitCode: 0}, nil
+	return &common.ExecutionResult{
+		Output: &common.Output{
+			Message: "Package index synchronized successfully",
+		},
+	}, nil
 }
 
 func (m *manager) Sync(verbose bool) error {
@@ -253,14 +267,6 @@ func (m *manager) registerRepo(repo RepoConfig) error {
 		return err
 	}
 	return m.LoadRepos()
-}
-
-func (m *manager) DisplayRegistryInfo(entries []IndexEntry) {
-	m.disp.Print(fmt.Sprintf("%-15s %-15s %-30s %s\n", "REPO", "RECIPE", "PATTERN", "HANDLER"))
-	m.disp.Print(fmt.Sprintln(strings.Repeat("-", 80)))
-	for _, e := range entries {
-		m.disp.Print(fmt.Sprintf("%-15s %-15s %-30s %s\n", e.RepoName, e.RecipeName, e.Pattern, e.Handler))
-	}
 }
 
 func (m *manager) GetRecipe(name string) (string, error) {

@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/lazyjson"
 	"pi/pkg/repo"
 	"sort"
@@ -13,7 +12,6 @@ import (
 // manager defines the internal state for managing package installations.
 type manager struct {
 	Repo   repo.Manager
-	Disp   display.Display
 	Config config.Config
 	pkgMgr lazyjson.Manager[PackageRegistry]
 }
@@ -37,11 +35,10 @@ type PackageRegistry struct {
 }
 
 // NewManager creates a new package manager with the given repository manager and system config.
-func NewManager(repo repo.Manager, disp display.Display, cfg config.Config) Manager {
+func NewManager(repo repo.Manager, cfg config.Config) Manager {
 	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
 	return &manager{
 		Repo:   repo,
-		Disp:   disp,
 		Config: cfg,
 		pkgMgr: lazyjson.New[PackageRegistry](pkgPath),
 	}

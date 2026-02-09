@@ -1,6 +1,4 @@
-// Package bubblewrap provides a wrapper around the Linux bubblewrap (bwrap) utility
-// for creating unprivileged sandboxes. It handles filesystem bind mounts,
-// environment variable management, and command execution within the sandbox.
+// Package bubblewrap provides a wrapper around the Linux bubblewrap (bwrap) utility.
 package bubblewrap
 
 import (
@@ -15,42 +13,27 @@ import (
 
 	"pi/pkg/common"
 	"pi/pkg/config"
-	"pi/pkg/pkgs"
 )
 
-// BindType represents the type of bind mount to perform (e.g., read-only, read-write).
+// BindType represents the type of bind mount to perform.
 type BindType = string
 
 const (
-	// BIND mounts the host path SRC on DEST (read-write).
-	BIND BindType = "--bind"
-	// BIND_TRY is equal to --bind but ignores non-existent SRC.
-	BIND_TRY BindType = "--bind-try"
-	// BIND_DEV mounts the host path SRC on DEST, allowing device access.
-	BIND_DEV BindType = "--dev-bind"
-	// BIND_DEV_TRY is equal to --dev-bind but ignores non-existent SRC.
+	BIND         BindType = "--bind"
+	BIND_TRY     BindType = "--bind-try"
+	BIND_DEV     BindType = "--dev-bind"
 	BIND_DEV_TRY BindType = "--dev-bind-try"
-	// BIND_RO mounts the host path SRC readonly on DEST.
-	BIND_RO BindType = "--ro-bind"
-	// BIND_RO_TRY is equal to --ro-bind but ignores non-existent SRC.
-	BIND_RO_TRY BindType = "--ro-bind-try"
-	// BIND_FD mounts an open directory or path fd on DEST.
-	BIND_FD BindType = "--bind-fd"
-	// BIND_RO_FD mounts an open directory or path fd read-only on DEST.
-	BIND_RO_FD BindType = "--ro-bind-fd"
-	// BIND_DATA copies from FD to file which is bind-mounted on DEST.
-	BIND_DATA BindType = "--bind-data"
-	// BIND_DATA_RO copies from FD to file which is readonly bind-mounted on DEST.
+	BIND_RO      BindType = "--ro-bind"
+	BIND_RO_TRY  BindType = "--ro-bind-try"
+	BIND_FD      BindType = "--bind-fd"
+	BIND_RO_FD   BindType = "--ro-bind-fd"
+	BIND_DATA    BindType = "--bind-data"
 	BIND_DATA_RO BindType = "--ro-bind-data"
 
-	// PROC mounts a new proc instance on DEST.
-	PROC BindType = "--proc"
-	// DEV mounts a new devtmpfs on DEST.
-	DEV BindType = "--dev"
-	// TMPFS mounts a new tmpfs on DEST.
+	PROC  BindType = "--proc"
+	DEV   BindType = "--dev"
 	TMPFS BindType = "--tmpfs"
-	// DIR creates a new directory at DEST.
-	DIR BindType = "--dir"
+	DIR   BindType = "--dir"
 )
 
 type bindPair struct {
@@ -71,7 +54,6 @@ type Bubblewrap struct {
 
 // Create initializes a new Bubblewrap configuration with the current environment.
 func Create() *Bubblewrap {
-
 	envs := make(map[string]string)
 	for _, env := range os.Environ() {
 		pair := strings.SplitN(env, "=", 2)
@@ -86,7 +68,6 @@ func Create() *Bubblewrap {
 		binds:      make(map[string]bindPair),
 		envs:       envs,
 	}
-
 }
 
 func (b *Bubblewrap) AddBind(typ BindType, path string) {
@@ -112,15 +93,11 @@ func (b *Bubblewrap) UnsetEnv(name string) {
 }
 
 func (b *Bubblewrap) AddVirtual(typ BindType, path string) {
-	// We use the same map but since hostpath is not needed for these,
-	// we'll handle them specially in Cmd() or just store them separately.
-	// For simplicity, let's just store them in binds with empty host_source.
 	b.binds[path] = bindPair{path, "", typ}
 }
 
 func (b *Bubblewrap) AddEnvFirst(name string, entry string) {
 	val := b.envs[name]
-
 	parts := strings.Split(val, ":")
 	newParts := []string{entry}
 	for _, p := range parts {
@@ -139,14 +116,9 @@ func (b *Bubblewrap) SetCommand(executable string, cmdline ...string) {
 // Cmd returns an *exec.Cmd to run the bubblewrap process.
 func (b *Bubblewrap) Cmd() *exec.Cmd {
 	execPath := "/usr/bin/bwrap"
-
-	// Construct argument list
 	args := []string{}
-
-	// Flags
 	args = append(args, b.flags...)
 
-	// Binds and Virtual FS
 	for _, key := range sortedKeys(b.binds) {
 		bind := b.binds[key]
 		if bind.host_source == "" {
@@ -156,7 +128,6 @@ func (b *Bubblewrap) Cmd() *exec.Cmd {
 		}
 	}
 
-	// Environment
 	for _, k := range sortedKeys(b.envs) {
 		args = append(args, "--setenv", k, b.envs[k])
 	}
@@ -164,18 +135,14 @@ func (b *Bubblewrap) Cmd() *exec.Cmd {
 		args = append(args, "--unsetenv", k)
 	}
 
-	// Finally add the command and arguments.
 	if b.executable != "" {
 		args = append(args, "--", b.executable)
 		args = append(args, b.cmdline...)
 	}
 
-	cmd := exec.Command(execPath, args...)
-	// Note: We don't set cmd.Env here because we use --setenv inside bwrap
-	return cmd
+	return exec.Command(execPath, args...)
 }
 
-// Spawn runs the command and waits for it to finish.
 func (b *Bubblewrap) Spawn() error {
 	cmd := b.Cmd()
 	cmd.Stdout = os.Stdout
@@ -184,23 +151,10 @@ func (b *Bubblewrap) Spawn() error {
 	return cmd.Run()
 }
 
-// Exec replaces the current process with the given command.
-// It uses syscall.Exec which does not return on success.
 func Exec(cmd *exec.Cmd) error {
-	// syscall.Exec requires the binary path to be the first argument if we want it to be argv[0],
-	// but actually the first argument to syscall.Exec is the path, and the second is the slice of arguments
-	// where the first element is usually the program name.
-	// exec.Command sets cmd.Args[0] to the command name/path.
-
-	// Ensure we have an absolute path if possible, though exec.Command might have resolved it?
-	// exec.Command only looks up path if it contains no separators.
-	// However, Cmd() here sets path to "/usr/bin/bwrap" which is absolute.
-
-	// Check if Path is set (it should be from exec.Command)
 	if cmd.Path == "" {
 		return fmt.Errorf("command path is empty")
 	}
-
 	return syscall.Exec(cmd.Path, cmd.Args, cmd.Env)
 }
 
@@ -213,7 +167,6 @@ func sortedKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-// BindSlice returns the bindings as a slice of SandboxBind.
 func (b *Bubblewrap) BindSlice() []common.SandboxBind {
 	var res []common.SandboxBind
 	for _, key := range sortedKeys(b.binds) {
@@ -227,7 +180,6 @@ func (b *Bubblewrap) BindSlice() []common.SandboxBind {
 	return res
 }
 
-// EnvSlice returns the environment variables as a slice of KEY=VALUE strings.
 func (b *Bubblewrap) EnvSlice() []string {
 	var res []string
 	for _, k := range sortedKeys(b.envs) {
@@ -236,7 +188,6 @@ func (b *Bubblewrap) EnvSlice() []string {
 	return res
 }
 
-// CmdFromSandbox constructs a bwrap command from a SandboxConfig.
 func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
 	execPath := "/usr/bin/bwrap"
 	args := []string{}
@@ -254,7 +205,6 @@ func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
 			args = append(args, "--unsetenv", k)
 		}
 
-		// Environment
 		for _, env := range s.Env {
 			parts := strings.SplitN(env, "=", 2)
 			if len(parts) == 2 {
@@ -262,7 +212,6 @@ func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
 			}
 		}
 
-		// Inner command
 		if s.Exe != "" {
 			args = append(args, "--", s.Exe)
 			args = append(args, s.Args...)
@@ -272,18 +221,23 @@ func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
 	return exec.Command(execPath, args...)
 }
 
-// ResolveLaunch prepares a command to be executed inside the bubblewrap sandbox.
-func ResolveLaunch(ctx context.Context, cfg config.Config, c *common.Cave, settings *common.CaveSettings, prep *common.PreparationResult, command []string) (*common.SandboxConfig, error) {
-	b := Create()
+// SandboxInfo provides all details needed to construct a sandbox.
+type SandboxInfo struct {
+	ID        string
+	Workspace string
+	HomePath  string
+	CaveName  string
+	Env       map[string]string // Settings Env
+}
 
-	// Internal home path inside the sandbox
+// ResolveLaunch prepares a command to be executed inside the bubblewrap sandbox.
+func ResolveLaunch(ctx context.Context, cfg config.Config, info SandboxInfo, prep *common.PreparationResult, command []string) (*common.SandboxConfig, error) {
+	b := Create()
 	internalHome := cfg.GetHostHome()
 
-	// 1. Isolation & Flags
 	b.AddFlag("--unshare-pid")
 	b.AddFlag("--die-with-parent")
 
-	// 2. Base system bindings (read-only)
 	b.AddBind(BIND_RO, "/usr")
 	b.AddBind(BIND_RO, "/lib")
 	if _, err := os.Stat("/lib64"); err == nil {
@@ -294,96 +248,68 @@ func ResolveLaunch(ctx context.Context, cfg config.Config, c *common.Cave, setti
 	b.AddBind(BIND_RO, "/opt")
 	b.AddBind(BIND_RO, "/etc")
 
-	// 3. Virtual filesystems
 	b.AddVirtual(PROC, "/proc")
 	b.AddVirtual(DEV, "/dev")
 	b.AddVirtual(TMPFS, "/tmp")
 	b.AddVirtual(TMPFS, "/run")
 
-	// 4. Bind global cache directory (readonly)
 	if prep.CacheDir != "" {
-		caveCache := filepath.Join(c.HomePath, ".cache", "pi")
+		caveCache := filepath.Join(info.HomePath, ".cache", "pi")
 		if err := os.MkdirAll(caveCache, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create cave cache dir: %w", err)
 		}
 		b.AddMapBind(BIND_RO, prep.CacheDir, filepath.Join(internalHome, ".cache", "pi"))
 	}
 
-	// 5. Setup Workspace & Home
-	b.AddBind(BIND, c.Workspace)
-	if err := os.MkdirAll(c.HomePath, 0755); err != nil {
+	b.AddBind(BIND, info.Workspace)
+	if err := os.MkdirAll(info.HomePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create home directory: %w", err)
 	}
-	localBin := filepath.Join(c.HomePath, ".local", "bin")
+	localBin := filepath.Join(info.HomePath, ".local", "bin")
 	if err := os.MkdirAll(localBin, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create .local/bin: %w", err)
 	}
-	b.AddMapBind(BIND, c.HomePath, internalHome)
+	b.AddMapBind(BIND, info.HomePath, internalHome)
 
-	// 6. Audio / Display / Agents (RO Try)
 	xdgRuntime := os.Getenv("XDG_RUNTIME_DIR")
 	if xdgRuntime != "" {
 		b.envs["XDG_RUNTIME_DIR"] = xdgRuntime
-		b.AddBind(BIND, xdgRuntime) // Shared for bus, display etc
-
-		// Wayland
-		waylandDisplay := os.Getenv("WAYLAND_DISPLAY")
-		if waylandDisplay != "" {
-			b.envs["WAYLAND_DISPLAY"] = waylandDisplay
+		b.AddBind(BIND, xdgRuntime)
+		if wd := os.Getenv("WAYLAND_DISPLAY"); wd != "" {
+			b.envs["WAYLAND_DISPLAY"] = wd
 		}
-
-		// DBus
-		dbusAddr := os.Getenv("DBUS_SESSION_BUS_ADDRESS")
-		if dbusAddr != "" {
-			b.envs["DBUS_SESSION_BUS_ADDRESS"] = dbusAddr
+		if da := os.Getenv("DBUS_SESSION_BUS_ADDRESS"); da != "" {
+			b.envs["DBUS_SESSION_BUS_ADDRESS"] = da
 		}
 	}
 
-	// SSH Agent
-	sshAuth := os.Getenv("SSH_AUTH_SOCK")
-	if sshAuth != "" {
+	if sshAuth := os.Getenv("SSH_AUTH_SOCK"); sshAuth != "" {
 		b.envs["SSH_AUTH_SOCK"] = sshAuth
 		b.AddBind(BIND_RO_TRY, sshAuth)
 	}
 
-	// 7. Graphics / USB / Hardware
 	b.AddBind(BIND_RO, "/sys")
 	b.AddBind(BIND_DEV, "/dev/dri")
 	b.AddBind(BIND_DEV_TRY, "/dev/bus/usb")
 
-	// 8. Create symlinks for packages in host Cave Home
-	if err := pkgs.CreateSymlinks(c.HomePath, prep.Symlinks); err != nil {
-		return nil, fmt.Errorf("failed to create symlinks: %w", err)
-	}
-
-	// 9. Set Environment
 	b.envs["HOME"] = internalHome
 	b.envs["USER"] = cfg.GetUser()
-	b.envs["PI_WORKSPACE"] = c.Workspace
-	caveName := c.Config.Name
-	if c.Variant != "" {
-		caveName = fmt.Sprintf("%s:%s", caveName, c.Variant)
-	}
-	b.envs["PI_CAVENAME"] = caveName
+	b.envs["PI_WORKSPACE"] = info.Workspace
+	b.envs["PI_CAVENAME"] = info.CaveName
 
 	b.AddEnvFirst("PATH", "/usr/bin:/bin")
 	b.AddEnvFirst("PATH", filepath.Join(internalHome, ".local", "bin"))
 
-	// Portals
 	b.UnsetEnv("GTK_USE_PORTAL")
 	b.UnsetEnv("QT_USE_PORTAL")
 
-	// Apply recipe environment variables
 	for k, v := range prep.Env {
 		b.envs[k] = v
 	}
-
-	// Apply settings environment variables
-	for k, v := range settings.Env {
+	for k, v := range info.Env {
 		b.envs[k] = v
 	}
 
-	// 10. Set command
 	if len(command) > 0 {
 		b.SetCommand(command[0], command[1:]...)
 	} else {

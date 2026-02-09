@@ -1,4 +1,4 @@
-package common
+package cave
 
 import (
 	"encoding/json"
@@ -51,7 +51,7 @@ func (c *CaveConfig) Resolve(variant string) (*CaveSettings, error) {
 	}
 
 	merged := &CaveSettings{
-		Pkgs: append([]PkgRef(nil), base.Pkgs...),
+		Pkgs: append([]string(nil), base.Pkgs...),
 		Env:  make(map[string]string),
 	}
 	for k, v := range base.Env {

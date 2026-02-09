@@ -21,9 +21,6 @@ import (
 )
 
 // main is the entry point for the pi CLI.
-// It initializes logging, parses global flags, and executes the command engine.
-// If the command requires a cave (sandbox), it performs the final syscall.Exec
-// to transition the process into the isolated environment.
 func main() {
 	// Setup logging
 	var gf cdl.GlobalFlags
@@ -47,12 +44,10 @@ func main() {
 }
 
 func runSandBox(s *common.SandboxConfig) int {
-
 	var exe string
 	var args []string
 	var env []string
 
-	// The decision to use bubblewrap is made here in main.
 	if os.Getenv("PI_NO_SANDBOX") == "" {
 		cmd := bubblewrap.CmdFromSandbox(s)
 		exe = cmd.Path
@@ -64,7 +59,6 @@ func runSandBox(s *common.SandboxConfig) int {
 		env = s.Env
 	}
 
-	// Verify file exists and is executable
 	info, err := os.Stat(exe)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Executable not found: %v\n", err)
@@ -79,51 +73,45 @@ func runSandBox(s *common.SandboxConfig) int {
 		fmt.Fprintf(os.Stderr, "Failed to exec: %v\n", err)
 		return 1
 	}
-	// syscall.Exec never returns on success
 	return 1
 }
 
 // PiEngine bootstraps the pi environment and executes a command.
-// It initializes the configuration, command parser, and various managers,
-// returning an ExecutionResult that describes the outcome or a request to launch a cave.
 func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error) {
-
 	config, err := config.Init()
 	if err != nil {
 		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
 	}
 
-	// contract: err is nil;, or both action and cmd are nil.
 	action, cmd, err := cdl.Parse[engine.ExecutionResult](args)
-
-	if action == nil || cmd == nil { // implies err != nil
+	if action == nil || cmd == nil {
 		return engine.ExecutionResult{}, err
 	}
 	if !cmd.Safe {
-		caveName, exists := os.LookupEnv("PI_CAVENAME")
-		if exists {
+		if caveName, exists := os.LookupEnv("PI_CAVENAME"); exists {
 			return engine.ExecutionResult{},
 				fmt.Errorf("command can not be run from cave %s", caveName)
 		}
 	}
 
-	dispMgr := display.NewConsole()
-	defer dispMgr.Close()
-
-	repoMgr := repo.NewManager(dispMgr, config)
-	caveMgr := cave.NewManager(config, dispMgr)
-	pkgsMgr := pkgs.NewManager(repoMgr, dispMgr, config)
-	diskMgr := disk.NewManager(config, dispMgr)
+	repoMgr := repo.NewManager(config)
+	caveMgr := cave.NewManager(config)
+	pkgsMgr := pkgs.NewManager(repoMgr, config)
+	diskMgr := disk.NewManager(config)
 
 	handlers := &engine.Handlers{
 		Ctx:     ctx,
 		RepoMgr: repoMgr,
-		DispMgr: dispMgr,
 		CaveMgr: caveMgr,
 		PkgsMgr: pkgsMgr,
 		DiskMgr: diskMgr,
 		Config:  config,
 	}
 
-	return action(handlers)
+	res, err := action(handlers)
+	if err == nil && res.Output != nil {
+		dispMgr := display.NewConsole()
+		dispMgr.RenderOutput(res.Output)
+	}
+	return res, err
 }

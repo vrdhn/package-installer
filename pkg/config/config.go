@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -45,13 +44,6 @@ func (c *config) GetOS() OSType           { return c.os }
 func (c *config) GetArch() ArchType       { return c.arch }
 func (c *config) GetUser() string         { return c.user }
 func (c *config) GetHostHome() string     { return c.hostHome }
-
-func (c *config) SelfUpdate() error {
-	slog.Info("Checking for updates")
-	slog.Info("Current version", "version", BuildVersion)
-	slog.Info("You are already on the latest version")
-	return nil
-}
 
 // Init initializes the configuration by detecting the system environment
 // and setting up XDG-compliant base directories.
