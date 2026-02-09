@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"pi/pkg/bubblewrap"
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/lazyjson"
@@ -258,21 +257,16 @@ func (m *manager) RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant 
 		caveName = fmt.Sprintf("%s:%s", caveName, c.Variant)
 	}
 
-	info := bubblewrap.SandboxInfo{
-		ID:        c.ID,
-		Workspace: c.Workspace,
-		HomePath:  c.HomePath,
-		CaveName:  caveName,
-		Env:       settings.Env,
-	}
-
-	sandbox, err := bubblewrap.ResolveLaunch(ctx, m.Config, info, prep, command)
-	if err != nil {
-		return nil, err
-	}
-
 	return &common.ExecutionResult{
-		Sandbox: sandbox,
+		SandboxInfo: &common.SandboxInfo{
+			ID:        c.ID,
+			Workspace: c.Workspace,
+			HomePath:  c.HomePath,
+			CaveName:  caveName,
+			Env:       settings.Env,
+		},
+		Preparation: prep,
+		Command:     command,
 	}, nil
 }
 

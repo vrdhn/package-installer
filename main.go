@@ -32,7 +32,7 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 
-	res, err := PiEngine(context.Background(), os.Args[1:])
+	res, cfg, err := PiEngine(context.Background(), os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -40,6 +40,14 @@ func main() {
 	if res.Output != nil {
 		dispMgr := display.NewConsole()
 		dispMgr.RenderOutput(res.Output)
+	}
+	if res.SandboxInfo != nil {
+		sandbox, err := bubblewrap.ResolveLaunch(context.Background(), cfg, *res.SandboxInfo, res.Preparation, res.Command)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error resolving sandbox: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(runSandBox(sandbox))
 	}
 	if res.Sandbox != nil {
 		os.Exit(runSandBox(res.Sandbox))
@@ -81,19 +89,19 @@ func runSandBox(s *common.SandboxConfig) int {
 }
 
 // PiEngine bootstraps the pi environment and executes a command.
-func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error) {
+func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, config.Config, error) {
 	config, err := config.Init()
 	if err != nil {
-		return engine.ExecutionResult{}, fmt.Errorf("error initializing config: %w", err)
+		return engine.ExecutionResult{}, nil, fmt.Errorf("error initializing config: %w", err)
 	}
 
 	action, cmd, err := cdl.Parse[engine.ExecutionResult](args)
 	if action == nil || cmd == nil {
-		return engine.ExecutionResult{}, err
+		return engine.ExecutionResult{}, config, err
 	}
 	if !cmd.Safe {
 		if caveName, exists := os.LookupEnv("PI_CAVENAME"); exists {
-			return engine.ExecutionResult{},
+			return engine.ExecutionResult{}, config,
 				fmt.Errorf("command can not be run from cave %s", caveName)
 		}
 	}
@@ -113,5 +121,5 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	}
 
 	res, err := action(handlers)
-	return res, err
+	return res, config, err
 }

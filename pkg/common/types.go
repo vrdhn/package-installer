@@ -14,8 +14,23 @@ type ExecutionResult struct {
 	// If this is not nil, it indicates that a process should be executed.
 	Sandbox *SandboxConfig
 
+	// SandboxInfo and Preparation are used to resolve the sandbox configuration
+	// lazily, usually in main.
+	SandboxInfo *SandboxInfo
+	Preparation *PreparationResult
+	Command     []string
+
 	// Output contains structured data for display to the user.
 	Output *Output
+}
+
+// SandboxInfo provides all details needed to construct a sandbox.
+type SandboxInfo struct {
+	ID        string
+	Workspace string
+	HomePath  string
+	CaveName  string
+	Env       map[string]string // Settings Env
 }
 
 // Output holds structured data for user-facing reports.

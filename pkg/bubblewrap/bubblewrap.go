@@ -221,17 +221,8 @@ func CmdFromSandbox(s *common.SandboxConfig) *exec.Cmd {
 	return exec.Command(execPath, args...)
 }
 
-// SandboxInfo provides all details needed to construct a sandbox.
-type SandboxInfo struct {
-	ID        string
-	Workspace string
-	HomePath  string
-	CaveName  string
-	Env       map[string]string // Settings Env
-}
-
 // ResolveLaunch prepares a command to be executed inside the bubblewrap sandbox.
-func ResolveLaunch(ctx context.Context, cfg config.Config, info SandboxInfo, prep *common.PreparationResult, command []string) (*common.SandboxConfig, error) {
+func ResolveLaunch(ctx context.Context, cfg config.Config, info common.SandboxInfo, prep *common.PreparationResult, command []string) (*common.SandboxConfig, error) {
 	b := Create()
 	internalHome := cfg.GetHostHome()
 
