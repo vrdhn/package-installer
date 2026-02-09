@@ -1,4 +1,4 @@
-// Package recipe provides the core interfaces and types for Starlark-based package discovery.
+// Package recipe provides the core types for Starlark-based package discovery.
 package recipe
 
 import (
@@ -18,14 +18,6 @@ type PackageDefinition = common.PackageDefinition
 // Fetcher is a function type used by recipes to retrieve remote content (e.g., HTML or JSON)
 // during the package discovery process.
 type Fetcher func(url string) ([]byte, error)
-
-// Recipe defines the interface for an object that can discover and resolve package versions.
-type Recipe interface {
-	// GetName returns the name of the recipe.
-	GetName() string
-	// Execute runs the recipe logic to find package versions matching the query.
-	Execute(cfg config.Config, pkgName string, versionQuery string, fetch Fetcher) ([]PackageDefinition, error)
-}
 
 // PinnedRecipe wraps a StarlarkRecipe and restricts its execution to a specific
 // regex pattern that was matched during the repository resolution phase.

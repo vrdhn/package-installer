@@ -19,7 +19,7 @@ import (
 
 // List returns all available builds for a package provided by a specific recipe.
 // It executes the recipe's discovery logic and returns the raw results.
-func List(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
+func List(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string, task display.Task) ([]recipe.PackageDefinition, error) {
 	task.SetStage("List", r.GetName())
 
 	return r.Execute(cfg, pkgName, version, func(url string) ([]byte, error) {
@@ -30,7 +30,7 @@ func List(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName strin
 // Resolve finds the optimal package build matching the user's requirements.
 // It filters the discovered versions based on the current system's OS and architecture,
 // release status keywords (latest, stable, lts), and archive extension compatibility.
-func Resolve(ctx context.Context, cfg config.Config, r recipe.Recipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
+func Resolve(ctx context.Context, cfg config.Config, r *recipe.PinnedRecipe, pkgName string, version string, task display.Task) (*recipe.PackageDefinition, error) {
 	pkgs, err := List(ctx, cfg, r, pkgName, version, task)
 	if err != nil {
 		return nil, err

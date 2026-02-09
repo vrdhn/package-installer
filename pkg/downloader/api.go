@@ -9,11 +9,7 @@ import (
 )
 
 // Downloader manages the retrieval of resources from various URIs.
-type Downloader interface {
-	// Download retrieves the resource at the specified URI and writes it to w.
-	// It uses the provided display Task to report progress and logs.
-	Download(ctx context.Context, uri string, w io.Writer, task display.Task) error
-}
+type Downloader = *manager
 
 // SchemeHandler defines the interface for handling specific URI schemes (e.g., "http://").
 type SchemeHandler interface {

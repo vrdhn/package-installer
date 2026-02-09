@@ -1,17 +1,12 @@
 // Package pkgs handles the resolution, installation, and management of individual packages.
-// It coordinates between repositories, recipes, and the installer to ensure
-// packages are correctly placed on disk and ready for use in sandboxes.
 package pkgs
 
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"pi/pkg/common"
 	"pi/pkg/config"
-	"pi/pkg/display"
 	"pi/pkg/installer"
-	"pi/pkg/lazyjson"
 	"pi/pkg/recipe"
 	"pi/pkg/repo"
 	"pi/pkg/resolver"
@@ -21,45 +16,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Manager defines the operations for managing package installations and synchronization.
-type manager struct {
-	Repo   repo.Manager
-	Disp   display.Display
-	Config config.Config
-	pkgMgr lazyjson.Manager[PackageRegistry]
-}
-
-type Manager = *manager
-
-// RecipeIndexEntry represents a discovery entry for a recipe and its supported patterns.
-type RecipeIndexEntry struct {
-	// Recipe is the name of the recipe file.
-	Recipe string
-	// Patterns is the list of package patterns supported by the recipe.
-	Patterns []string
-}
-
-// NewManager creates a new package manager with the given repository manager and system config.
-func NewManager(repo repo.Manager, disp display.Display, cfg config.Config) Manager {
-	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
-	return &manager{
-		Repo:   repo,
-		Disp:   disp,
-		Config: cfg,
-		pkgMgr: lazyjson.New[PackageRegistry](pkgPath),
-	}
-}
-
 func (m *manager) SyncPkgs(ctx context.Context, query string) (*common.ExecutionResult, error) {
 	if err := m.Repo.LoadRepos(); err != nil {
 		return nil, err
 	}
-	err := m.Sync(ctx, query)
-	if err != nil {
+	if err := m.Sync(ctx, query); err != nil {
 		return nil, err
 	}
 
-	// Print updated records
 	versions, err := m.List(ctx, query)
 	if err != nil {
 		return nil, err
@@ -89,10 +53,9 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 
 	m.Disp.Close()
 
-	myOS := m.Config.GetOS()
-	myArch := m.Config.GetArch()
-
 	if !showAll {
+		myOS := m.Config.GetOS()
+		myArch := m.Config.GetArch()
 		var filtered []PackageDefinition
 		for _, v := range versions {
 			if v.OS == myOS && v.Arch == myArch {
@@ -104,7 +67,6 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 
 	SortPackageDefinitions(versions)
 
-	// Show only most recent 5
 	if len(versions) > 5 {
 		versions = versions[len(versions)-5:]
 	}
@@ -119,7 +81,6 @@ func (m *manager) ListPkgs(ctx context.Context, query string, showAll bool) (*co
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
-// Prepare ensures all packages are installed and returns the required symlinks.
 func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*common.PreparationResult, error) {
 	var allSymlinks []common.Symlink
 	allEnv := make(map[string]string)
@@ -128,71 +89,18 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*com
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, pkgStr := range pkgStrings {
-		pkgStr := pkgStr // capture for goroutine
+		pkgStr := pkgStr
 		g.Go(func() error {
-			p, err := Parse(pkgStr)
+			links, env, err := m.preparePkg(ctx, pkgStr)
 			if err != nil {
 				return err
 			}
-
-			recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.Config)
-			if err != nil {
-				return err
-			}
-
-			src, err := m.Repo.GetRecipe(recipeName)
-			if err != nil {
-				return fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
-			}
-
-			task := m.Disp.StartTask(p.String())
-			recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
-			if err != nil {
-				task.Done()
-				return fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
-			}
-			selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
-
-			// Resolve
-			pkgDef, err := resolver.Resolve(ctx, m.Config, selected, p.Name, p.Version, task)
-			if err != nil {
-				task.Done()
-				return fmt.Errorf("resolution failed for %s: %v", p.String(), err)
-			}
-
-			// Plan
-			plan, err := installer.NewPlan(m.Config, *pkgDef)
-			if err != nil {
-				task.Done()
-				return fmt.Errorf("planning failed for %s: %v", p.String(), err)
-			}
-
-			// Install
-			if err := installer.Install(ctx, plan, task); err != nil {
-				task.Done()
-				return fmt.Errorf("installation failed for %s: %v", p.String(), err)
-			}
-
-			// Discover symlinks
-			links, err := DiscoverSymlinks(plan.InstallPath, pkgDef.Symlinks)
-			if err != nil {
-				task.Done()
-				return fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
-			}
-
 			mu.Lock()
 			allSymlinks = append(allSymlinks, links...)
-
-			// Handle environment variables
-			for k, v := range pkgDef.Env {
-				// Replace ${PI_PKG_ROOT} with the actual install path
-				// Inside the cave, we will bind the package directory to its host path.
-				resolvedVal := strings.ReplaceAll(v, "${PI_PKG_ROOT}", plan.InstallPath)
-				allEnv[k] = resolvedVal
+			for k, v := range env {
+				allEnv[k] = v
 			}
 			mu.Unlock()
-
-			task.Done()
 			return nil
 		})
 	}
@@ -209,7 +117,58 @@ func (m *manager) Prepare(ctx context.Context, pkgStrings []config.PkgRef) (*com
 	}, nil
 }
 
-// ListFromSource returns all versions of a package by executing the recipe.
+func (m *manager) preparePkg(ctx context.Context, pkgStr config.PkgRef) ([]common.Symlink, map[string]string, error) {
+	p, err := Parse(pkgStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	recipeName, regexKey, err := m.Repo.Resolve(p.Name, m.Config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	src, err := m.Repo.GetRecipe(recipeName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error loading recipe for %s: %v", recipeName, err)
+	}
+
+	task := m.Disp.StartTask(p.String())
+	defer task.Done()
+
+	recipeObj, err := recipe.NewStarlarkRecipe(recipeName, src, task.Log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error initializing recipe %s: %v", recipeName, err)
+	}
+	selected := recipe.NewPinnedRecipe(recipeObj, regexKey)
+
+	pkgDef, err := resolver.Resolve(ctx, m.Config, selected, p.Name, p.Version, task)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolution failed for %s: %v", p.String(), err)
+	}
+
+	plan, err := installer.NewPlan(m.Config, *pkgDef)
+	if err != nil {
+		return nil, nil, fmt.Errorf("planning failed for %s: %v", p.String(), err)
+	}
+
+	if err := installer.Install(ctx, plan, task); err != nil {
+		return nil, nil, fmt.Errorf("installation failed for %s: %v", p.String(), err)
+	}
+
+	links, err := DiscoverSymlinks(plan.InstallPath, pkgDef.Symlinks)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to discover symlinks for %s: %v", p.String(), err)
+	}
+
+	env := make(map[string]string)
+	for k, v := range pkgDef.Env {
+		env[k] = strings.ReplaceAll(v, "${PI_PKG_ROOT}", plan.InstallPath)
+	}
+
+	return links, env, nil
+}
+
 func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.PackageDefinition, error) {
 	p, err := Parse(pkgStr)
 	if err != nil {
@@ -239,7 +198,6 @@ func (m *manager) ListFromSource(ctx context.Context, pkgStr string) ([]recipe.P
 	return pkgs, err
 }
 
-// Sync retrieves all versions for matching packages and saves them to package.json.
 func (m *manager) Sync(ctx context.Context, query string) error {
 	matches, err := m.Repo.ResolveQuery(query)
 	if err != nil {
@@ -251,36 +209,37 @@ func (m *manager) Sync(ctx context.Context, query string) error {
 	}
 
 	for _, match := range matches {
-		src, err := m.Repo.GetRecipe(match.RecipeName)
-		if err != nil {
+		if err := m.syncMatch(ctx, match); err != nil {
 			return err
 		}
-
-		task := m.Disp.StartTask(fmt.Sprintf("Syncing %s/%s", match.RepoName, match.Pattern))
-		recipeObj, err := recipe.NewStarlarkRecipe(match.RecipeName, src, task.Log)
-		if err != nil {
-			task.Done()
-			return err
-		}
-
-		selected := recipe.NewPinnedRecipe(recipeObj, match.Pattern)
-		// List with empty version to get all
-		pkgs, err := resolver.List(ctx, m.Config, selected, match.Pattern, "", task)
-		if err != nil {
-			task.Done()
-			return err
-		}
-
-		task.Log(fmt.Sprintf("Found %d versions for %s", len(pkgs), match.Pattern))
-
-		if err := m.UpdateVersions(match.RepoUUID, match.Pattern, pkgs); err != nil {
-			task.Done()
-			return err
-		}
-		task.Done()
 	}
 
 	return nil
+}
+
+func (m *manager) syncMatch(ctx context.Context, match repo.ResolvedQuery) error {
+	src, err := m.Repo.GetRecipe(match.RecipeName)
+	if err != nil {
+		return err
+	}
+
+	task := m.Disp.StartTask(fmt.Sprintf("Syncing %s/%s", match.RepoName, match.Pattern))
+	defer task.Done()
+
+	recipeObj, err := recipe.NewStarlarkRecipe(match.RecipeName, src, task.Log)
+	if err != nil {
+		return err
+	}
+
+	selected := recipe.NewPinnedRecipe(recipeObj, match.Pattern)
+	pkgs, err := resolver.List(ctx, m.Config, selected, match.Pattern, "", task)
+	if err != nil {
+		return err
+	}
+
+	task.Log(fmt.Sprintf("Found %d versions for %s", len(pkgs), match.Pattern))
+
+	return m.UpdateVersions(match.RepoUUID, match.Pattern, pkgs)
 }
 
 func (m *manager) filterVersions(all []PackageDefinition, query string) []PackageDefinition {
@@ -310,7 +269,6 @@ func (m *manager) filterVersions(all []PackageDefinition, query string) []Packag
 	return matches
 }
 
-// List returns the matching versions from package.json.
 func (m *manager) List(ctx context.Context, query string) ([]PackageDefinition, error) {
 	reg, err := m.pkgMgr.Get()
 	if err != nil {
@@ -320,14 +278,11 @@ func (m *manager) List(ctx context.Context, query string) ([]PackageDefinition, 
 
 	matches := m.filterVersions(all, query)
 
-	// Auto-sync if no matches found and a query was provided
 	if len(matches) == 0 && query != "" {
 		if err := m.Sync(ctx, query); err != nil {
-			// If Sync fails, we return the error (e.g. no recipe found)
 			return nil, err
 		}
 
-		// Reload after sync
 		reg, err = m.pkgMgr.Get()
 		if err != nil {
 			return nil, err
@@ -339,7 +294,6 @@ func (m *manager) List(ctx context.Context, query string) ([]PackageDefinition, 
 	return matches, nil
 }
 
-// ListIndex returns the registered package definitions for all recipes without executing handlers.
 func (m *manager) ListIndex(ctx context.Context) ([]RecipeIndexEntry, error) {
 	var entries []RecipeIndexEntry
 	for _, name := range m.Repo.ListRecipes() {

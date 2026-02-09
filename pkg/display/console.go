@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// consoleDisplay implements the Display interface for standard terminal output.
+// consoleDisplay handles terminal output and task orchestration.
 type consoleDisplay struct {
 	mu      sync.Mutex
 	out     io.Writer
@@ -63,7 +63,7 @@ func (d *consoleDisplay) Close() {
 	// no-op
 }
 
-// consoleTask implements the Task interface for terminal tracking.
+// consoleTask implements the progress tracking for a single task.
 type consoleTask struct {
 	name   string
 	disp   *consoleDisplay

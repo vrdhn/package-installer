@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"pi/pkg/bubblewrap"
 	"pi/pkg/common"
 	"pi/pkg/config"
 	"pi/pkg/display"
@@ -45,35 +46,7 @@ func NewManager(cfg config.Config, disp display.Display) Manager {
 // 2. PI_CAVENAME environment variable (lookup in registry)
 // 3. Walking up from cwd
 func (m *manager) Find(cwd string) (*common.Cave, error) {
-	var root string
-	var variant string
-
-	envWorkspace := os.Getenv("PI_WORKSPACE")
-	envCaveName := os.Getenv("PI_CAVENAME")
-
-	if envWorkspace != "" {
-		root = envWorkspace
-	}
-
-	if envCaveName != "" {
-		parts := strings.SplitN(envCaveName, ":", 2)
-		name := parts[0]
-		if len(parts) > 1 {
-			variant = parts[1]
-		}
-
-		if root == "" {
-			reg, err := m.regMgr.Get()
-			if err == nil {
-				for _, entry := range reg.Caves {
-					if entry.Name == name {
-						root = entry.Workspace
-						break
-					}
-				}
-			}
-		}
-	}
+	root, variant := m.findRootFromEnv()
 
 	if root == "" {
 		var err error
@@ -94,18 +67,7 @@ func (m *manager) Find(cwd string) (*common.Cave, error) {
 		workspace = cfg.Workspace
 	}
 
-	var homePath string
-	if cfg.Home != "" {
-		if filepath.IsAbs(cfg.Home) {
-			homePath = cfg.Home
-		} else {
-			homePath = filepath.Join(m.Config.GetHomeDir(), cfg.Home)
-		}
-	} else {
-		// Fallback to hash-based ID for backward compatibility
-		id := generateID(root)
-		homePath = filepath.Join(m.Config.GetHomeDir(), id)
-	}
+	homePath := m.resolveHomePath(root, cfg)
 
 	return &common.Cave{
 		ID:        filepath.Base(homePath),
@@ -114,6 +76,50 @@ func (m *manager) Find(cwd string) (*common.Cave, error) {
 		Variant:   variant,
 		Config:    cfg,
 	}, nil
+}
+
+func (m *manager) findRootFromEnv() (string, string) {
+	root := os.Getenv("PI_WORKSPACE")
+	envCaveName := os.Getenv("PI_CAVENAME")
+	variant := ""
+
+	if envCaveName != "" {
+		parts := strings.SplitN(envCaveName, ":", 2)
+		name := parts[0]
+		if len(parts) > 1 {
+			variant = parts[1]
+		}
+
+		if root == "" {
+			root = m.findRootByName(name)
+		}
+	}
+	return root, variant
+}
+
+func (m *manager) findRootByName(name string) string {
+	reg, err := m.regMgr.Get()
+	if err != nil {
+		return ""
+	}
+	for _, entry := range reg.Caves {
+		if entry.Name == name {
+			return entry.Workspace
+		}
+	}
+	return ""
+}
+
+func (m *manager) resolveHomePath(root string, cfg *common.CaveConfig) string {
+	if cfg.Home != "" {
+		if filepath.IsAbs(cfg.Home) {
+			return cfg.Home
+		}
+		return filepath.Join(m.Config.GetHomeDir(), cfg.Home)
+	}
+	// Fallback to hash-based ID for backward compatibility
+	id := generateID(root)
+	return filepath.Join(m.Config.GetHomeDir(), id)
 }
 
 func (m *manager) Info(ctx context.Context) (*common.ExecutionResult, error) {
@@ -240,11 +246,13 @@ func (m *manager) RunCommand(ctx context.Context, pkgsMgr pkgs.Manager, variant 
 		command = strings.Fields(commandStr)
 	}
 
+	sandbox, err := bubblewrap.ResolveLaunch(ctx, m.Config, c, settings, prep, command)
+	if err != nil {
+		return nil, err
+	}
+
 	return &common.ExecutionResult{
-		Cave:        c,
-		Settings:    settings,
-		Preparation: prep,
-		Command:     command,
+		Sandbox: sandbox,
 	}, nil
 }
 

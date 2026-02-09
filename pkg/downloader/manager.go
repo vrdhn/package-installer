@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Mutable
+// manager implementation for downloader.
 type manager struct {
 	handlers map[string]SchemeHandler
 }

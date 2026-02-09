@@ -1,23 +1,13 @@
 package engine
 
 import (
-	"pi/pkg/bubblewrap"
 	"pi/pkg/cdl"
 )
 
 func (h *Handlers) resolveSandbox(res *ExecutionResult, err error) (ExecutionResult, error) {
-	if err != nil || res == nil || res.Cave == nil {
-		if res == nil {
-			return ExecutionResult{}, err
-		}
-		return *res, err
-	}
-
-	sandbox, err := bubblewrap.ResolveLaunch(h.Ctx, h.Config, res.Cave, res.Settings, res.Preparation, res.Command)
-	if err != nil {
+	if err != nil || res == nil {
 		return ExecutionResult{}, err
 	}
-	res.Sandbox = sandbox
 	return *res, nil
 }
 

@@ -10,8 +10,8 @@ import (
 	"github.com/adrg/xdg"
 )
 
-// Config holds the base directories and system info for pi.
-// Mutable
+// config holds the base directories and system info for pi.
+// This struct is immutable after initialization.
 type config struct {
 	cacheDir  string
 	configDir string
@@ -31,34 +31,7 @@ type config struct {
 }
 
 // Config provides access to application-wide paths and system environment information.
-type Config interface {
-	// GetCacheDir returns the base directory for cached data.
-	GetCacheDir() string
-	// GetConfigDir returns the base directory for configuration files.
-	GetConfigDir() string
-	// GetStateDir returns the base directory for persistent state.
-	GetStateDir() string
-	// GetPkgDir returns the directory where packages are installed.
-	GetPkgDir() string
-	// GetDownloadDir returns the directory where archives are downloaded.
-	GetDownloadDir() string
-	// GetRecipeDir returns the directory where recipes are stored.
-	GetRecipeDir() string
-	// GetHomeDir returns the base directory for sandboxed home environments.
-	GetHomeDir() string
-	// GetDiscoveryDir returns the directory for caching recipe discovery results.
-	GetDiscoveryDir() string
-	// GetOS returns the current system's operating system.
-	GetOS() OSType
-	// GetArch returns the current system's CPU architecture.
-	GetArch() ArchType
-	// GetUser returns the current user's username.
-	GetUser() string
-	// GetHostHome returns the path to the user's actual home directory on the host.
-	GetHostHome() string
-	// SelfUpdate performs an update of the pi tool itself.
-	SelfUpdate() error
-}
+type Config = *config
 
 func (c *config) GetCacheDir() string     { return c.cacheDir }
 func (c *config) GetConfigDir() string    { return c.configDir }
@@ -80,14 +53,6 @@ func (c *config) SelfUpdate() error {
 	return nil
 }
 
-func (c *config) updateDerived() {
-	c.pkgDir = filepath.Join(c.cacheDir, "pkgs")
-	c.downloadDir = filepath.Join(c.cacheDir, "downloads")
-	c.recipeDir = filepath.Join(c.configDir, "recipes")
-	c.homeDir = filepath.Join(c.stateDir, "homes")
-	c.discoveryDir = filepath.Join(c.cacheDir, "discovery")
-}
-
 // Init initializes the configuration by detecting the system environment
 // and setting up XDG-compliant base directories.
 func Init() (Config, error) {
@@ -99,18 +64,22 @@ func Init() (Config, error) {
 		return nil, fmt.Errorf("failed to get current user: %w", err)
 	}
 
-	c := &config{
-		cacheDir:  filepath.Join(xdg.CacheHome, "pi"),
-		configDir: filepath.Join(xdg.ConfigHome, "pi"),
-		stateDir:  filepath.Join(xdg.StateHome, "pi"),
-		os:        osType,
-		arch:      archType,
-		user:      u.Username,
-		hostHome:  u.HomeDir,
-	}
+	cacheDir := filepath.Join(xdg.CacheHome, "pi")
+	configDir := filepath.Join(xdg.ConfigHome, "pi")
+	stateDir := filepath.Join(xdg.StateHome, "pi")
 
-	c.updateDerived()
-
-	return c, nil
-
+	return &config{
+		cacheDir:     cacheDir,
+		configDir:    configDir,
+		stateDir:     stateDir,
+		pkgDir:       filepath.Join(cacheDir, "pkgs"),
+		downloadDir:  filepath.Join(cacheDir, "downloads"),
+		recipeDir:    filepath.Join(configDir, "recipes"),
+		homeDir:      filepath.Join(stateDir, "homes"),
+		discoveryDir: filepath.Join(cacheDir, "discovery"),
+		os:           osType,
+		arch:         archType,
+		user:         u.Username,
+		hostHome:     u.HomeDir,
+	}, nil
 }

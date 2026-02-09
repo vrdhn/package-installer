@@ -1,45 +1,14 @@
 // Package disk provides utilities for managing the local storage used by pi.
-// It handles disk usage reporting, cache cleanup, and complete data uninstallation.
 package disk
 
 import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"pi/pkg/common"
-	"pi/pkg/config"
-	"pi/pkg/display"
 	"strings"
 )
 
-// Manager defines the operations for managing pi's local storage.
-type manager struct {
-	cfg  config.Config
-	Disp display.Display
-}
-
-// Manager is a pointer to the internal manager implementation.
-type Manager = *manager
-
-// NewManager creates a new disk manager with the specified configuration and display.
-func NewManager(cfg config.Config, disp display.Display) Manager {
-	return &manager{cfg: cfg, Disp: disp}
-}
-
-// Usage represents disk usage information for a specific category of data.
-type Usage struct {
-	// Label is the display name of the category (e.g., "Packages").
-	Label string
-	// Size is the total size in bytes.
-	Size int64
-	// Items is the number of individual files in the category.
-	Items int
-	// Path is the filesystem path where this data is stored.
-	Path string
-}
-
-// Info displays a table of disk usage statistics to the user.
 func (m *manager) Info() (*common.ExecutionResult, error) {
 	stats, total := m.GetInfo()
 	m.Disp.Print(fmt.Sprintf("%-15s %-10s %-10s %s\n", "Type", "Size", "Items", "Path"))
@@ -52,7 +21,6 @@ func (m *manager) Info() (*common.ExecutionResult, error) {
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
-// CleanDir removes temporary and cached data (packages, downloads, discovery).
 func (m *manager) CleanDir() (*common.ExecutionResult, error) {
 	cleaned := m.Clean()
 	for _, dir := range cleaned {
@@ -62,7 +30,6 @@ func (m *manager) CleanDir() (*common.ExecutionResult, error) {
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
-// UninstallData removes all pi-related XDG directories.
 func (m *manager) UninstallData(force bool) (*common.ExecutionResult, error) {
 	if !force {
 		m.Disp.Print("This will delete ALL pi data (cache, config, state). Are you sure? [y/N]: ")
@@ -81,7 +48,6 @@ func (m *manager) UninstallData(force bool) (*common.ExecutionResult, error) {
 	return &common.ExecutionResult{ExitCode: 0}, nil
 }
 
-// GetInfo returns disk usage statistics for all pi directories.
 func (m *manager) GetInfo() ([]Usage, int64) {
 	paths := map[string]string{
 		"Packages":  m.cfg.GetPkgDir(),
@@ -105,7 +71,6 @@ func (m *manager) GetInfo() ([]Usage, int64) {
 	return stats, total
 }
 
-// Clean removes temporary and cached data (packages, downloads, discovery).
 func (m *manager) Clean() []string {
 	dirs := []string{
 		m.cfg.GetPkgDir(),
@@ -123,7 +88,6 @@ func (m *manager) Clean() []string {
 	return cleaned
 }
 
-// Uninstall removes all pi-related XDG directories.
 func (m *manager) Uninstall() []string {
 	dirs := []string{
 		m.cfg.GetCacheDir(),
@@ -138,35 +102,4 @@ func (m *manager) Uninstall() []string {
 		}
 	}
 	return removed
-}
-
-// DirSize calculates the total size and item count of a directory.
-func DirSize(path string) (int64, int) {
-	var size int64
-	var count int
-	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-			count++
-		}
-		return nil
-	})
-	return size, count
-}
-
-// FormatSize converts bytes to a human-readable string.
-func FormatSize(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

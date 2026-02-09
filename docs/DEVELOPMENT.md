@@ -2,9 +2,11 @@
 
 ## Coding Standards
 *   **Safety**: Prefer explicit types; use `any` sparingly. Use `default: panic` in truly exhaustive switches.
-*   **Structure**: Keep functions small where practical, but no hard limits are enforced.
-*   **Immutability**: The ReadOnly/Writable pattern is used in `config`; other packages are conventional Go structs.
-*   **Packages**: The codebase favors small, focused packages.
+*   **Functional Style**: Favor immutable structs and data-driven design. Logic should be separated from data definitions where possible.
+*   **Encapsulation**: If a struct is not supposed to be copied, export a pointer type using the pattern `type T = *t`.
+*   **Interfaces**: Only use interfaces when multiple implementations are truly expected or required for testing. Avoid unneeded abstractions.
+*   **Structure**: Keep functions small and focused on a single purpose. Break down complex logic into meaningful helper methods.
+*   **Packages**: The codebase favors small, focused packages with single responsibilities. Avoid abstraction leakage by keeping internal details private.
 
 ## Module Overview
 | Package | Description |
