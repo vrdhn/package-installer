@@ -13,7 +13,7 @@ import (
 
 // Manager provides high-level control over a JSON-backed data structure.
 // It handles concurrent access and ensures data is only loaded from disk when first requested.
-type Manager[T any] struct {
+type manager[T any] struct {
 	filepath string
 	data     *T
 	loaded   bool
@@ -21,6 +21,8 @@ type Manager[T any] struct {
 	mu       sync.RWMutex
 	opts     *options[T]
 }
+
+type Manager[T any] = *manager[T]
 
 // options holds configuration for the Manager.
 type options[T any] struct {
@@ -31,8 +33,8 @@ type options[T any] struct {
 }
 
 // New creates a new Manager for the given file path.
-func New[T any](filepath string, opts ...Option[T]) *Manager[T] {
-	mgr := &Manager[T]{
+func New[T any](filepath string, opts ...Option[T]) *manager[T] {
+	mgr := &manager[T]{
 		filepath: filepath,
 		opts: &options[T]{
 			indent:          "  ",
@@ -51,7 +53,7 @@ func New[T any](filepath string, opts ...Option[T]) *Manager[T] {
 
 // Get returns the current data, loading it lazily if needed.
 // Returns a pointer to the data for reading.
-func (m *Manager[T]) Get() (*T, error) {
+func (m *manager[T]) Get() (*T, error) {
 	m.mu.RLock()
 	if m.loaded {
 		defer m.mu.RUnlock()
@@ -73,7 +75,7 @@ func (m *Manager[T]) Get() (*T, error) {
 
 // Modify executes a function that can modify the data.
 // The data is lazily loaded if needed, and automatically marked dirty.
-func (m *Manager[T]) Modify(fn func(*T) error) error {
+func (m *manager[T]) Modify(fn func(*T) error) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -93,7 +95,7 @@ func (m *Manager[T]) Modify(fn func(*T) error) error {
 
 // Save writes the data to disk if it's dirty.
 // Does nothing if the data hasn't been modified.
-func (m *Manager[T]) Save() error {
+func (m *manager[T]) Save() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -109,7 +111,7 @@ func (m *Manager[T]) Save() error {
 }
 
 // Reload forces a reload from disk, discarding any unsaved changes.
-func (m *Manager[T]) Reload() error {
+func (m *manager[T]) Reload() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -121,14 +123,14 @@ func (m *Manager[T]) Reload() error {
 }
 
 // IsDirty returns true if the data has been modified since the last load/save.
-func (m *Manager[T]) IsDirty() bool {
+func (m *manager[T]) IsDirty() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.dirty
 }
 
 // IsLoaded returns true if the data has been loaded from disk.
-func (m *Manager[T]) IsLoaded() bool {
+func (m *manager[T]) IsLoaded() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.loaded
@@ -136,7 +138,7 @@ func (m *Manager[T]) IsLoaded() bool {
 
 // MarkDirty manually marks the data as dirty.
 // Use this if you've modified the data obtained from Get() directly.
-func (m *Manager[T]) MarkDirty() {
+func (m *manager[T]) MarkDirty() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.dirty = true
@@ -144,7 +146,7 @@ func (m *Manager[T]) MarkDirty() {
 
 // loadLocked loads data from the file.
 // Must be called with write lock held.
-func (m *Manager[T]) loadLocked() error {
+func (m *manager[T]) loadLocked() error {
 	data, err := os.ReadFile(m.filepath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -180,7 +182,7 @@ func (m *Manager[T]) loadLocked() error {
 
 // saveLocked writes data to the file atomically.
 // Must be called with write lock held.
-func (m *Manager[T]) saveLocked() error {
+func (m *manager[T]) saveLocked() error {
 	// Marshal the data
 	var data []byte
 	var err error
@@ -218,13 +220,13 @@ func (m *Manager[T]) saveLocked() error {
 
 // SaveIfDirty is a convenience method that saves only if dirty.
 // This is equivalent to Save(), but the name makes intent clearer.
-func (m *Manager[T]) SaveIfDirty() error {
+func (m *manager[T]) SaveIfDirty() error {
 	return m.Save()
 }
 
 // MustSave saves the data and panics on error.
 // Useful for cleanup in defer statements.
-func (m *Manager[T]) MustSave() {
+func (m *manager[T]) MustSave() {
 	if err := m.Save(); err != nil {
 		panic(fmt.Sprintf("failed to save: %v", err))
 	}

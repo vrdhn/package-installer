@@ -26,7 +26,7 @@ type manager struct {
 	Repo   repo.Manager
 	Disp   display.Display
 	Config config.Config
-	pkgMgr *lazyjson.Manager[PackageRegistry]
+	pkgMgr lazyjson.Manager[PackageRegistry]
 }
 
 type Manager = *manager

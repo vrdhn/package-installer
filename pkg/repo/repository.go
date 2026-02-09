@@ -61,7 +61,7 @@ type manager struct {
 	repos   []RepoConfig
 	disp    display.Display
 	cfg     config.Config
-	repoMgr *lazyjson.Manager[repoRegistry]
+	repoMgr lazyjson.Manager[repoRegistry]
 
 	// In-memory index of all packages
 	index []IndexEntry

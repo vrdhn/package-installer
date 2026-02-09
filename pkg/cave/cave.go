@@ -23,7 +23,7 @@ import (
 type manager struct {
 	Config config.Config
 	Disp   display.Display
-	regMgr *lazyjson.Manager[common.Registry]
+	regMgr lazyjson.Manager[common.Registry]
 }
 
 // Manager is a pointer to the internal manager implementation.
