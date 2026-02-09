@@ -1,7 +1,7 @@
 // Package repository manages the discovery and indexing of package recipes.
 // It handles multiple recipe repositories (local or remote) and maintains
 // a compiled index for fast package-to-recipe resolution.
-package repository
+package repo
 
 import (
 	"fmt"

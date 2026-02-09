@@ -16,7 +16,7 @@ import (
 	"pi/pkg/display"
 	"pi/pkg/engine"
 	"pi/pkg/pkgs"
-	"pi/pkg/repository"
+	"pi/pkg/repo"
 	"syscall"
 )
 
@@ -110,7 +110,7 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	dispMgr := display.NewConsole()
 	defer dispMgr.Close()
 
-	repoMgr := repository.NewManager(dispMgr, config)
+	repoMgr := repo.NewManager(dispMgr, config)
 	caveMgr := cave.NewManager(config, dispMgr)
 	pkgsMgr := pkgs.NewManager(repoMgr, dispMgr, config)
 	diskMgr := disk.NewManager(config, dispMgr)

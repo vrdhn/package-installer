@@ -13,7 +13,7 @@ import (
 	"pi/pkg/installer"
 	"pi/pkg/lazyjson"
 	"pi/pkg/recipe"
-	"pi/pkg/repository"
+	"pi/pkg/repo"
 	"pi/pkg/resolver"
 	"strings"
 	"sync"
@@ -23,7 +23,7 @@ import (
 
 // Manager defines the operations for managing package installations and synchronization.
 type manager struct {
-	Repo   repository.Manager
+	Repo   repo.Manager
 	Disp   display.Display
 	Config config.Config
 	pkgMgr *lazyjson.Manager[PackageRegistry]
@@ -40,7 +40,7 @@ type RecipeIndexEntry struct {
 }
 
 // NewManager creates a new package manager with the given repository manager and system config.
-func NewManager(repo repository.Manager, disp display.Display, cfg config.Config) Manager {
+func NewManager(repo repo.Manager, disp display.Display, cfg config.Config) Manager {
 	pkgPath := filepath.Join(cfg.GetConfigDir(), "package.json")
 	return &manager{
 		Repo:   repo,

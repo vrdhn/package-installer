@@ -12,7 +12,7 @@ import (
 	"pi/pkg/disk"
 	"pi/pkg/display"
 	"pi/pkg/pkgs"
-	"pi/pkg/repository"
+	"pi/pkg/repo"
 )
 
 // Handlers implements the cdl.Handlers interface, providing the logic for all pi CLI commands.
@@ -20,7 +20,7 @@ type Handlers struct {
 	// Ctx is the global execution context.
 	Ctx context.Context
 	// RepoMgr manages recipe repositories and package indexing.
-	RepoMgr repository.Manager
+	RepoMgr repo.Manager
 	// DispMgr handles user feedback and progress visualization.
 	DispMgr display.Display
 	// CaveMgr manages sandboxed project environments.
