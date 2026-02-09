@@ -37,6 +37,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	if res.Output != nil {
+		dispMgr := display.NewConsole()
+		dispMgr.RenderOutput(res.Output)
+	}
 	if res.Sandbox != nil {
 		os.Exit(runSandBox(res.Sandbox))
 	}
@@ -109,9 +113,5 @@ func PiEngine(ctx context.Context, args []string) (engine.ExecutionResult, error
 	}
 
 	res, err := action(handlers)
-	if err == nil && res.Output != nil {
-		dispMgr := display.NewConsole()
-		dispMgr.RenderOutput(res.Output)
-	}
 	return res, err
 }

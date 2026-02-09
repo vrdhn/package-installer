@@ -17,7 +17,7 @@ type consoleDisplay struct {
 // NewConsole creates a Display that writes to standard error.
 func NewConsole() Display {
 	return &consoleDisplay{
-		out: os.Stderr,
+		out: os.Stdout,
 	}
 }
 
