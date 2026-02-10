@@ -14,12 +14,14 @@ use anyhow::Context as _;
 pub struct PackageEntry {
     pub regexp: String,
     pub function_name: String,
+    pub filename: String,
 }
 
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
     pub os: String,
     pub arch: String,
+    pub filename: String,
     pub packages: RwLock<Vec<PackageEntry>>,
 }
 
@@ -28,14 +30,15 @@ impl Allocative for Context {
         let mut visitor = visitor.enter_self_sized::<Self>();
         visitor.visit_field::<String>(Key::new("os"), &self.os);
         visitor.visit_field::<String>(Key::new("arch"), &self.arch);
+        visitor.visit_field::<String>(Key::new("filename"), &self.filename);
         visitor.exit();
     }
 }
 
 impl Display for Context {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Context(os={}, arch={}, packages_count={})", 
-            self.os, self.arch, self.packages.read().len())
+        write!(f, "Context(os={}, arch={}, filename={}, packages_count={})", 
+            self.os, self.arch, self.filename, self.packages.read().len())
     }
 }
 
@@ -49,10 +52,11 @@ impl<'v> AllocValue<'v> for Context {
 }
 
 impl Context {
-    pub fn new() -> Self {
+    pub fn new(filename: String) -> Self {
         Self {
             os: env::consts::OS.to_string(),
             arch: env::consts::ARCH.to_string(),
+            filename,
             packages: RwLock::new(Vec::new()),
         }
     }
@@ -83,7 +87,6 @@ pub fn starlark_functions(builder: &mut GlobalsBuilder) {
             function_repr.to_string()
         };
 
-        // If the name contains a dot (e.g. "test_config.star.install_vlc"), take the last part
         if let Some(last_dot) = name.rfind('.') {
             name = name[last_dot + 1..].to_string();
         }
@@ -91,6 +94,7 @@ pub fn starlark_functions(builder: &mut GlobalsBuilder) {
         context.packages.write().push(PackageEntry {
             regexp,
             function_name: name,
+            filename: context.filename.clone(),
         });
         
         Ok(NoneType)
