@@ -1,4 +1,5 @@
 mod devel_test;
+mod starlark_executor;
 
 use clap::{Parser, Subcommand};
 use log::LevelFilter;

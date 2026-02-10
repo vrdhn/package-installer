@@ -1,16 +1,23 @@
-use log::{info, trace};
+use log::{info, trace, error};
+use std::path::Path;
+use crate::starlark_executor;
 
 pub fn run(filename: &str, pkg: Option<&str>) {
     info!("Executing devel test command");
     trace!("Debugging information: filename={}, pkg={:?}", filename, pkg);
     
-    println!("Testing file: {}", filename);
-    if let Some(p) = pkg {
-        println!("Package name: {}", p);
-    } else {
-        println!("No package name provided");
+    if let Err(e) = execute_starlark(filename) {
+        error!("Starlark execution failed: {}", e);
     }
     
-    // Placeholder implementation
-    info!("Devel test placeholder implementation completed");
+    if let Some(p) = pkg {
+        println!("Package name: {}", p);
+    }
+    
+    info!("Devel test command completed");
+}
+
+fn execute_starlark(filename: &str) -> anyhow::Result<()> {
+    let path = Path::new(filename);
+    starlark_executor::evaluate_file(path)
 }
