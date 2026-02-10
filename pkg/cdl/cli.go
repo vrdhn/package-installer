@@ -82,9 +82,10 @@ type CaveUseParams struct {
 	Cave string
 }
 
-type DevelReplParams struct {
+type DevelTestParams struct {
 	GlobalFlags
-	File string
+	File    string
+	Package string
 }
 
 type DiskCleanParams struct {
@@ -143,7 +144,7 @@ type Handlers[T any] interface {
 	RunCaveRun(params *CaveRunParams) (T, error)
 	RunCaveSync(params *CaveSyncParams) (T, error)
 	RunCaveUse(params *CaveUseParams) (T, error)
-	RunDevelRepl(params *DevelReplParams) (T, error)
+	RunDevelTest(params *DevelTestParams) (T, error)
 	RunDiskClean(params *DiskCleanParams) (T, error)
 	RunDiskInfo(params *DiskInfoParams) (T, error)
 	RunDiskUninstall(params *DiskUninstallParams) (T, error)
@@ -234,15 +235,16 @@ var CliCommands = []CommandDef{
 		Subs: []CommandDef{
 
 			CommandDef{
-				Name:        "repl",
-				FullCommand: "devel/repl",
-				Desc:        "Run the recipe development REPL",
+				Name:        "test",
+				FullCommand: "devel/test",
+				Desc:        "Test a recipe file",
 				Safe:        false,
 				Args: []ArgDef{
 					{Name: "file", Type: "string", Desc: "Path to recipe file"},
+					{Name: "package", Type: "string", Desc: "Package name to test"},
 				},
 				Examples: []string{
-					"pi devel repl ./recipes/nodejs.star",
+					"pi devel test ./recipes/vscode.star vscode",
 				},
 			},
 		},
@@ -497,8 +499,8 @@ func Parse[T any](args []string) (Action[T], *CommandDef, error) {
 		return handleCaveSync[T](inv, gf), resolvedCmd, nil
 	case "cave/use":
 		return handleCaveUse[T](inv, gf), resolvedCmd, nil
-	case "devel/repl":
-		return handleDevelRepl[T](inv, gf), resolvedCmd, nil
+	case "devel/test":
+		return handleDevelTest[T](inv, gf), resolvedCmd, nil
 	case "disk/clean":
 		return handleDiskClean[T](inv, gf), resolvedCmd, nil
 	case "disk/info":
@@ -599,12 +601,13 @@ func handleCaveUse[T any](inv *Invocation, gf GlobalFlags) Action[T] {
 		return h.RunCaveUse(params)
 	}
 }
-func handleDevelRepl[T any](inv *Invocation, gf GlobalFlags) Action[T] {
-	params := &DevelReplParams{}
+func handleDevelTest[T any](inv *Invocation, gf GlobalFlags) Action[T] {
+	params := &DevelTestParams{}
 	params.GlobalFlags = gf
 	params.File = inv.Args["file"]
+	params.Package = inv.Args["package"]
 	return func(h Handlers[T]) (T, error) {
-		return h.RunDevelRepl(params)
+		return h.RunDevelTest(params)
 	}
 }
 func handleDiskClean[T any](inv *Invocation, gf GlobalFlags) Action[T] {

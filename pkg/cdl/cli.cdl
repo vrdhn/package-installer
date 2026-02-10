@@ -22,9 +22,10 @@ cmd pkg list "List available versions for a package"
 
 cmd devel "Developer tools"
 
-cmd devel repl "Run the recipe development REPL"
+cmd devel test "Test a recipe file"
     arg file string "Path to recipe file"
-    example "pi devel repl ./recipes/nodejs.star"
+    arg package string "Package name to test"
+    example "pi devel test ./recipes/vscode.star vscode"
 
 
 cmd cave "Manage the cave (sandbox)"

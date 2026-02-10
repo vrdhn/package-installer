@@ -2,14 +2,20 @@ def resolve_vscode(pkg_name):
     # For VS Code, we primarily fetch the latest version for each platform
     # The update API provides the specific download URL and SHA256
 
+    target_os = get_os()
+    target_arch = get_arch()
+
     platforms = [
-        {"os": "linux", "arch": "x64", "code_platform": "linux-x64", "bin_path": "VSCode-linux-x64/bin/code"},
+        {"os": "linux", "arch": "amd64", "code_platform": "linux-x64", "bin_path": "VSCode-linux-x64/bin/code"},
         {"os": "linux", "arch": "arm64", "code_platform": "linux-arm64", "bin_path": "VSCode-linux-arm64/bin/code"},
-        {"os": "darwin", "arch": "x64", "code_platform": "darwin", "bin_path": "Visual Studio Code.app/Contents/Resources/app/bin/code"},
+        {"os": "darwin", "arch": "amd64", "code_platform": "darwin", "bin_path": "Visual Studio Code.app/Contents/Resources/app/bin/code"},
         {"os": "darwin", "arch": "arm64", "code_platform": "darwin-arm64", "bin_path": "Visual Studio Code.app/Contents/Resources/app/bin/code"},
     ]
 
     for p in platforms:
+        if p["os"] != target_os or p["arch"] != target_arch:
+            continue
+
         # Using 'latest' gives us the most recent stable release info
         update_url = "https://update.code.visualstudio.com/api/update/%s/stable/latest" % p["code_platform"]
 
@@ -48,3 +54,4 @@ def resolve_vscode(pkg_name):
         )
 
 add_pkgdef(regex="vscode", handler=resolve_vscode)
+print("Hello World")

@@ -75,3 +75,36 @@ func Init() (Config, error) {
 		hostHome:     u.HomeDir,
 	}, nil
 }
+
+//TODO: We need to split the Config into separated structs, separate cave
+// data form cache data, so that NewTestConfig ignore the user/home
+
+// NewTestConfig creates a configuration rooted at the specified base directory.
+func NewTestConfig(basePath string) Config {
+	osType, _ := ParseOS(runtime.GOOS)
+	archType, _ := ParseArch(runtime.GOARCH)
+
+	u, _ := user.Current()
+	var username, home string
+	if u != nil {
+		username = u.Username
+		home = u.HomeDir
+	}
+
+	absBase, _ := filepath.Abs(basePath)
+
+	return &config{
+		cacheDir:     absBase,
+		configDir:    absBase,
+		stateDir:     absBase,
+		pkgDir:       filepath.Join(absBase, "pkgs"),
+		downloadDir:  filepath.Join(absBase, "downloads"),
+		recipeDir:    filepath.Join(absBase, "recipes"),
+		homeDir:      filepath.Join(absBase, "homes"),
+		discoveryDir: filepath.Join(absBase, "discovery"),
+		os:           osType,
+		arch:         archType,
+		user:         username,
+		hostHome:     home,
+	}
+}

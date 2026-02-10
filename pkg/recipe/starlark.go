@@ -135,6 +135,8 @@ func (sr *StarlarkRecipe) loadRegistry() error {
 		"download_github_releases": newDownloadGitHubReleasesBuiltin(sr),
 		"add_version":              newAddVersionBuiltin(sr),
 		"add_pkgdef":               newAddPkgdefBuiltin(sr),
+		"get_os":                   newGetOSBuiltin(sr),
+		"get_arch":                 newGetArchBuiltin(sr),
 	}
 
 	globals, err := starlark.ExecFile(sr.thread, sr.Name+".star", sr.Source, builtins)
