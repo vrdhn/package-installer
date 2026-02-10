@@ -1071,6 +1071,7 @@ dependencies = [
  "env_logger",
  "log",
  "parking_lot",
+ "regex",
  "serde",
  "starlark",
  "tempfile",

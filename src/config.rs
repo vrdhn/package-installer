@@ -72,19 +72,25 @@ pub fn starlark_functions(builder: &mut GlobalsBuilder) {
         Ok(context.arch.clone())
     }
 
-    fn add_package(regexp: String, function: Value, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<NoneType> {
+    fn add_package<'v>(regexp: String, function: Value<'v>, eval: &mut Evaluator<'v, '_, '_>) -> anyhow::Result<NoneType> {
         let context_value = eval.module().extra_value().context("Context not found in module extra")?;
         let context = context_value.downcast_ref::<Context>().context("Extra value is not a Context")?;
         
-        let function_name = if let Some(name) = function.to_value().to_str().strip_prefix("<function ") {
-             name.strip_suffix('>').unwrap_or(name).to_string()
+        let function_repr = function.to_value().to_str();
+        let mut name = if let Some(s) = function_repr.strip_prefix("<function ") {
+            s.strip_suffix(">").unwrap_or(s).to_string()
         } else {
-             function.to_str()
+            function_repr.to_string()
         };
+
+        // If the name contains a dot (e.g. "test_config.star.install_vlc"), take the last part
+        if let Some(last_dot) = name.rfind('.') {
+            name = name[last_dot + 1..].to_string();
+        }
 
         context.packages.write().push(PackageEntry {
             regexp,
-            function_name,
+            function_name: name,
         });
         
         Ok(NoneType)

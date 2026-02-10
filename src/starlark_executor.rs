@@ -6,8 +6,9 @@ use std::path::Path;
 use std::fs;
 use anyhow::Context as _;
 use crate::config::{Context, starlark_functions};
+use regex::Regex;
 
-pub fn evaluate_file(path: &Path) -> anyhow::Result<()> {
+pub fn evaluate_file(path: &Path, pkg: Option<&str>) -> anyhow::Result<()> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
     
@@ -34,15 +35,29 @@ pub fn evaluate_file(path: &Path) -> anyhow::Result<()> {
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals).map_err(|e| anyhow::anyhow!("{}", e))?;
     
-    let final_context = module.extra_value()
-        .context("Context missing after evaluation")?
-        .downcast_ref::<Context>()
-        .context("Extra value is not a Context")?;
-    
-    let packages = final_context.packages.read();
-    log::info!("Evaluation finished. Registered {} packages.", packages.len());
-    for p in packages.iter() {
-        log::info!("Package: regexp='{}', function='{}'", p.regexp, p.function_name);
+    if let Some(package_name) = pkg {
+        let final_context = module.extra_value()
+            .context("Context missing after evaluation")?
+            .downcast_ref::<Context>()
+            .context("Extra value is not a Context")?;
+        
+        let packages = final_context.packages.read();
+        for entry in packages.iter() {
+            let re = Regex::new(&entry.regexp)
+                .with_context(|| format!("Invalid regex: {}", entry.regexp))?;
+            
+            if re.is_match(package_name) {
+                log::info!("Package '{}' matched regex '{}'. Calling function '{}'.", package_name, entry.regexp, entry.function_name);
+                
+                // Look up the function in the module
+                let function = module.get(&entry.function_name)
+                    .context(format!("Function '{}' not found in module", entry.function_name))?;
+                
+                let pkg_value = eval.heap().alloc(package_name);
+                eval.eval_function(function, &[pkg_value], &[])
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+            }
+        }
     }
     
     Ok(())
@@ -55,12 +70,12 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_add_package_function() {
+    fn test_add_package_and_call() {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "def install_vlc(pkg): print('Installing', pkg)").unwrap();
-        writeln!(file, "add_package('^vLC', install_vlc)").unwrap();
+        writeln!(file, "add_package('^vlc', install_vlc)").unwrap();
         
-        let result = evaluate_file(file.path());
+        let result = evaluate_file(file.path(), Some("vlc-player"));
         assert!(result.is_ok());
     }
 }
