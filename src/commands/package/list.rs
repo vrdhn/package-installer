@@ -1,3 +1,4 @@
+use crate::models::config::Config;
 use crate::models::package_entry::PackageList;
 use crate::models::repository::RepositoryConfig;
 use crate::models::selector::PackageSelector;
@@ -6,13 +7,10 @@ use comfy_table::Table;
 use glob::Pattern;
 use std::fs;
 
-pub fn run(selector_str: Option<&str>) {
+pub fn run(config: &Config, selector_str: Option<&str>) {
     let selector = selector_str.and_then(PackageSelector::parse);
 
-    let config_dir = dirs_next::config_dir()
-        .expect("Failed to get config directory")
-        .join("pi");
-    let config_file = config_dir.join("repositories.json");
+    let config_file = config.repositories_file();
 
     if !config_file.exists() {
         println!("No repositories configured.");
@@ -20,13 +18,8 @@ pub fn run(selector_str: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let config: RepositoryConfig =
+    let repo_config: RepositoryConfig =
         serde_json::from_str(&content).expect("Failed to parse config file");
-
-    let cache_dir = dirs_next::cache_dir()
-        .expect("Failed to get cache directory")
-        .join("pi")
-        .join("meta");
 
     let mut table = Table::new();
     table.set_header(vec!["Repo", "Package", "Version", "Date", "Type"]);
@@ -36,7 +29,7 @@ pub fn run(selector_str: Option<&str>) {
         .and_then(|s| s.version.clone())
         .unwrap_or_else(|| "stable".to_string());
 
-    for repo in &config.repositories {
+    for repo in &repo_config.repositories {
         if let Some(ref s) = selector {
             if let Some(ref r_name) = s.recipe {
                 if repo.name != *r_name {
@@ -45,7 +38,7 @@ pub fn run(selector_str: Option<&str>) {
             }
         }
 
-        let repo_cache_file = cache_dir.join(format!("packages-{}.json", repo.uuid));
+        let repo_cache_file = config.package_cache_file(&repo.uuid);
         if !repo_cache_file.exists() {
             continue;
         }
@@ -65,8 +58,7 @@ pub fn run(selector_str: Option<&str>) {
             }
 
             let safe_name = pkg.name.replace('/', "#");
-            let version_cache_file =
-                cache_dir.join(format!("version-{}-{}.json", repo.uuid, safe_name));
+            let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
             if !version_cache_file.exists() {
                 continue;
             }
@@ -86,8 +78,7 @@ pub fn run(selector_str: Option<&str>) {
                     if inst.name == *prefix {
                         let full_name = format!("{}:{}", prefix, s.package);
                         let safe_name = full_name.replace('/', "#");
-                        let version_cache_file =
-                            cache_dir.join(format!("version-{}-{}.json", repo.uuid, safe_name));
+                        let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
                         if version_cache_file.exists() {
                             let v_content = fs::read_to_string(&version_cache_file)
                                 .expect("Failed to read version cache file");

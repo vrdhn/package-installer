@@ -1,3 +1,4 @@
+use crate::models::config::Config;
 use crate::models::package_entry::PackageEntry;
 use crate::models::version_entry::VersionEntry;
 use crate::starlark::runtime::{evaluate_file, execute_function};
@@ -6,11 +7,10 @@ use log::{error, info};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
-pub fn run(filename: &str, pkg: Option<&str>) {
+pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     info!("Executing devel test command for file: {}", filename);
 
-    // Default download directory for test
-    let download_dir = get_default_download_dir();
+    let download_dir = config.download_dir.clone();
 
     let path = Path::new(filename);
     match evaluate_file(path, download_dir.clone()) {
@@ -22,13 +22,6 @@ pub fn run(filename: &str, pkg: Option<&str>) {
         }
         Err(e) => error!("Starlark evaluation failed: {}", e),
     }
-}
-
-fn get_default_download_dir() -> PathBuf {
-    let mut path = dirs_next::cache_dir().unwrap_or_else(|| PathBuf::from(".cache"));
-    path.push("pi");
-    path.push("downloads");
-    path
 }
 
 fn process_package_matching(package_name: &str, packages: &[PackageEntry], download_dir: PathBuf) {

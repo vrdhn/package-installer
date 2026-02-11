@@ -26,6 +26,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: PackageCommands,
     },
+    /// Disk management
+    Disk {
+        #[command(subcommand)]
+        command: DiskCommands,
+    },
     /// Development commands
     Devel {
         #[command(subcommand)]
@@ -63,6 +68,20 @@ pub enum PackageCommands {
     List {
         /// Package selector
         selector: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum DiskCommands {
+    /// Show disk usage of pi directories
+    Info,
+    /// Clean the cache directory
+    Clean,
+    /// Uninstall pi (deletes config, state, and cache)
+    Uninstall {
+        /// Confirmation flag to proceed with uninstallation
+        #[arg(long)]
+        confirm: bool,
     },
 }
 
