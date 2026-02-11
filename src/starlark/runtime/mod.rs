@@ -1,65 +1,72 @@
-use starlark::environment::{GlobalsBuilder, Module, LibraryExtension};
+use crate::models::context::Context;
+use crate::models::package_entry::PackageEntry;
+use crate::models::version_entry::VersionEntry;
+use crate::starlark::api::register_api;
+use anyhow::Context as _;
+use starlark::environment::{GlobalsBuilder, LibraryExtension, Module};
 use starlark::eval::Evaluator;
 use starlark::syntax::{AstModule, Dialect};
 use starlark::values::ValueLike;
-use std::path::{Path, PathBuf};
 use std::fs;
-use anyhow::Context as _;
-use crate::models::package_entry::PackageEntry;
-use crate::models::context::Context;
-use crate::starlark::api::register_api;
+use std::path::{Path, PathBuf};
 
 pub fn evaluate_file(path: &Path, download_dir: PathBuf) -> anyhow::Result<Vec<PackageEntry>> {
     let filename = path.to_string_lossy().into_owned();
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
-    
+
     let ast = parse_ast(&filename, content)?;
     let globals = create_globals();
     let module = Module::new();
-    
+
     setup_context(&module, filename, download_dir);
-    
+
     let mut eval = Evaluator::new(&module);
-    eval.eval_module(ast, &globals).map_err(|e| anyhow::anyhow!("{}", e))?;
-    
+    eval.eval_module(ast, &globals)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
     extract_packages(&module)
 }
 
-pub fn execute_function(path: &Path, function_name: &str, argument: &str, download_dir: PathBuf) -> anyhow::Result<()> {
+pub fn execute_function(
+    path: &Path,
+    function_name: &str,
+    argument: &str,
+    download_dir: PathBuf,
+) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = path.to_string_lossy().into_owned();
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
-    
+
     let ast = parse_ast(&filename, content)?;
     let globals = create_globals();
     let module = Module::new();
-    
+
     setup_context(&module, format!("{}:exec", filename), download_dir);
-    
+
     let mut eval = Evaluator::new(&module);
-    eval.eval_module(ast, &globals).map_err(|e| anyhow::anyhow!("{}", e))?;
-    
-    let function = module.get(function_name)
-        .context(format!("Function '{}' not found in module '{}'", function_name, filename))?;
-    
+    eval.eval_module(ast, &globals)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    let function = module.get(function_name).context(format!(
+        "Function '{}' not found in module '{}'",
+        function_name, filename
+    ))?;
+
     let arg_value = eval.heap().alloc(argument);
     eval.eval_function(function, &[arg_value], &[])
         .map_err(|e| anyhow::anyhow!("{}", e))?;
-    
-    Ok(())
+
+    extract_versions(&module)
 }
 
 fn parse_ast(filename: &str, content: String) -> anyhow::Result<AstModule> {
-    AstModule::parse(filename, content, &Dialect::Extended)
-        .map_err(|e| anyhow::anyhow!("{}", e))
+    AstModule::parse(filename, content, &Dialect::Extended).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
 fn create_globals() -> starlark::environment::Globals {
-    let mut builder = GlobalsBuilder::extended_by(&[
-        LibraryExtension::Print,
-        LibraryExtension::Json,
-    ]);
+    let mut builder =
+        GlobalsBuilder::extended_by(&[LibraryExtension::Print, LibraryExtension::Json]);
     register_api(&mut builder);
     builder.build()
 }
@@ -71,12 +78,23 @@ fn setup_context(module: &Module, filename: String, download_dir: PathBuf) {
 }
 
 fn extract_packages(module: &Module) -> anyhow::Result<Vec<PackageEntry>> {
-    let context = module.extra_value()
+    let context = module
+        .extra_value()
         .context("Context missing after evaluation")?
         .downcast_ref::<Context>()
         .context("Extra value is not a Context")?;
-    
+
     Ok(context.packages.read().clone())
+}
+
+fn extract_versions(module: &Module) -> anyhow::Result<Vec<VersionEntry>> {
+    let context = module
+        .extra_value()
+        .context("Context missing after evaluation")?
+        .downcast_ref::<Context>()
+        .context("Extra value is not a Context")?;
+
+    Ok(context.versions.read().clone())
 }
 
 #[cfg(test)]
@@ -90,12 +108,19 @@ mod tests {
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "def install_vlc(pkg): print('Installing', pkg)").unwrap();
         writeln!(file, "add_package('^vlc', install_vlc)").unwrap();
-        
+
         let download_dir = PathBuf::from("/tmp/pi-test");
         let packages = evaluate_file(file.path(), download_dir.clone()).unwrap();
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].regexp, "^vlc");
-        
-        execute_function(file.path(), &packages[0].function_name, "vlc-player", download_dir).unwrap();
+
+        let versions = execute_function(
+            file.path(),
+            &packages[0].function_name,
+            "vlc-player",
+            download_dir,
+        )
+        .unwrap();
+        assert_eq!(versions.len(), 0);
     }
 }

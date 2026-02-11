@@ -1,17 +1,18 @@
-use starlark::values::{Value, ValueLike, none::NoneType};
-use starlark::starlark_module;
-use starlark::environment::GlobalsBuilder;
-use starlark::eval::Evaluator;
-use starlark::syntax::{AstModule, Dialect};
-use starlark::values::list::ListRef;
-use starlark::values::dict::DictRef;
-use anyhow::Context as _;
 use crate::models::context::Context;
 use crate::models::package_entry::PackageEntry;
-use crate::services::downloader::Downloader;
+use crate::models::version_entry::VersionEntry;
 use crate::services::cache::Cache;
-use std::time::Duration;
+use crate::services::downloader::Downloader;
+use anyhow::Context as _;
 use serde_json_path::JsonPath;
+use starlark::environment::GlobalsBuilder;
+use starlark::eval::Evaluator;
+use starlark::starlark_module;
+use starlark::syntax::{AstModule, Dialect};
+use starlark::values::dict::DictRef;
+use starlark::values::list::ListRef;
+use starlark::values::{Value, ValueLike, none::NoneType};
+use std::time::Duration;
 
 #[starlark_module]
 pub fn register_api(builder: &mut GlobalsBuilder) {
@@ -25,16 +26,20 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         Ok(context.arch.clone())
     }
 
-    fn add_package<'v>(regexp: String, function: Value<'v>, eval: &mut Evaluator<'v, '_, '_>) -> anyhow::Result<NoneType> {
+    fn add_package<'v>(
+        regexp: String,
+        function: Value<'v>,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
         let name = extract_function_name(function);
-        
+
         context.packages.write().push(PackageEntry {
             regexp,
             function_name: name,
             filename: context.filename.clone(),
         });
-        
+
         Ok(NoneType)
     }
 
@@ -51,34 +56,64 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         Ok(content)
     }
 
-    fn json_parse<'v>(content: String, eval: &mut Evaluator<'v, '_, '_>) -> anyhow::Result<Value<'v>> {
+    fn json_parse<'v>(
+        content: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
         let ast = AstModule::parse("internal", "json".to_string(), &Dialect::Extended)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
-        let json_val = eval.eval_statements(ast)
+        let json_val = eval
+            .eval_statements(ast)
             .map_err(|e| anyhow::anyhow!("Failed to retrieve json module: {}", e))?;
-        
-        let decode = json_val.get_attr("decode", eval.heap())
+
+        let decode = json_val
+            .get_attr("decode", eval.heap())
             .map_err(|e| anyhow::anyhow!("{}", e))?
             .context("json.decode not found")?;
-            
+
         let content_val = eval.heap().alloc(content);
-        
-        eval.eval_function(decode, &[content_val], &[]).map_err(|e| anyhow::anyhow!("{}", e))
+
+        eval.eval_function(decode, &[content_val], &[])
+            .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn json_dump(data: Value, query: Option<String>) -> anyhow::Result<NoneType> {
         let json_val = starlark_to_serde(data)?;
 
         if let Some(q) = query {
-            let path = JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("JSONPath parse error: {}", e))?;
+            let path =
+                JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("JSONPath parse error: {}", e))?;
             let node = path.query(&json_val);
-            // node is a NodeList, we take the first element or the whole list if multiple?
-            // jq-like behavior usually returns a stream, here we can return the list.
             println!("{}", serde_json::to_string_pretty(&node)?);
         } else {
             println!("{}", serde_json::to_string_pretty(&json_val)?);
         }
-        
+
+        Ok(NoneType)
+    }
+
+    fn add_version(
+        pkgname: String,
+        version: String,
+        release_date: String,
+        release_type: String,
+        url: String,
+        filename: String,
+        checksum: String,
+        checksum_url: String,
+        eval: &mut Evaluator<'_, '_, '_>,
+    ) -> anyhow::Result<NoneType> {
+        let context = get_context(eval)?;
+        context.versions.write().push(VersionEntry {
+            pkgname,
+            version,
+            release_date,
+            release_type,
+            url,
+            filename,
+            checksum,
+            checksum_url,
+        });
         Ok(NoneType)
     }
 }

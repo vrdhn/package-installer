@@ -1,9 +1,9 @@
 use anyhow::Result;
-use std::path::PathBuf;
-use std::fs;
-use std::time::{SystemTime, Duration};
-use sha2::{Sha256, Digest};
 use hex;
+use sha2::{Digest, Sha256};
+use std::fs;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 
 pub struct Cache {
     dir: PathBuf,

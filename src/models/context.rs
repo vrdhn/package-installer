@@ -1,12 +1,13 @@
-use starlark::values::{starlark_value, StarlarkValue, Value, AllocValue, Heap};
+use crate::models::package_entry::PackageEntry;
+use crate::models::version_entry::VersionEntry;
+use allocative::{Allocative, Key, Visitor};
+use parking_lot::RwLock;
+use serde::Serialize;
 use starlark::any::ProvidesStaticType;
+use starlark::values::{AllocValue, Heap, StarlarkValue, Value, starlark_value};
 use std::env;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
-use parking_lot::RwLock;
-use allocative::{Allocative, Visitor, Key};
-use serde::Serialize;
-use crate::models::package_entry::PackageEntry;
 
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
@@ -15,6 +16,7 @@ pub struct Context {
     pub filename: String,
     pub download_dir: PathBuf,
     pub packages: RwLock<Vec<PackageEntry>>,
+    pub versions: RwLock<Vec<VersionEntry>>,
 }
 
 impl Context {
@@ -25,6 +27,7 @@ impl Context {
             filename,
             download_dir,
             packages: RwLock::new(Vec::new()),
+            versions: RwLock::new(Vec::new()),
         }
     }
 }
@@ -35,17 +38,25 @@ impl Allocative for Context {
         visitor.visit_field::<String>(Key::new("os"), &self.os);
         visitor.visit_field::<String>(Key::new("arch"), &self.arch);
         visitor.visit_field::<String>(Key::new("filename"), &self.filename);
-        // PathBuf doesn't implement Allocative by default in all versions, 
-        // we can skip or visit as string
-        visitor.visit_field::<String>(Key::new("download_dir"), &self.download_dir.to_string_lossy().to_string());
+        visitor.visit_field::<String>(
+            Key::new("download_dir"),
+            &self.download_dir.to_string_lossy().to_string(),
+        );
         visitor.exit();
     }
 }
 
 impl Display for Context {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Context(os={}, arch={}, filename={}, download_dir={}, packages_count={})", 
-            self.os, self.arch, self.filename, self.download_dir.display(), self.packages.read().len())
+        write!(
+            f,
+            "Context(os={}, arch={}, filename={}, packages_count={}, versions_count={})",
+            self.os,
+            self.arch,
+            self.filename,
+            self.packages.read().len(),
+            self.versions.read().len()
+        )
     }
 }
 

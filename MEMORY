@@ -1,0 +1,20 @@
+# pi (package-installer) - Rust
+deps: clap(derive), log, env_logger, starlark(0.13.0), anyhow, allocative, serde(derive), parking_lot(serde), regex
+
+src/
+ models/
+  package_entry: PackageEntry { regexp, function_name, filename }
+  context: Context { os, arch, filename, packages: RwLock<Vec<PackageEntry>> } - StarlarkValue, AllocValue
+ starlark/
+  api: register_api (get_os, get_arch, add_package(regexp, func_obj))
+  runtime: evaluate_file(path) -> Vec<PackageEntry>, execute_function(path, fn_name, arg)
+ cli/parser: Cli { verbose }, Devel { Test { filename, pkg } }
+ logging/init: init_logging(verbose)
+ commands/devel/test: run(filename, pkg) -> evaluate, then match regex, then execute_function
+ main: init logging, parse cli, route to commands::devel::test::run
+
+logic:
+- evaluate_file: creates Module + Context (in extra_value), runs script, returns collected packages.
+- add_package: extracts fn name from func_obj (strips "<function " and module prefix), stores in Context.
+- execute_function: fresh Module + Context, loads file, looks up fn by name, calls with arg string.
+- devel test: matches optional pkg against entries, calls corresponding functions.

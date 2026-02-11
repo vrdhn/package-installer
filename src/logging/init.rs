@@ -7,7 +7,5 @@ pub fn init_logging(verbose: bool) {
         LevelFilter::Info
     };
 
-    env_logger::Builder::new()
-        .filter_level(log_level)
-        .init();
+    env_logger::Builder::new().filter_level(log_level).init();
 }
