@@ -19,7 +19,8 @@ pub fn run(name: Option<&str>) {
 
     let cache_dir = dirs_next::cache_dir()
         .expect("Failed to get cache directory")
-        .join("pi");
+        .join("pi")
+        .join("meta");
 
     let mut table = Table::new();
     table.set_header(vec!["Repo Name", "Regexp", "Discover Fn"]);

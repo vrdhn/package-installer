@@ -22,7 +22,8 @@ pub fn run(name: Option<&str>) {
 
     let cache_dir = dirs_next::cache_dir()
         .expect("Failed to get cache directory")
-        .join("pi");
+        .join("pi")
+        .join("meta");
     fs::create_dir_all(&cache_dir).expect("Failed to create cache directory");
 
     let download_dir = cache_dir.join("downloads");
