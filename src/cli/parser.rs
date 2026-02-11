@@ -21,6 +21,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: RepoCommands,
     },
+    /// Package management
+    Package {
+        #[command(subcommand)]
+        command: PackageCommands,
+    },
     /// Development commands
     Devel {
         #[command(subcommand)]
@@ -44,6 +49,20 @@ pub enum RepoCommands {
     List {
         /// Optional name of the repository to list
         name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum PackageCommands {
+    /// Sync package versions
+    Sync {
+        /// Package selector (without version)
+        selector: Option<String>,
+    },
+    /// List package versions
+    List {
+        /// Package selector
+        selector: Option<String>,
     },
 }
 

@@ -31,6 +31,14 @@ fn main() {
                 commands::repo::list::run(name.as_deref());
             }
         },
+        Commands::Package { command } => match command {
+            cli::parser::PackageCommands::Sync { selector } => {
+                commands::package::sync::run(selector.as_deref());
+            }
+            cli::parser::PackageCommands::List { selector } => {
+                commands::package::list::run(selector.as_deref());
+            }
+        },
         Commands::Devel { command } => match command {
             DevelCommands::Test { filename, pkg } => {
                 commands::devel::test::run(&filename, pkg.as_deref());

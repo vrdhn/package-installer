@@ -1,7 +1,7 @@
 use allocative::Allocative;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Allocative)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
 pub struct VersionEntry {
     pub pkgname: String,
     pub version: String,
@@ -11,4 +11,9 @@ pub struct VersionEntry {
     pub filename: String,
     pub checksum: String,
     pub checksum_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VersionList {
+    pub versions: Vec<VersionEntry>,
 }
