@@ -69,6 +69,12 @@ pub enum PackageCommands {
         /// Package selector
         selector: Option<String>,
     },
+    /// Resolve package selectors to specific versions
+    Resolve {
+        /// Package selectors to resolve
+        #[arg(required = true)]
+        queries: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]

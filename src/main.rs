@@ -40,6 +40,9 @@ fn main() {
             cli::parser::PackageCommands::List { selector } => {
                 commands::package::list::run(&config, selector.as_deref());
             }
+            cli::parser::PackageCommands::Resolve { queries } => {
+                commands::package::resolve::run(&config, queries);
+            }
         },
         Commands::Disk { command } => match command {
             cli::parser::DiskCommands::Info => {

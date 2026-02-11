@@ -18,7 +18,7 @@ src/
  services/
   downloader: ureq-based GET requests
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
- cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
+ cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List, Resolve }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
  logging/init: init_logging(verbose)
  commands/repo:
   - add: register repo path, generate UUID, store in repositories.json, trigger sync
@@ -27,6 +27,7 @@ src/
  commands/package:
   - sync: [recipe]/[prefix]:package -> match & discover (handles installers), cache version-<uuid>-<sanitized_name>.json (sanitized with #)
   - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support), sanitized with #
+  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps
   - selector: handles glob (v1.*) and symbolic (latest, stable, lts) versions
  commands/disk:
   - info: show disk usage of config, cache, and state directories
