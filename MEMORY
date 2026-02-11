@@ -12,8 +12,12 @@ src/
  services/
   downloader: ureq-based GET requests
   cache: SHA256-hashed filenames, TTL-based validation
- cli/parser: Cli { verbose }, Devel { Test { filename, pkg } }
+ cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Devel { Test { filename, pkg } }
  logging/init: init_logging(verbose)
+ commands/repo:
+  - add: register repo path, generate UUID, store in repositories.json, trigger sync
+  - sync: walk repo for .star files, evaluate, cache packages-<uuid>.json, trigger list
+  - list: display table of repo, package regexp, and discovery function
  commands/devel/test:
   1. evaluate_file -> collect PackageEntry list
   2. if pkg: match regex -> execute_function -> collect VersionEntry list
