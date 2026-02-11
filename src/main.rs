@@ -1,3 +1,4 @@
+mod build;
 mod cli;
 mod commands;
 mod logging;
@@ -15,6 +16,10 @@ fn main() {
     init_logging(cli.verbose);
 
     match cli.command {
+        Commands::Version => {
+            println!("pi version: {}", build::BUILD_VERSION);
+            println!("build date: {}", build::BUILD_DATE);
+        }
         Commands::Devel { command } => match command {
             DevelCommands::Test { filename, pkg } => {
                 commands::devel::test::run(&filename, pkg.as_deref());

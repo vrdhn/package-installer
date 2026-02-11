@@ -14,6 +14,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Print version information
+    Version,
     /// Development commands
     Devel {
         #[command(subcommand)]
