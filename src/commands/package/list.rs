@@ -1,6 +1,6 @@
 use crate::models::config::Config;
 use crate::models::package_entry::PackageList;
-use crate::models::repository::RepositoryConfig;
+use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
 use comfy_table::Table;
@@ -18,7 +18,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let repo_config: RepositoryConfig =
+    let repo_config: Repositories =
         serde_json::from_str(&content).expect("Failed to parse config file");
 
     let mut table = Table::new();

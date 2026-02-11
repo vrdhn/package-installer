@@ -1,6 +1,6 @@
 use crate::commands::repo::sync;
 use crate::models::config::Config;
-use crate::models::repository::{Repository, RepositoryConfig};
+use crate::models::repository::{Repository, Repositories};
 use std::fs;
 
 pub fn run(config: &Config, path: &str) {
@@ -19,7 +19,7 @@ pub fn run(config: &Config, path: &str) {
         let content = fs::read_to_string(&config_file).expect("Failed to read config file");
         serde_json::from_str(&content).expect("Failed to parse config file")
     } else {
-        RepositoryConfig {
+        Repositories {
             repositories: Vec::new(),
         }
     };

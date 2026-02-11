@@ -19,6 +19,6 @@ impl Repository {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RepositoryConfig {
+pub struct Repositories {
     pub repositories: Vec<Repository>,
 }

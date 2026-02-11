@@ -4,7 +4,7 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 src/
  models/
   config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir }
-  repository: Repository { uuid, path, name }, RepositoryConfig { repositories }
+  repository: Repository { uuid, path, name }, Repositories { repositories }
   package_entry: PackageEntry { name, function_name, filename }, InstallerEntry { name, function_name, filename }
   version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, installer_command: Auto|Custom(String) }
   context: Context { os, arch, filename, download_dir, packages: RwLock, installers: RwLock, versions: RwLock }

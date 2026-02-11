@@ -1,8 +1,9 @@
 use crate::commands::repo::list;
 use crate::models::config::Config;
 use crate::models::package_entry::PackageList;
-use crate::models::repository::{Repository, RepositoryConfig};
+use crate::models::repository::{Repository, Repositories};
 use crate::starlark::runtime::evaluate_file;
+use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -16,20 +17,20 @@ pub fn run(config: &Config, name: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let repo_config: RepositoryConfig =
+    let repo_config: Repositories =
         serde_json::from_str(&content).expect("Failed to parse config file");
 
     fs::create_dir_all(&config.meta_dir).expect("Failed to create cache directory");
 
-    for repo in &repo_config.repositories {
+    repo_config.repositories.par_iter().for_each(|repo| {
         if let Some(target_name) = name {
             if repo.name != target_name {
-                continue;
+                return;
             }
         }
 
         sync_repo(config, repo);
-    }
+    });
 
     list::run(config, name);
 }

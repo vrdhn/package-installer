@@ -1,10 +1,11 @@
 use crate::commands::package::list;
 use crate::models::config::Config;
 use crate::models::package_entry::{InstallerEntry, PackageEntry, PackageList};
-use crate::models::repository::{Repository, RepositoryConfig};
+use crate::models::repository::{Repository, Repositories};
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
 use crate::starlark::runtime::{execute_function, execute_installer_function};
+use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 
@@ -19,25 +20,25 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let repo_config: RepositoryConfig =
+    let repo_config: Repositories =
         serde_json::from_str(&content).expect("Failed to parse config file");
 
     fs::create_dir_all(&config.meta_dir).expect("Failed to create cache directory");
     let download_dir = &config.download_dir;
 
-    for repo in &repo_config.repositories {
+    repo_config.repositories.par_iter().for_each(|repo| {
         // If recipe is specified, it must match repo name
         if let Some(ref s) = selector {
             if let Some(ref r_name) = s.recipe {
                 if repo.name != *r_name {
-                    continue;
+                    return;
                 }
             }
         }
 
         let repo_cache_file = config.package_cache_file(&repo.uuid);
         if !repo_cache_file.exists() {
-            continue;
+            return;
         }
 
         let pkg_content =
@@ -45,12 +46,12 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
         let pkg_list: PackageList =
             serde_json::from_str(&pkg_content).expect("Failed to parse repo cache file");
 
-        for pkg in &pkg_list.packages {
+        pkg_list.packages.par_iter().for_each(|pkg| {
             // Match package name
             if let Some(ref s) = selector {
                 if !s.package.is_empty() && s.package != "*" {
                     if !pkg.name.contains(&s.package) {
-                        continue;
+                        return;
                     }
                 }
             }
@@ -60,34 +61,27 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                 if let Some(ref s) = selector {
                     if s.prefix.is_none() {
                         if pkg.name != s.package {
-                            continue;
+                            return;
                         }
                     }
                 } else {
-                    continue;
+                    return;
                 }
             }
 
             sync_package(config, repo, pkg, download_dir);
-        }
+        });
 
         if let Some(ref s) = selector {
             if let Some(ref prefix) = s.prefix {
-                for inst in &pkg_list.installers {
+                pkg_list.installers.par_iter().for_each(|inst| {
                     if inst.name == *prefix {
-                        sync_installer_package(
-                            config,
-                            repo,
-                            inst,
-                            prefix,
-                            &s.package,
-                            download_dir,
-                        );
+                        sync_installer_package(config, repo, inst, prefix, &s.package, download_dir);
                     }
-                }
+                });
             }
         }
-    }
+    });
 
     list::run(config, selector_str);
 }
