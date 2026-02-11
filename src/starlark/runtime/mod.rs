@@ -112,7 +112,7 @@ mod tests {
         let download_dir = PathBuf::from("/tmp/pi-test");
         let packages = evaluate_file(file.path(), download_dir.clone()).unwrap();
         assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].regexp, "^vlc");
+        assert_eq!(packages[0].name, "^vlc");
 
         let versions = execute_function(
             file.path(),

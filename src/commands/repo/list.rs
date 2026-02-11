@@ -40,7 +40,7 @@ pub fn run(name: Option<&str>) {
             for pkg in package_list.packages {
                 table.add_row(vec![
                     repo.name.clone(),
-                    pkg.regexp,
+                    pkg.name,
                     pkg.function_name,
                 ]);
             }

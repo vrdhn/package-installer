@@ -52,13 +52,13 @@ pub fn run(selector_str: Option<&str>) {
         for pkg in pkg_list.packages {
             if let Some(ref s) = selector {
                 if !s.package.is_empty() && s.package != "*" {
-                    if !pkg.regexp.contains(&s.package) {
+                    if !pkg.name.contains(&s.package) {
                         continue;
                     }
                 }
             }
 
-            let version_cache_file = cache_dir.join(format!("version-{}-{}.json", repo.uuid, pkg.regexp));
+            let version_cache_file = cache_dir.join(format!("version-{}-{}.json", repo.uuid, pkg.name));
             if !version_cache_file.exists() {
                 continue;
             }

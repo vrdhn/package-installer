@@ -3,11 +3,11 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 
 src/
  models/
-  package_entry: PackageEntry { regexp, function_name, filename }
+  package_entry: PackageEntry { name, function_name, filename }
   version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url }
   context: Context { os, arch, filename, download_dir, packages: RwLock, versions: RwLock }
  starlark/
-  api: register_api (get_os, get_arch, add_package, download, json_parse, json_dump, add_version)
+  api: register_api (get_os, get_arch, add_package(name, fn), download, json_parse, json_dump, add_version)
   runtime: evaluate_file -> Vec<PackageEntry>, execute_function -> Vec<VersionEntry>
  services/
   downloader: ureq-based GET requests
@@ -17,7 +17,7 @@ src/
  commands/repo:
   - add: register repo path, generate UUID, store in repositories.json, trigger sync
   - sync: walk repo for .star files, evaluate, cache packages-<uuid>.json, trigger list
-  - list: display table of repo, package regexp, and discovery function
+  - list: display table of repo, package name, and discovery function
  commands/package:
   - sync: [recipe]/[prefix]:package -> match & discover, cache version-<uuid>-<pkg>.json
   - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support)

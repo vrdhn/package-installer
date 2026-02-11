@@ -27,16 +27,16 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
     }
 
     fn add_package<'v>(
-        regexp: String,
+        name: String,
         function: Value<'v>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
-        let name = extract_function_name(function);
+        let function_name = extract_function_name(function);
 
         context.packages.write().push(PackageEntry {
-            regexp,
-            function_name: name,
+            name,
+            function_name,
             filename: context.filename.clone(),
         });
 

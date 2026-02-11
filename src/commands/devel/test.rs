@@ -33,13 +33,13 @@ fn get_default_download_dir() -> PathBuf {
 
 fn process_package_matching(package_name: &str, packages: &[PackageEntry], download_dir: PathBuf) {
     for entry in packages {
-        match Regex::new(&entry.regexp) {
+        match Regex::new(&entry.name) {
             Ok(re) => {
                 if re.is_match(package_name) {
                     run_package_function(package_name, entry, download_dir.clone());
                 }
             }
-            Err(e) => error!("Invalid regex '{}': {}", entry.regexp, e),
+            Err(e) => error!("Invalid regex '{}': {}", entry.name, e),
         }
     }
 }
@@ -47,7 +47,7 @@ fn process_package_matching(package_name: &str, packages: &[PackageEntry], downl
 fn run_package_function(package_name: &str, entry: &PackageEntry, download_dir: PathBuf) {
     info!(
         "Package '{}' matched regex '{}'. Calling function '{}' from '{}'.",
-        package_name, entry.regexp, entry.function_name, entry.filename
+        package_name, entry.name, entry.function_name, entry.filename
     );
 
     let starlark_path = Path::new(&entry.filename);

@@ -55,9 +55,9 @@ pub fn run(selector_str: Option<&str>) {
             // Match package name
             if let Some(ref s) = selector {
                 if !s.package.is_empty() && s.package != "*" {
-                    // Check if selector.package is a substring of pkg.regexp or matches exactly
+                    // Check if selector.package is a substring of pkg.name or matches exactly
                     // This allows "node" to match "^node"
-                    if !pkg.regexp.contains(&s.package) {
+                    if !pkg.name.contains(&s.package) {
                         continue;
                     }
                 }
@@ -65,14 +65,14 @@ pub fn run(selector_str: Option<&str>) {
 
             // Prefix handling:
             // "prefixed packages are not synced unless full name is provideded"
-            // If the package regexp (name) contains a colon, it's prefixed.
-            if pkg.regexp.contains(':') {
+            // If the package name (name) contains a colon, it's prefixed.
+            if pkg.name.contains(':') {
                 if let Some(ref s) = selector {
                     if s.prefix.is_none() {
                         // Prefixed but no prefix in selector (unless selector is specific)
                         // Actually the requirement says "unless full name is provided"
-                        // I'll assume if selector.package matches pkg.regexp exactly it's fine.
-                        if pkg.regexp != s.package {
+                        // I'll assume if selector.package matches pkg.name exactly it's fine.
+                        if pkg.name != s.package {
                             continue;
                         }
                     }
@@ -90,19 +90,19 @@ pub fn run(selector_str: Option<&str>) {
 }
 
 fn sync_package(repo: &Repository, pkg: &PackageEntry, cache_dir: &Path, download_dir: &Path) {
-    println!("Syncing package: {} in repo: {}...", pkg.regexp, repo.name);
+    println!("Syncing package: {} in repo: {}...", pkg.name, repo.name);
     
     let star_path = Path::new(&repo.path).join(&pkg.filename);
-    match execute_function(&star_path, &pkg.function_name, &pkg.regexp, download_dir.to_path_buf()) {
+    match execute_function(&star_path, &pkg.function_name, &pkg.name, download_dir.to_path_buf()) {
         Ok(versions) => {
             let version_list = VersionList { versions };
-            let version_cache_file = cache_dir.join(format!("version-{}-{}.json", repo.uuid, pkg.regexp));
+            let version_cache_file = cache_dir.join(format!("version-{}-{}.json", repo.uuid, pkg.name));
             let content = serde_json::to_string_pretty(&version_list).expect("Failed to serialize version list");
             fs::write(&version_cache_file, content).expect("Failed to write version cache file");
-            println!("Synced {} versions for {}", version_list.versions.len(), pkg.regexp);
+            println!("Synced {} versions for {}", version_list.versions.len(), pkg.name);
         }
         Err(e) => {
-            eprintln!("Error syncing package {}: {}", pkg.regexp, e);
+            eprintln!("Error syncing package {}: {}", pkg.name, e);
         }
     }
 }

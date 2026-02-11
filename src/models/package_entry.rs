@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Allocative, Serialize, Deserialize)]
 pub struct PackageEntry {
-    pub regexp: String,
+    pub name: String,
     pub function_name: String,
     pub filename: String,
 }
