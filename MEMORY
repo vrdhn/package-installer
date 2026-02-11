@@ -15,7 +15,7 @@ src/
  cli/parser: Cli { verbose }, Devel { Test { filename, pkg } }
  logging/init: init_logging(verbose)
  commands/devel/test:
-  1. evaluate_file -> collect PackageEntry listt
+  1. evaluate_file -> collect PackageEntry list
   2. if pkg: match regex -> execute_function -> collect VersionEntry list
   3. sort versions (date, version) -> print table (comfy-table)
 

@@ -16,10 +16,34 @@ pub struct Cli {
 pub enum Commands {
     /// Print version information
     Version,
+    /// Repository management
+    Repo {
+        #[command(subcommand)]
+        command: RepoCommands,
+    },
     /// Development commands
     Devel {
         #[command(subcommand)]
         command: DevelCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum RepoCommands {
+    /// Add a new repository
+    Add {
+        /// Path to the repository
+        path: String,
+    },
+    /// Sync repositories
+    Sync {
+        /// Optional name of the repository to sync
+        name: Option<String>,
+    },
+    /// List repositories and their packages
+    List {
+        /// Optional name of the repository to list
+        name: Option<String>,
     },
 }
 

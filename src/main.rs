@@ -20,6 +20,17 @@ fn main() {
             println!("pi version: {}", build::BUILD_VERSION);
             println!("build date: {}", build::BUILD_DATE);
         }
+        Commands::Repo { command } => match command {
+            cli::parser::RepoCommands::Add { path } => {
+                commands::repo::add::run(&path);
+            }
+            cli::parser::RepoCommands::Sync { name } => {
+                commands::repo::sync::run(name.as_deref());
+            }
+            cli::parser::RepoCommands::List { name } => {
+                commands::repo::list::run(name.as_deref());
+            }
+        },
         Commands::Devel { command } => match command {
             DevelCommands::Test { filename, pkg } => {
                 commands::devel::test::run(&filename, pkg.as_deref());
