@@ -8,7 +8,15 @@ pub struct PackageEntry {
     pub filename: String,
 }
 
+#[derive(Debug, Clone, Allocative, Serialize, Deserialize)]
+pub struct InstallerEntry {
+    pub name: String,
+    pub function_name: String,
+    pub filename: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageList {
     pub packages: Vec<PackageEntry>,
+    pub installers: Vec<InstallerEntry>,
 }

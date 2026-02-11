@@ -14,7 +14,7 @@ pub fn run(filename: &str, pkg: Option<&str>) {
 
     let path = Path::new(filename);
     match evaluate_file(path, download_dir.clone()) {
-        Ok(packages) => {
+        Ok((packages, _installers)) => {
             info!("Registered {} packages.", packages.len());
             if let Some(package_name) = pkg {
                 process_package_matching(package_name, &packages, download_dir);

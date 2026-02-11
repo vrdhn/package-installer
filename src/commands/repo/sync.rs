@@ -1,7 +1,7 @@
-use crate::models::repository::{Repository, RepositoryConfig};
-use crate::models::package_entry::PackageList;
-use crate::starlark::runtime::evaluate_file;
 use crate::commands::repo::list;
+use crate::models::package_entry::PackageList;
+use crate::models::repository::{Repository, RepositoryConfig};
+use crate::starlark::runtime::evaluate_file;
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -18,7 +18,8 @@ pub fn run(name: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let config: RepositoryConfig = serde_json::from_str(&content).expect("Failed to parse config file");
+    let config: RepositoryConfig =
+        serde_json::from_str(&content).expect("Failed to parse config file");
 
     let cache_dir = dirs_next::cache_dir()
         .expect("Failed to get cache directory")
@@ -44,6 +45,7 @@ pub fn run(name: Option<&str>) {
 fn sync_repo(repo: &Repository, cache_dir: &Path, download_dir: &Path) {
     println!("Syncing repository: {}...", repo.name);
     let mut all_packages = Vec::new();
+    let mut all_installers = Vec::new();
     let repo_path = Path::new(&repo.path);
 
     for entry in WalkDir::new(repo_path)
@@ -53,13 +55,20 @@ fn sync_repo(repo: &Repository, cache_dir: &Path, download_dir: &Path) {
     {
         let star_file_path = entry.path();
         match evaluate_file(star_file_path, download_dir.to_path_buf()) {
-            Ok(packages) => {
+            Ok((packages, installers)) => {
+                let rel_path = star_file_path
+                    .strip_prefix(repo_path)
+                    .unwrap_or(star_file_path)
+                    .to_string_lossy()
+                    .to_string();
+
                 for mut pkg in packages {
-                    // Make filename relative to repo path
-                    if let Ok(rel_path) = star_file_path.strip_prefix(repo_path) {
-                        pkg.filename = rel_path.to_string_lossy().to_string();
-                    }
+                    pkg.filename = rel_path.clone();
                     all_packages.push(pkg);
+                }
+                for mut inst in installers {
+                    inst.filename = rel_path.clone();
+                    all_installers.push(inst);
                 }
             }
             Err(e) => {
@@ -68,9 +77,18 @@ fn sync_repo(repo: &Repository, cache_dir: &Path, download_dir: &Path) {
         }
     }
 
-    let package_list = PackageList { packages: all_packages };
+    let package_list = PackageList {
+        packages: all_packages,
+        installers: all_installers,
+    };
     let cache_file = cache_dir.join(format!("packages-{}.json", repo.uuid));
-    let content = serde_json::to_string_pretty(&package_list).expect("Failed to serialize package list");
+    let content =
+        serde_json::to_string_pretty(&package_list).expect("Failed to serialize package list");
     fs::write(&cache_file, content).expect("Failed to write cache file");
-    println!("Synced {} packages for {}", package_list.packages.len(), repo.name);
+    println!(
+        "Synced {} packages and {} installers for {}",
+        package_list.packages.len(),
+        package_list.installers.len(),
+        repo.name
+    );
 }

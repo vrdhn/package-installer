@@ -11,10 +11,13 @@ pub struct PackageSelector {
 impl PackageSelector {
     /// Parses a selector string in the format: [recipe]/[prefix]:package[=version]
     pub fn parse(s: &str) -> Option<Self> {
-        // Regex to capture: ([recipe]/)?([prefix]:)?package(=version)?
-        // We need to be careful with the separators.
-        
-        let re = Regex::new(r"^(?:([^/]+)/)?(?:([^:]+):)?([^=]+)(?:=(.+))?$").unwrap();
+        // Updated regex to handle [recipe/][prefix:]package
+        // 1. Optional recipe followed by /
+        // 2. Optional prefix followed by :
+        // 3. Package name (can contain /)
+        // 4. Optional version starting with =
+
+        let re = Regex::new(r"^(?:([^/:]+)/)?(?:([^/:]+):)?([^=]+)(?:=(.+))?$").unwrap();
         let caps = re.captures(s)?;
 
         Some(Self {

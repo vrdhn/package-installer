@@ -1,5 +1,5 @@
-use crate::models::repository::{Repository, RepositoryConfig};
 use crate::commands::repo::sync;
+use crate::models::repository::{Repository, RepositoryConfig};
 use std::fs;
 
 pub fn run(path: &str) {
@@ -21,7 +21,9 @@ pub fn run(path: &str) {
         let content = fs::read_to_string(&config_file).expect("Failed to read config file");
         serde_json::from_str(&content).expect("Failed to parse config file")
     } else {
-        RepositoryConfig { repositories: Vec::new() }
+        RepositoryConfig {
+            repositories: Vec::new(),
+        }
     };
 
     if config.repositories.iter().any(|r| r.path == abs_path_str) {

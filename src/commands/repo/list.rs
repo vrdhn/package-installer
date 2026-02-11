@@ -1,5 +1,5 @@
-use crate::models::repository::RepositoryConfig;
 use crate::models::package_entry::PackageList;
+use crate::models::repository::RepositoryConfig;
 use comfy_table::Table;
 use std::fs;
 
@@ -15,7 +15,8 @@ pub fn run(name: Option<&str>) {
     }
 
     let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let config: RepositoryConfig = serde_json::from_str(&content).expect("Failed to parse config file");
+    let config: RepositoryConfig =
+        serde_json::from_str(&content).expect("Failed to parse config file");
 
     let cache_dir = dirs_next::cache_dir()
         .expect("Failed to get cache directory")
@@ -23,7 +24,7 @@ pub fn run(name: Option<&str>) {
         .join("meta");
 
     let mut table = Table::new();
-    table.set_header(vec!["Repo Name", "Regexp", "Discover Fn"]);
+    table.set_header(vec!["Repo Name", "Type", "Name", "Discover Fn"]);
 
     for repo in config.repositories {
         if let Some(target_name) = name {
@@ -35,13 +36,24 @@ pub fn run(name: Option<&str>) {
         let cache_file = cache_dir.join(format!("packages-{}.json", repo.uuid));
         if cache_file.exists() {
             let content = fs::read_to_string(&cache_file).expect("Failed to read cache file");
-            let package_list: PackageList = serde_json::from_str(&content).expect("Failed to parse cache file");
+            let package_list: PackageList =
+                serde_json::from_str(&content).expect("Failed to parse cache file");
 
             for pkg in package_list.packages {
                 table.add_row(vec![
                     repo.name.clone(),
+                    "Package".to_string(),
                     pkg.name,
                     pkg.function_name,
+                ]);
+            }
+
+            for inst in package_list.installers {
+                table.add_row(vec![
+                    repo.name.clone(),
+                    "Installer".to_string(),
+                    inst.name,
+                    inst.function_name,
                 ]);
             }
         }

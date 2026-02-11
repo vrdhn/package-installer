@@ -65,4 +65,40 @@ def install_node(package_name):
                 checksum_url = shasums_url
             )
 
-add_package("^node", install_node)
+add_package("node", install_node)
+
+def npm_discovery(installer, package):
+    print("Syncing npm package:", package)
+    url = "https://registry.npmjs.org/" + package
+    content = download(url)
+    data = json_parse(content)
+    
+    versions = data["versions"]
+    time = data["time"]
+    dist_tags = data["dist-tags"]
+    
+    for version in versions:
+        v_data = versions[version]
+        
+        release_type = "stable"
+        # Simple heuristic for release type
+        if "-" in version:
+            release_type = "testing"
+        
+        # Check if it's the latest or lts (using dist-tags as a hint)
+        if version == dist_tags.get("latest"):
+            release_type = "stable"
+        
+        add_version(
+            pkgname = package,
+            version = version,
+            release_date = time.get(version, ""),
+            release_type = release_type,
+            url = v_data["dist"]["tarball"],
+            filename = package.split("/")[-1] + "-" + version + ".tgz",
+            checksum = v_data["dist"]["shasum"],
+            checksum_url = "",
+            installer_command = "npm --global install " + package
+        )
+
+add_installer("npm", npm_discovery)
