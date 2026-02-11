@@ -3,6 +3,7 @@ mod starlark;
 mod cli;
 mod commands;
 mod logging;
+mod services;
 
 use clap::Parser;
 use crate::cli::parser::{Cli, Commands, DevelCommands};

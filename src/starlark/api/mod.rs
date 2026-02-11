@@ -2,9 +2,16 @@ use starlark::values::{Value, ValueLike, none::NoneType};
 use starlark::starlark_module;
 use starlark::environment::GlobalsBuilder;
 use starlark::eval::Evaluator;
+use starlark::syntax::{AstModule, Dialect};
+use starlark::values::list::ListRef;
+use starlark::values::dict::DictRef;
 use anyhow::Context as _;
 use crate::models::context::Context;
 use crate::models::package_entry::PackageEntry;
+use crate::services::downloader::Downloader;
+use crate::services::cache::Cache;
+use std::time::Duration;
+use serde_json_path::JsonPath;
 
 #[starlark_module]
 pub fn register_api(builder: &mut GlobalsBuilder) {
@@ -30,6 +37,50 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         
         Ok(NoneType)
     }
+
+    fn download(url: String, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
+        let context = get_context(eval)?;
+        let cache = Cache::new(context.download_dir.clone(), Duration::from_secs(3600)); // 1 hour TTL
+
+        if let Some(cached) = cache.read(&url)? {
+            return Ok(cached);
+        }
+
+        let content = Downloader::download(&url)?;
+        cache.write(&url, &content)?;
+        Ok(content)
+    }
+
+    fn json_parse<'v>(content: String, eval: &mut Evaluator<'v, '_, '_>) -> anyhow::Result<Value<'v>> {
+        let ast = AstModule::parse("internal", "json".to_string(), &Dialect::Extended)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let json_val = eval.eval_statements(ast)
+            .map_err(|e| anyhow::anyhow!("Failed to retrieve json module: {}", e))?;
+        
+        let decode = json_val.get_attr("decode", eval.heap())
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .context("json.decode not found")?;
+            
+        let content_val = eval.heap().alloc(content);
+        
+        eval.eval_function(decode, &[content_val], &[]).map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
+    fn json_dump(data: Value, query: Option<String>) -> anyhow::Result<NoneType> {
+        let json_val = starlark_to_serde(data)?;
+
+        if let Some(q) = query {
+            let path = JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("JSONPath parse error: {}", e))?;
+            let node = path.query(&json_val);
+            // node is a NodeList, we take the first element or the whole list if multiple?
+            // jq-like behavior usually returns a stream, here we can return the list.
+            println!("{}", serde_json::to_string_pretty(&node)?);
+        } else {
+            println!("{}", serde_json::to_string_pretty(&json_val)?);
+        }
+        
+        Ok(NoneType)
+    }
 }
 
 fn get_context<'v, 'a, 'e>(eval: &Evaluator<'v, 'a, 'e>) -> anyhow::Result<&'v Context> {
@@ -52,4 +103,31 @@ fn extract_function_name(function: Value) -> String {
         .map(|idx| &name[idx + 1..])
         .unwrap_or(name)
         .to_string()
+}
+
+fn starlark_to_serde(val: Value) -> anyhow::Result<serde_json::Value> {
+    if val.is_none() {
+        Ok(serde_json::Value::Null)
+    } else if let Some(b) = val.unpack_bool() {
+        Ok(serde_json::Value::Bool(b))
+    } else if let Some(i) = val.unpack_i32() {
+        Ok(serde_json::Value::Number(i.into()))
+    } else if let Some(s) = val.unpack_str() {
+        Ok(serde_json::Value::String(s.to_string()))
+    } else if let Some(list) = ListRef::from_value(val) {
+        let mut arr = Vec::new();
+        for v in list.content() {
+            arr.push(starlark_to_serde(*v)?);
+        }
+        Ok(serde_json::Value::Array(arr))
+    } else if let Some(dict) = DictRef::from_value(val) {
+        let mut obj = serde_json::Map::new();
+        for (k, v) in dict.iter_hashed() {
+            let key_str = k.key().to_str();
+            obj.insert(key_str, starlark_to_serde(v)?);
+        }
+        Ok(serde_json::Value::Object(obj))
+    } else {
+        Ok(serde_json::Value::String(val.to_str()))
+    }
 }
