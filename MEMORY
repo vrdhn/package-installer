@@ -1,5 +1,5 @@
 # pi (package-installer) - Rust
-deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq, sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap
+deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq(3.x), sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap, toml
 
 src/
  models/
@@ -9,16 +9,16 @@ src/
   version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, manager_command: Auto|Custom(String) }, VersionList { versions, get_for_package(config, repo, name, pkg_entry, mgr_entry), load, save, exists }
   selector: PackageSelector { recipe, prefix, package, version }
  starlark/
-  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download, json_parse, json_dump, add_version(..., manager_command))
+  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download, json_parse, toml_parse, json_dump, add_version(..., manager_command))
   runtime: 
    - evaluate_file -> (Vec<PackageEntry>, Vec<ManagerEntry>)
    - execute_function -> Vec<VersionEntry>
    - execute_manager_function -> Vec<VersionEntry>
  services/
-  downloader: ureq-based GET requests
+  downloader: ureq-based streaming GET requests with progress reporting (10s interval), bandwidth calc, and IPv4 preference.
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
   sync: core logic for sync_repo, sync_package, and sync_manager_package
- cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List, Resolve }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
+ cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List, Info, Resolve }, Cave { Init, Info, Add, Rem, Resolve }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
  logging/init: init_logging(verbose)
  commands/repo:
   - add: register repo path, generate UUID, store in repositories.json, trigger sync
@@ -27,7 +27,10 @@ src/
  commands/package:
   - sync: sync_all(config, selector) -> calls services::sync::{sync_package, sync_manager_package}
   - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support)
+  - info: display detailed metadata (URL, checksum, etc.) for matching packages
   - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps.
+ commands/cave:
+  - init, info, add, rem, resolve: Cave management for environments and package sets.
  commands/disk:
   - info: show disk usage of config, cache, and state directories
   - clean: delete the cache directory
@@ -37,8 +40,10 @@ logic:
 - Lazy Loading: Models use Config.state to cache data. get_all / get_for_repo / get_for_package methods handle thread-safe lazy loading and automatically trigger synchronization if data is missing.
 - Concurrency: Rayon used for parallel resolution; DashMap and OnceLock ensure threads wait for shared resources during automagic syncs.
 - json_parse: trick using eval_statements("json") to get built-in module then calling .decode()
+- toml_parse: parses TOML string -> serde_json::Value -> Starlark Value.
 - json_dump: converts Starlark -> Serde, applies JSONPath (serde_json_path), prints pretty JSON
 - add_version: stores metadata including checksum_url and optional manager_command; type logic (stable/lts/obsolete) handled in .star
 - sorting: VersionEntry sorted by release_date then version string before display
 - Sanitization: Package names in version cache filenames have '/' replaced with '#' to avoid directory issues.
 - Refactoring: Renamed "installer" to "manager" throughout the codebase.
+- Rust Discovery: `discover_rust_component` handles wildcard targets and auto-appends `-preview` suffix for components like `rustfmt` to match manifest entries while keeping base names in `COMPONENTS`.
