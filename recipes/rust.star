@@ -21,7 +21,6 @@ def discover_rust_component(package_name):
     
     for channel in ["stable", "beta", "nightly"]:
         url = "https://static.rust-lang.org/dist/channel-rust-" + channel + ".toml"
-        print("Fetching manifest:", url)
         content = download(url)
         if not content:
             continue

@@ -66,6 +66,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         let cache = Cache::new(context.download_dir.clone(), Duration::from_secs(3600)); // 1 hour TTL
 
         if let Some(cached) = cache.read(&url)? {
+            println!("From Cache: {}", url);
             return Ok(cached);
         }
 
@@ -81,9 +82,11 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
 
         // Check cache again after acquiring lock to see if another thread finished it
         if let Some(cached) = cache.read(&url)? {
+            println!("From Cache: {}", url);
             return Ok(cached);
         }
 
+        println!("Fetching: {}", url);
         let content = Downloader::download(&url)?;
         cache.write(&url, &content)?;
         Ok(content)

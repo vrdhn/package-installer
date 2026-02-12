@@ -1,6 +1,4 @@
 use anyhow::Result;
-use hex;
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -16,10 +14,14 @@ impl Cache {
     }
 
     pub fn get_path(&self, url: &str) -> PathBuf {
-        let mut hasher = Sha256::new();
-        hasher.update(url.as_bytes());
-        let hash = hex::encode(hasher.finalize());
-        self.dir.join(hash)
+        let sanitized = url
+            .replace("://", "_")
+            .replace("/", "_")
+            .replace(":", "_")
+            .replace("?", "_")
+            .replace("&", "_")
+            .replace("=", "_");
+        self.dir.join(sanitized)
     }
 
     pub fn read(&self, url: &str) -> Result<Option<String>> {
