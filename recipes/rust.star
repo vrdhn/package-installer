@@ -71,7 +71,7 @@ def discover_rust_component(package_name):
             filename = filename,
             checksum = checksum,
             checksum_url = "",
-            filemap = {"bin/*": "bin"}
+            filemap = {package_name + "/bin/*": "bin"}
         )
 
 def cargo_discovery(manager, package):

@@ -39,7 +39,8 @@ def install_node(package_name):
             if "win" in platform:
                 ext = "zip"
 
-            filename = "node-" + version + "-" + platform + "." + ext
+            base_name = "node-" + version + "-" + platform
+            filename = base_name + "." + ext
             url = "https://nodejs.org/dist/" + version + "/" + filename
             shasums_url = "https://nodejs.org/dist/" + version + "/SHASUMS256.txt"
 
@@ -63,7 +64,7 @@ def install_node(package_name):
                 filename = filename,
                 checksum = "",
                 checksum_url = shasums_url,
-                filemap = {"bin/*": "bin"}
+                filemap = {base_name + "/bin/*": "bin"}
             )
 
 add_package("node", install_node)
@@ -99,7 +100,7 @@ def npm_discovery(manager, package):
             filename = package.split("/")[-1] + "-" + version + ".tgz",
             checksum = v_data["dist"]["shasum"],
             checksum_url = "",
-            filemap = {"bin/*": "bin"},
+            filemap = {"package/bin/*": "bin"},
             manager_command = "npm --global install " + package
         )
 

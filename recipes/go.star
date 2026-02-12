@@ -52,7 +52,7 @@ def install_go(package_name):
                     filename = f["filename"],
                     checksum = f["sha256"],
                     checksum_url = "",
-                    filemap = {"bin/*": "bin"}
+                    filemap = {"go/bin/*": "bin"}
                 )
 
 add_package("go", install_go)
