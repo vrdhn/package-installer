@@ -33,7 +33,6 @@ impl CaveSettings {
 pub struct Cave {
     pub name: String,
     pub workspace: PathBuf,
-    pub home: String,
     #[serde(default)]
     pub settings: CaveSettings,
     #[serde(default)]
@@ -49,9 +48,8 @@ impl Cave {
             .unwrap_or_else(|| "default".to_string());
         
         Self {
-            name: name.clone(),
+            name,
             workspace: path,
-            home: name,
             settings: CaveSettings::default(),
             variants: HashMap::new(),
         }

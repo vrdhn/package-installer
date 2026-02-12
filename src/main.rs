@@ -53,6 +53,7 @@ fn main() {
             CaveCommands::Add { arg1, arg2 } => commands::cave::add::run(&config, arg1, arg2),
             CaveCommands::Rem { arg1, arg2 } => commands::cave::rem::run(&config, arg1, arg2),
             CaveCommands::Resolve { variant } => commands::cave::resolve::run(&config, variant),
+            CaveCommands::Build { variant } => commands::cave::build::run(&config, variant),
         },
         Commands::Disk { command } => match command {
             cli::parser::DiskCommands::Info => {

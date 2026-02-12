@@ -69,6 +69,11 @@ pub enum CaveCommands {
         /// Optional variant name (starts with :)
         variant: Option<String>,
     },
+    /// Resolve and install all packages in the cave or a variant
+    Build {
+        /// Optional variant name (starts with :)
+        variant: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

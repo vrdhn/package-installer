@@ -37,7 +37,7 @@ pub fn run(config: &Config, arg1: String, arg2: Option<String>) {
     let selector = PackageSelector::parse(&query).unwrap();
     
     println!("Resolving {}...", query);
-    if let Some((full_name, version)) = resolve::resolve_query(config, repo_config, &selector) {
+    if let Some((full_name, version, _uuid)) = resolve::resolve_query(config, repo_config, &selector) {
         println!("Resolved to: {} ({} - {})", full_name, version.version, version.release_type);
     } else {
         println!("Warning: Could not resolve {}, but adding anyway.", query);

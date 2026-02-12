@@ -39,7 +39,7 @@ pub fn run(config: &Config, variant: Option<String>) {
             };
 
             match resolve::resolve_query(config, repo_config, &selector) {
-                Some((full_name, version)) => (query.clone(), full_name, version.release_date),
+                Some((full_name, version, _uuid)) => (query.clone(), full_name, version.release_date),
                 None => (query.clone(), "Not found".to_string(), "-".to_string()),
             }
         })

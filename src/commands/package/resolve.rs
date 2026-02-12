@@ -26,7 +26,7 @@ pub fn run(config: &Config, queries: Vec<String>) {
             };
 
             match resolve_query(config, repo_config, &selector) {
-                Some((full_qualified_name, version)) => {
+                Some((full_qualified_name, version, _uuid)) => {
                     (query.clone(), full_qualified_name, version.release_date)
                 }
                 None => (query.clone(), "Not found".to_string(), "-".to_string()),
@@ -48,7 +48,7 @@ pub fn resolve_query(
     config: &Config,
     repo_config: &Repositories,
     selector: &PackageSelector,
-) -> Option<(String, VersionEntry)> {
+) -> Option<(String, VersionEntry, String)> {
     let target_version = selector.version.as_deref().unwrap_or("stable");
 
     for repo in &repo_config.repositories {
@@ -71,7 +71,7 @@ pub fn resolve_query(
                 {
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
                         let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
-                        return Some((full_qualified, v));
+                        return Some((full_qualified, v, repo.uuid.clone()));
                     }
                 }
             }
@@ -91,7 +91,7 @@ pub fn resolve_query(
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
                         let full_qualified =
                             format!("{}/{}={}", repo.name, full_name, v.version);
-                        return Some((full_qualified, v));
+                        return Some((full_qualified, v, repo.uuid.clone()));
                     }
                 }
             }
