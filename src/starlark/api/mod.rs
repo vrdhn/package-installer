@@ -9,9 +9,10 @@ use starlark::environment::GlobalsBuilder;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
 use starlark::syntax::{AstModule, Dialect};
-use starlark::values::dict::DictRef;
+use starlark::values::dict::{DictRef, Dict};
 use starlark::values::list::ListRef;
-use starlark::values::{Value, ValueLike, none::NoneType};
+use starlark::values::{Heap, Value, ValueLike, none::NoneType};
+use starlark::collections::SmallMap;
 use std::time::Duration;
 
 #[starlark_module]
@@ -92,6 +93,15 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
 
         eval.eval_function(decode, &[content_val], &[])
             .map_err(|e| anyhow::anyhow!("{}", e))
+    }
+
+    fn toml_parse<'v>(
+        content: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        let json_value: serde_json::Value = toml::from_str(&content)
+            .map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
+        Ok(serde_to_starlark(json_value, eval.heap()))
     }
 
     fn json_dump(data: Value, query: Option<String>) -> anyhow::Result<NoneType> {
@@ -188,5 +198,36 @@ fn starlark_to_serde(val: Value) -> anyhow::Result<serde_json::Value> {
         Ok(serde_json::Value::Object(obj))
     } else {
         Ok(serde_json::Value::String(val.to_str()))
+    }
+}
+
+fn serde_to_starlark<'v>(val: serde_json::Value, heap: &'v Heap) -> Value<'v> {
+    match val {
+        serde_json::Value::Null => Value::new_none(),
+        serde_json::Value::Bool(b) => Value::new_bool(b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                heap.alloc(i as i32) // Starlark i32
+            } else if let Some(f) = n.as_f64() {
+                heap.alloc(f)
+            } else {
+                heap.alloc(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => heap.alloc(s),
+        serde_json::Value::Array(arr) => {
+            let mut list = Vec::new();
+            for v in arr {
+                list.push(serde_to_starlark(v, heap));
+            }
+            heap.alloc(list)
+        }
+        serde_json::Value::Object(obj) => {
+            let mut dict = SmallMap::with_capacity(obj.len());
+            for (k, v) in obj {
+                dict.insert_hashed(heap.alloc(k).get_hashed().unwrap(), serde_to_starlark(v, heap));
+            }
+            heap.alloc(Dict::new(dict))
+        }
     }
 }
