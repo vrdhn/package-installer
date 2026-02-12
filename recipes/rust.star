@@ -18,10 +18,7 @@ def get_rust_target():
 
 def discover_rust_component(package_name):
     target = get_rust_target()
-    # rust-src is target-independent
-    if package_name == "rust-src":
-        target = None
-        
+    
     for channel in ["stable", "beta", "nightly"]:
         url = "https://static.rust-lang.org/dist/channel-rust-" + channel + ".toml"
         print("Fetching manifest:", url)
@@ -32,7 +29,9 @@ def discover_rust_component(package_name):
         data = toml_parse(content)
         date = data.get("date", "")
         
-        pkg = data.get("pkg", {}).get(package_name)
+        pkgs = data.get("pkg", {})
+        pkg = pkgs.get(package_name)
+        
         if not pkg:
             continue
             
@@ -43,19 +42,22 @@ def discover_rust_component(package_name):
         version = version_full.split(" ")[0]
         
         # Check if target is supported for this component
-        if target:
-            target_data = pkg.get("target", {}).get(target)
-            if not target_data or not target_data.get("available"):
-                continue
+        target_dict = pkg.get("target", {})
+        target_data = target_dict.get(target)
+        if not target_data or not target_data.get("available"):
+            # Try wildcard target
+            target_data = target_dict.get("*")
             
-            filename = package_name + "-" + version + "-" + target + ".tar.gz"
-        else:
-            filename = package_name + "-" + version + ".tar.gz"
-                
-        # Construct download URL
-        dl_url = "https://static.rust-lang.org/dist/" + filename
-        if channel != "stable" and date:
-            dl_url = "https://static.rust-lang.org/dist/" + date + "/" + filename
+        if not target_data or not target_data.get("available"):
+            continue
+
+        dl_url = target_data.get("url")
+        checksum = target_data.get("hash")
+        
+        if not dl_url:
+            continue
+
+        filename = dl_url.split('/')[-1]
             
         add_version(
             pkgname = package_name,
@@ -64,8 +66,8 @@ def discover_rust_component(package_name):
             release_type = channel,
             url = dl_url,
             filename = filename,
-            checksum = "",
-            checksum_url = dl_url + ".sha256"
+            checksum = checksum,
+            checksum_url = ""
         )
 
 def cargo_discovery(manager, package):
@@ -94,7 +96,16 @@ def cargo_discovery(manager, package):
         )
 
 # Register toolchain components
-COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]
+COMPONENTS = [
+    "rust",
+    "cargo",
+    "rust-analyzer-preview",
+    "rust-src",
+    "rustfmt-preview",
+    "clippy-preview",
+    "rustc",
+    "rust-std",
+]
 for c in COMPONENTS:
     add_package(c, discover_rust_component)
 

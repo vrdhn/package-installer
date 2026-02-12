@@ -102,6 +102,11 @@ pub enum PackageCommands {
         /// Package selector
         selector: Option<String>,
     },
+    /// Display detailed information for matching packages
+    Info {
+        /// Package selector
+        selector: String,
+    },
     /// Resolve package selectors to specific versions
     Resolve {
         /// Package selectors to resolve
