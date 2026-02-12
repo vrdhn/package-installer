@@ -16,7 +16,7 @@ pub struct Context {
     pub os: String,
     pub arch: String,
     pub filename: String,
-    pub download_dir: PathBuf,
+    pub meta_dir: PathBuf,
     pub packages: RwLock<Vec<PackageEntry>>,
     pub managers: RwLock<Vec<ManagerEntry>>,
     pub versions: RwLock<Vec<VersionEntry>>,
@@ -25,12 +25,12 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(filename: String, download_dir: PathBuf, state: Arc<State>) -> Self {
+    pub fn new(filename: String, meta_dir: PathBuf, state: Arc<State>) -> Self {
         Self {
             os: env::consts::OS.to_string(),
             arch: env::consts::ARCH.to_string(),
             filename,
-            download_dir,
+            meta_dir,
             packages: RwLock::new(Vec::new()),
             managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
@@ -46,8 +46,8 @@ impl Allocative for Context {
         visitor.visit_field::<String>(Key::new("arch"), &self.arch);
         visitor.visit_field::<String>(Key::new("filename"), &self.filename);
         visitor.visit_field::<String>(
-            Key::new("download_dir"),
-            &self.download_dir.to_string_lossy().to_string(),
+            Key::new("meta_dir"),
+            &self.meta_dir.to_string_lossy().to_string(),
         );
         visitor.exit();
     }

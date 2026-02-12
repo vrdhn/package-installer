@@ -3,17 +3,18 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 
 src/
  models/
-  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, state: Arc<State> }, State { repositories: OnceLock, package_lists: DashMap, version_lists: DashMap }
+  config: Config { cache_dir, config_dir, state_dir, meta_dir, state: Arc<State> }, State { repositories: OnceLock, package_lists: DashMap, version_lists: DashMap, meta_dir }
   repository: Repository { uuid, path, name }, Repositories { repositories, get_all(config), load, save }
   package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo), load, save, exists }
   version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, manager_command: Auto|Custom(String) }, VersionList { versions, get_for_package(config, repo, name, pkg_entry, mgr_entry), load, save, exists }
   selector: PackageSelector { recipe, prefix, package, version }
+  context: Context { os, arch, filename, meta_dir, state: Arc<State> }
  starlark/
-  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download, json_parse, toml_parse, json_dump, add_version(..., manager_command))
+  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download (caches to meta_dir), json_parse, toml_parse, json_dump, add_version(..., manager_command))
   runtime: 
-   - evaluate_file -> (Vec<PackageEntry>, Vec<ManagerEntry>)
-   - execute_function -> Vec<VersionEntry>
-   - execute_manager_function -> Vec<VersionEntry>
+   - evaluate_file(path, state) -> (Vec<PackageEntry>, Vec<ManagerEntry>)
+   - execute_function(path, name, arg, state) -> Vec<VersionEntry>
+   - execute_manager_function(path, name, mgr, pkg, state) -> Vec<VersionEntry>
  services/
   downloader: ureq-based streaming GET requests with progress reporting (10s interval), bandwidth calc, and IPv4 preference.
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
@@ -23,16 +24,16 @@ src/
  commands/repo:
   - add: register repo path, generate UUID, store in repositories.json, trigger sync
   - sync: triggers sync_all -> calls services::sync::sync_repo
-  - list: display table of repo, type, name, and discovery function
+  - list: display table (no separators) of repo, type, name, and discovery function
  commands/package:
   - sync: sync_all(config, selector) -> calls services::sync::{sync_package, sync_manager_package}
-  - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support)
-  - info: display detailed metadata (URL, checksum, etc.) for matching packages
-  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps.
+  - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support), no separators
+  - info: display detailed metadata (URL, checksum, etc.) for matching packages, no separators
+  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps, no separators.
  commands/cave:
   - init, info, add, rem, resolve: Cave management for environments and package sets.
  commands/disk:
-  - info: show disk usage of config, cache, and state directories
+  - info: show disk usage of config, cache, and state directories, no separators
   - clean: delete the cache directory
   - uninstall: delete config, cache, and state directories (requires --confirm)
 
@@ -45,5 +46,5 @@ logic:
 - add_version: stores metadata including checksum_url and optional manager_command; type logic (stable/lts/obsolete) handled in .star
 - sorting: VersionEntry sorted by release_date then version string before display
 - Sanitization: Package names in version cache filenames have '/' replaced with '#' to avoid directory issues.
-- Refactoring: Renamed "installer" to "manager" throughout the codebase.
+- Refactoring: Removed download_dir, moved Starlark API download caching to meta_dir. Removed table separators.
 - Rust Discovery: `discover_rust_component` handles wildcard targets and auto-appends `-preview` suffix for components like `rustfmt` to match manifest entries while keeping base names in `COMPONENTS`.

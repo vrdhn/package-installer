@@ -10,10 +10,8 @@ use std::path::Path;
 pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     info!("Executing devel test command for file: {}", filename);
 
-    let download_dir = config.download_dir.clone();
-
     let path = Path::new(filename);
-    match evaluate_file(path, download_dir.clone(), config.state.clone()) {
+    match evaluate_file(path, config.state.clone()) {
         Ok((packages, managers)) => {
             info!("Registered {} packages and {} managers.", packages.len(), managers.len());
             if let Some(package_name) = pkg {
@@ -47,14 +45,12 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
         manager_name, entry.function_name, package_name, entry.filename
     );
 
-    let download_dir = config.download_dir.clone();
-    let starlark_path = Path::new(&entry.filename);
+    let star_path = Path::new(&entry.filename);
     match crate::starlark::runtime::execute_manager_function(
-        starlark_path,
+        &star_path,
         &entry.function_name,
         manager_name,
         package_name,
-        download_dir,
         config.state.clone(),
     ) {
         Ok(mut versions) => {
@@ -82,13 +78,11 @@ fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntr
         package_name, entry.function_name, entry.filename
     );
 
-    let download_dir = config.download_dir.clone();
-    let starlark_path = Path::new(&entry.filename);
+    let star_path = Path::new(&entry.filename);
     match execute_function(
-        starlark_path,
+        &star_path,
         &entry.function_name,
         package_name,
-        download_dir,
         config.state.clone(),
     ) {
         Ok(mut versions) => {

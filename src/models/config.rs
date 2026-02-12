@@ -11,7 +11,6 @@ pub struct Config {
     pub config_dir: PathBuf,
     pub state_dir: PathBuf,
     pub meta_dir: PathBuf,
-    pub download_dir: PathBuf,
     pub state: Arc<State>,
 }
 
@@ -21,6 +20,7 @@ pub struct State {
     pub package_lists: DashMap<String, Arc<PackageList>>,
     pub version_lists: DashMap<String, Arc<VersionList>>,
     pub download_locks: DashMap<String, Arc<parking_lot::Mutex<()>>>,
+    pub meta_dir: PathBuf,
 }
 
 impl Config {
@@ -36,15 +36,16 @@ impl Config {
             .join("pi");
 
         let meta_dir = cache_dir.join("meta");
-        let download_dir = cache_dir.join("downloads");
 
         Self {
             cache_dir,
             config_dir,
             state_dir,
-            meta_dir,
-            download_dir,
-            state: Arc::new(State::default()),
+            meta_dir: meta_dir.clone(),
+            state: Arc::new(State {
+                meta_dir,
+                ..Default::default()
+            }),
         }
     }
 

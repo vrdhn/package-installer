@@ -14,7 +14,6 @@ use std::sync::Arc;
 
 pub fn evaluate_file(
     path: &Path,
-    download_dir: PathBuf,
     state: Arc<State>,
 ) -> anyhow::Result<(Vec<PackageEntry>, Vec<ManagerEntry>)> {
     let filename = path.to_string_lossy().into_owned();
@@ -25,7 +24,12 @@ pub fn evaluate_file(
     let globals = create_globals();
     let module = Module::new();
 
-    setup_context(&module, filename, download_dir, state);
+    setup_context(
+        &module,
+        filename,
+        state.meta_dir.clone(),
+        state.clone(),
+    );
 
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals)
@@ -41,7 +45,6 @@ pub fn execute_manager_function(
     function_name: &str,
     manager_name: &str,
     package_name: &str,
-    download_dir: PathBuf,
     state: Arc<State>,
 ) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = path.to_string_lossy().into_owned();
@@ -55,8 +58,8 @@ pub fn execute_manager_function(
     setup_context(
         &module,
         format!("{}:exec:{}", filename, manager_name),
-        download_dir,
-        state,
+        state.meta_dir.clone(),
+        state.clone(),
     );
 
     let mut eval = Evaluator::new(&module);
@@ -80,7 +83,6 @@ pub fn execute_function(
     path: &Path,
     function_name: &str,
     argument: &str,
-    download_dir: PathBuf,
     state: Arc<State>,
 ) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = path.to_string_lossy().into_owned();
@@ -91,7 +93,12 @@ pub fn execute_function(
     let globals = create_globals();
     let module = Module::new();
 
-    setup_context(&module, format!("{}:exec", filename), download_dir, state);
+    setup_context(
+        &module,
+        format!("{}:exec", filename),
+        state.meta_dir.clone(),
+        state.clone(),
+    );
 
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals)
@@ -120,8 +127,13 @@ fn create_globals() -> starlark::environment::Globals {
     builder.build()
 }
 
-fn setup_context(module: &Module, filename: String, download_dir: PathBuf, state: Arc<State>) {
-    let context = Context::new(filename, download_dir, state);
+fn setup_context(
+    module: &Module,
+    filename: String,
+    meta_dir: PathBuf,
+    state: Arc<State>,
+) {
+    let context = Context::new(filename, meta_dir, state);
     let context_value = module.heap().alloc_simple(context);
     module.set_extra_value(context_value);
 }
@@ -168,9 +180,12 @@ mod tests {
         writeln!(file, "def install_vlc(pkg): print('Installing', pkg)").unwrap();
         writeln!(file, "add_package('^vlc', install_vlc)").unwrap();
 
-        let download_dir = PathBuf::from("/tmp/pi-test");
-        let state = Arc::new(State::default());
-        let (packages, _managers) = evaluate_file(file.path(), download_dir.clone(), state.clone()).unwrap();
+        let meta_dir = PathBuf::from("/tmp/pi-test-meta");
+        let state = Arc::new(State {
+            meta_dir,
+            ..Default::default()
+        });
+        let (packages, _managers) = evaluate_file(file.path(), state.clone()).unwrap();
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "^vlc");
 
@@ -178,7 +193,6 @@ mod tests {
             file.path(),
             &packages[0].function_name,
             "vlc-player",
-            download_dir,
             state,
         )
         .unwrap();

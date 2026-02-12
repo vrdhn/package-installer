@@ -18,7 +18,7 @@ pub fn sync_repo(config: &Config, repo: &Repository) {
         .filter(|e| e.path().extension().map_or(false, |ext| ext == "star"))
     {
         let star_file_path = entry.path();
-        match evaluate_file(star_file_path, config.download_dir.clone(), config.state.clone()) {
+        match evaluate_file(star_file_path, config.state.clone()) {
             Ok((packages, managers)) => {
                 let rel_path = star_file_path
                     .strip_prefix(repo_path)
@@ -67,7 +67,6 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) {
         &star_path,
         &pkg.function_name,
         &pkg.name,
-        config.download_dir.clone(),
         config.state.clone(),
     ) {
         Ok(versions) => {
@@ -105,7 +104,6 @@ pub fn sync_manager_package(
         &mgr.function_name,
         manager_name,
         package_name,
-        config.download_dir.clone(),
         config.state.clone(),
     ) {
         Ok(versions) => {
