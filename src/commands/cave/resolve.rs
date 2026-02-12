@@ -5,6 +5,7 @@ use crate::models::repository::Repositories;
 use crate::commands::package::resolve;
 use std::env;
 use rayon::prelude::*;
+use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
 pub fn run(config: &Config, variant: Option<String>) {
@@ -45,6 +46,7 @@ pub fn run(config: &Config, variant: Option<String>) {
         .collect();
 
     let mut table = Table::new();
+    table.load_preset(NOTHING);
     table.set_header(vec!["Query", "Resolved Full Name", "Release Date"]);
     for (query, full_name, date) in results {
         table.add_row(vec![query, full_name, date]);

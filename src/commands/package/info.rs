@@ -3,7 +3,7 @@ use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
-use comfy_table::{Table, Attribute, Cell, Color, presets::UTF8_FULL};
+use comfy_table::{Table, Attribute, Cell, Color, presets::NOTHING};
 
 pub fn run(config: &Config, selector_str: &str) {
     let selector = match PackageSelector::parse(selector_str) {
@@ -100,7 +100,7 @@ fn print_package_info(repo_name: String, _pkg_name: &str, v_list: VersionList, t
 
     for v in filtered_versions {
         let mut table = Table::new();
-        table.load_preset(UTF8_FULL);
+        table.load_preset(NOTHING);
         table.set_header(vec![
             Cell::new("Field").add_attribute(Attribute::Bold),
             Cell::new("Value").add_attribute(Attribute::Bold),

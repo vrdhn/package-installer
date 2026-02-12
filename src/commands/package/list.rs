@@ -3,6 +3,7 @@ use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
+use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
 pub fn run(config: &Config, selector_str: Option<&str>) {
@@ -11,6 +12,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
     let repo_config = Repositories::get_all(config);
 
     let mut table = Table::new();
+    table.load_preset(NOTHING);
     table.set_header(vec!["Repo", "Package", "Version", "Date", "Type"]);
 
     let target_version = selector

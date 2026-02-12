@@ -1,4 +1,5 @@
 use crate::models::config::Config;
+use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 use std::fs;
 use std::path::Path;
@@ -6,6 +7,7 @@ use walkdir::WalkDir;
 
 pub fn run(config: &Config) {
     let mut table = Table::new();
+    table.load_preset(NOTHING);
     table.set_header(vec!["Directory", "Path", "Size"]);
 
     add_row(&mut table, "Config", &config.config_dir);

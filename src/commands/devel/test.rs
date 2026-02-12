@@ -2,6 +2,7 @@ use crate::models::config::Config;
 use crate::models::package_entry::PackageEntry;
 use crate::models::version_entry::VersionEntry;
 use crate::starlark::runtime::{evaluate_file, execute_function};
+use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 use log::{error, info};
 use std::path::Path;
@@ -115,6 +116,7 @@ fn print_versions_table(versions: &[VersionEntry]) {
     }
 
     let mut table = Table::new();
+    table.load_preset(NOTHING);
     table.set_header(vec![
         "Package",
         "Version",

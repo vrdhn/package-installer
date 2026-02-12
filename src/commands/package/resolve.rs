@@ -3,6 +3,7 @@ use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::{VersionEntry, VersionList};
+use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
 pub fn run(config: &Config, queries: Vec<String>) {
@@ -35,6 +36,7 @@ pub fn run(config: &Config, queries: Vec<String>) {
 
     // Print results
     let mut table = Table::new();
+    table.load_preset(NOTHING);
     table.set_header(vec!["Query", "Resolved Full Name", "Release Date"]);
     for (query, full_name, date) in results {
         table.add_row(vec![query, full_name, date]);
