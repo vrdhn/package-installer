@@ -20,6 +20,7 @@ pub struct State {
     pub repositories: OnceLock<Repositories>,
     pub package_lists: DashMap<String, Arc<PackageList>>,
     pub version_lists: DashMap<String, Arc<VersionList>>,
+    pub download_locks: DashMap<String, Arc<parking_lot::Mutex<()>>>,
 }
 
 impl Config {

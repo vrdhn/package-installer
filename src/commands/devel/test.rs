@@ -4,7 +4,7 @@ use crate::models::version_entry::VersionEntry;
 use crate::starlark::runtime::{evaluate_file, execute_function};
 use comfy_table::Table;
 use log::{error, info};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     info!("Executing devel test command for file: {}", filename);
@@ -12,7 +12,7 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     let download_dir = config.download_dir.clone();
 
     let path = Path::new(filename);
-    match evaluate_file(path, download_dir.clone()) {
+    match evaluate_file(path, download_dir.clone(), config.state.clone()) {
         Ok((packages, managers)) => {
             info!("Registered {} packages and {} managers.", packages.len(), managers.len());
             if let Some(package_name) = pkg {
@@ -22,14 +22,14 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
                     let pkg_inner = &package_name[colon_idx + 1..];
 
                     if let Some(mgr) = managers.iter().find(|m| m.name == mgr_name) {
-                        run_manager_function(mgr_name, pkg_inner, mgr, download_dir.clone());
+                        run_manager_function(config, mgr_name, pkg_inner, mgr);
                         return;
                     }
                 }
 
                 // Try exact package name match
                 if let Some(pkg_entry) = packages.iter().find(|p| p.name == package_name) {
-                    run_package_function(package_name, pkg_entry, download_dir.clone());
+                    run_package_function(config, package_name, pkg_entry);
                     return;
                 }
 
@@ -40,12 +40,13 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     }
 }
 
-fn run_manager_function(manager_name: &str, package_name: &str, entry: &crate::models::package_entry::ManagerEntry, download_dir: PathBuf) {
+fn run_manager_function(config: &Config, manager_name: &str, package_name: &str, entry: &crate::models::package_entry::ManagerEntry) {
     info!(
         "Manager '{}' matched exactly. Calling function '{}' for package '{}' from '{}'.",
         manager_name, entry.function_name, package_name, entry.filename
     );
 
+    let download_dir = config.download_dir.clone();
     let starlark_path = Path::new(&entry.filename);
     match crate::starlark::runtime::execute_manager_function(
         starlark_path,
@@ -53,6 +54,7 @@ fn run_manager_function(manager_name: &str, package_name: &str, entry: &crate::m
         manager_name,
         package_name,
         download_dir,
+        config.state.clone(),
     ) {
         Ok(mut versions) => {
             info!(
@@ -73,18 +75,20 @@ fn run_manager_function(manager_name: &str, package_name: &str, entry: &crate::m
     }
 }
 
-fn run_package_function(package_name: &str, entry: &PackageEntry, download_dir: PathBuf) {
+fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntry) {
     info!(
         "Package '{}' matched exactly. Calling function '{}' from '{}'.",
         package_name, entry.function_name, entry.filename
     );
 
+    let download_dir = config.download_dir.clone();
     let starlark_path = Path::new(&entry.filename);
     match execute_function(
         starlark_path,
         &entry.function_name,
         package_name,
         download_dir,
+        config.state.clone(),
     ) {
         Ok(mut versions) => {
             info!(

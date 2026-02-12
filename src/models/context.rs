@@ -1,3 +1,4 @@
+use crate::models::config::State;
 use crate::models::package_entry::{ManagerEntry, PackageEntry};
 use crate::models::version_entry::VersionEntry;
 use allocative::{Allocative, Key, Visitor};
@@ -8,6 +9,7 @@ use starlark::values::{AllocValue, Heap, StarlarkValue, Value, starlark_value};
 use std::env;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
@@ -18,10 +20,12 @@ pub struct Context {
     pub packages: RwLock<Vec<PackageEntry>>,
     pub managers: RwLock<Vec<ManagerEntry>>,
     pub versions: RwLock<Vec<VersionEntry>>,
+    #[serde(skip)]
+    pub state: Arc<State>,
 }
 
 impl Context {
-    pub fn new(filename: String, download_dir: PathBuf) -> Self {
+    pub fn new(filename: String, download_dir: PathBuf, state: Arc<State>) -> Self {
         Self {
             os: env::consts::OS.to_string(),
             arch: env::consts::ARCH.to_string(),
@@ -30,6 +34,7 @@ impl Context {
             packages: RwLock::new(Vec::new()),
             managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
+            state,
         }
     }
 }

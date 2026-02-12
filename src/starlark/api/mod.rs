@@ -69,6 +69,21 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             return Ok(cached);
         }
 
+        // Handle concurrent downloads by locking on the URL
+        let lock = context
+            .state
+            .download_locks
+            .entry(url.clone())
+            .or_insert_with(|| std::sync::Arc::new(parking_lot::Mutex::new(())))
+            .clone();
+
+        let _guard = lock.lock();
+
+        // Check cache again after acquiring lock to see if another thread finished it
+        if let Some(cached) = cache.read(&url)? {
+            return Ok(cached);
+        }
+
         let content = Downloader::download(&url)?;
         cache.write(&url, &content)?;
         Ok(content)
