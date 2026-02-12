@@ -6,7 +6,7 @@ mod models;
 mod services;
 mod starlark;
 
-use crate::cli::parser::{Cli, Commands, DevelCommands};
+use crate::cli::parser::{Cli, Commands, DevelCommands, CaveCommands};
 use crate::logging::init::init_logging;
 use crate::models::config::Config;
 use clap::Parser;
@@ -43,6 +43,13 @@ fn main() {
             cli::parser::PackageCommands::Resolve { queries } => {
                 commands::package::resolve::run(&config, queries);
             }
+        },
+        Commands::Cave { command } => match command {
+            CaveCommands::Init => commands::cave::init::run(&config),
+            CaveCommands::Info => commands::cave::info::run(&config),
+            CaveCommands::Add { arg1, arg2 } => commands::cave::add::run(&config, arg1, arg2),
+            CaveCommands::Rem { arg1, arg2 } => commands::cave::rem::run(&config, arg1, arg2),
+            CaveCommands::Resolve { variant } => commands::cave::resolve::run(&config, variant),
         },
         Commands::Disk { command } => match command {
             cli::parser::DiskCommands::Info => {

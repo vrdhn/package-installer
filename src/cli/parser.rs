@@ -27,6 +27,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: PackageCommands,
     },
+    /// {init, info, add, resolve} Cave management
+    Cave {
+        #[command(subcommand)]
+        command: CaveCommands,
+    },
     /// {info, clean, uninstall} Disk management
     Disk {
         #[command(subcommand)]
@@ -36,6 +41,33 @@ pub enum Commands {
     Devel {
         #[command(subcommand)]
         command: DevelCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum CaveCommands {
+    /// Initialize a new cave in the current directory
+    Init,
+    /// Display information about the current cave
+    Info,
+    /// Add a package to the cave or a variant
+    Add {
+        /// Optional variant name (starts with :) or package query
+        arg1: String,
+        /// Optional package query (if arg1 was a variant)
+        arg2: Option<String>,
+    },
+    /// Remove a package from the cave or a variant
+    Rem {
+        /// Optional variant name (starts with :) or package query
+        arg1: String,
+        /// Optional package query (if arg1 was a variant)
+        arg2: Option<String>,
+    },
+    /// Resolve all packages in the cave or a variant
+    Resolve {
+        /// Optional variant name (starts with :)
+        variant: Option<String>,
     },
 }
 

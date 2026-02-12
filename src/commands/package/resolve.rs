@@ -42,7 +42,7 @@ pub fn run(config: &Config, queries: Vec<String>) {
     println!("{table}");
 }
 
-fn resolve_query(
+pub fn resolve_query(
     config: &Config,
     repo_config: &Repositories,
     selector: &PackageSelector,
@@ -98,7 +98,7 @@ fn resolve_query(
     None
 }
 
-fn find_best_version(v_list: VersionList, target_version: &str) -> Option<VersionEntry> {
+pub fn find_best_version(v_list: VersionList, target_version: &str) -> Option<VersionEntry> {
     let mut filtered_versions: Vec<_> = v_list
         .versions
         .into_iter()
