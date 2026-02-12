@@ -12,17 +12,7 @@ pub fn run(config: &Config, path: &str) {
         .to_string();
     let abs_path_str = abs_path.to_string_lossy().to_string();
 
-    fs::create_dir_all(&config.config_dir).expect("Failed to create config directory");
-    let config_file = config.repositories_file();
-
-    let mut repo_config = if config_file.exists() {
-        let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-        serde_json::from_str(&content).expect("Failed to parse config file")
-    } else {
-        Repositories {
-            repositories: Vec::new(),
-        }
-    };
+    let mut repo_config = Repositories::load(config).expect("Failed to load repositories");
 
     if repo_config.repositories.iter().any(|r| r.path == abs_path_str) {
         println!("Repository already exists: {}", abs_path_str);
@@ -32,8 +22,7 @@ pub fn run(config: &Config, path: &str) {
     let repo = Repository::new(abs_path_str, name.clone());
     repo_config.repositories.push(repo);
 
-    let content = serde_json::to_string_pretty(&repo_config).expect("Failed to serialize config");
-    fs::write(&config_file, content).expect("Failed to write config file");
+    repo_config.save(config).expect("Failed to save repositories");
 
     println!("Added repository: {} at {}", name, abs_path.display());
 

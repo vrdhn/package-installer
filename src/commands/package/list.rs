@@ -5,21 +5,11 @@ use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
 use comfy_table::Table;
 use glob::Pattern;
-use std::fs;
 
 pub fn run(config: &Config, selector_str: Option<&str>) {
     let selector = selector_str.and_then(PackageSelector::parse);
 
-    let config_file = config.repositories_file();
-
-    if !config_file.exists() {
-        println!("No repositories configured.");
-        return;
-    }
-
-    let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let repo_config: Repositories =
-        serde_json::from_str(&content).expect("Failed to parse config file");
+    let repo_config = Repositories::get_all(config);
 
     let mut table = Table::new();
     table.set_header(vec!["Repo", "Package", "Version", "Date", "Type"]);
@@ -38,58 +28,42 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
             }
         }
 
-        let repo_cache_file = config.package_cache_file(&repo.uuid);
-        if !repo_cache_file.exists() {
-            continue;
-        }
-
-        let pkg_content =
-            fs::read_to_string(&repo_cache_file).expect("Failed to read repo cache file");
-        let pkg_list: PackageList =
-            serde_json::from_str(&pkg_content).expect("Failed to parse repo cache file");
-
-        for pkg in &pkg_list.packages {
-            if let Some(ref s) = selector {
-                if !s.package.is_empty() && s.package != "*" {
-                    if !pkg.name.contains(&s.package) {
-                        continue;
+        if let Some(pkg_list) = PackageList::get_for_repo(config, repo) {
+            for pkg in &pkg_list.packages {
+                if let Some(ref s) = selector {
+                    if !s.package.is_empty() && s.package != "*" {
+                        if !pkg.name.contains(&s.package) {
+                            continue;
+                        }
                     }
+                }
+
+                if let Some(v_list) = VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None) {
+                    add_versions_to_table(
+                        &mut table,
+                        repo.name.clone(),
+                        (*v_list).clone(),
+                        &target_version,
+                    );
                 }
             }
 
-            let safe_name = pkg.name.replace('/', "#");
-            let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
-            if !version_cache_file.exists() {
-                continue;
-            }
-
-            let v_content =
-                fs::read_to_string(&version_cache_file).expect("Failed to read version cache file");
-            let v_list: VersionList =
-                serde_json::from_str(&v_content).expect("Failed to parse version cache file");
-
-            add_versions_to_table(&mut table, repo.name.clone(), v_list, &target_version);
-        }
-
-        // Handle installers
-        if let Some(ref s) = selector {
-            if let Some(ref prefix) = s.prefix {
-                for inst in &pkg_list.installers {
-                    if inst.name == *prefix {
-                        let full_name = format!("{}:{}", prefix, s.package);
-                        let safe_name = full_name.replace('/', "#");
-                        let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
-                        if version_cache_file.exists() {
-                            let v_content = fs::read_to_string(&version_cache_file)
-                                .expect("Failed to read version cache file");
-                            let v_list: VersionList = serde_json::from_str(&v_content)
-                                .expect("Failed to parse version cache file");
-                            add_versions_to_table(
-                                &mut table,
-                                repo.name.clone(),
-                                v_list,
-                                &target_version,
-                            );
+            // Handle managers
+            if let Some(ref s) = selector {
+                if let Some(ref prefix) = s.prefix {
+                    for mgr in &pkg_list.managers {
+                        if mgr.name == *prefix {
+                            let full_name = format!("{}:{}", prefix, s.package);
+                            if let Some(v_list) =
+                                VersionList::get_for_package(config, repo, &full_name, None, Some((mgr, &s.package)))
+                            {
+                                add_versions_to_table(
+                                    &mut table,
+                                    repo.name.clone(),
+                                    (*v_list).clone(),
+                                    &target_version,
+                                );
+                            }
                         }
                     }
                 }

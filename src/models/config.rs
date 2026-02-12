@@ -1,4 +1,9 @@
+use crate::models::package_entry::PackageList;
+use crate::models::repository::Repositories;
+use crate::models::version_entry::VersionList;
+use dashmap::DashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -7,6 +12,14 @@ pub struct Config {
     pub state_dir: PathBuf,
     pub meta_dir: PathBuf,
     pub download_dir: PathBuf,
+    pub state: Arc<State>,
+}
+
+#[derive(Debug, Default)]
+pub struct State {
+    pub repositories: OnceLock<Repositories>,
+    pub package_lists: DashMap<String, Arc<PackageList>>,
+    pub version_lists: DashMap<String, Arc<VersionList>>,
 }
 
 impl Config {
@@ -30,6 +43,7 @@ impl Config {
             state_dir,
             meta_dir,
             download_dir,
+            state: Arc::new(State::default()),
         }
     }
 

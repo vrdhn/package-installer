@@ -67,7 +67,7 @@ def install_node(package_name):
 
 add_package("node", install_node)
 
-def npm_discovery(installer, package):
+def npm_discovery(manager, package):
     print("Syncing npm package:", package)
     url = "https://registry.npmjs.org/" + package
     content = download(url)
@@ -98,7 +98,7 @@ def npm_discovery(installer, package):
             filename = package.split("/")[-1] + "-" + version + ".tgz",
             checksum = v_data["dist"]["shasum"],
             checksum_url = "",
-            installer_command = "npm --global install " + package
+            manager_command = "npm --global install " + package
         )
 
-add_installer("npm", npm_discovery)
+add_manager("npm", npm_discovery)

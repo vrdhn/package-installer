@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "pi")]
-#[command(about = "A package installer", long_about = None)]
+#[command(about = "A package manager", long_about = None)]
 pub struct Cli {
     /// Enable verbose logging (shows all log levels)
     #[arg(short, long, global = true)]

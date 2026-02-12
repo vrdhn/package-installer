@@ -4,56 +4,41 @@ use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::{VersionEntry, VersionList};
 use comfy_table::Table;
-use glob::Pattern;
-use std::fs;
 
 pub fn run(config: &Config, queries: Vec<String>) {
-    let config_file = config.repositories_file();
+    let repo_config = Repositories::get_all(config);
 
-    if !config_file.exists() {
-        println!("No repositories configured.");
-        return;
-    }
+    // Resolve queries in parallel
+    use rayon::prelude::*;
+    let results: Vec<(String, String, String)> = queries
+        .par_iter()
+        .map(|query| {
+            let selector = match PackageSelector::parse(query) {
+                Some(s) => s,
+                None => {
+                    return (
+                        query.clone(),
+                        "Invalid selector".to_string(),
+                        "-".to_string(),
+                    )
+                }
+            };
 
-    let content = fs::read_to_string(&config_file).expect("Failed to read config file");
-    let repo_config: Repositories =
-        serde_json::from_str(&content).expect("Failed to parse config file");
+            match resolve_query(config, repo_config, &selector) {
+                Some((full_qualified_name, version)) => {
+                    (query.clone(), full_qualified_name, version.release_date)
+                }
+                None => (query.clone(), "Not found".to_string(), "-".to_string()),
+            }
+        })
+        .collect();
 
+    // Print results
     let mut table = Table::new();
     table.set_header(vec!["Query", "Resolved Full Name", "Release Date"]);
-
-    for query in queries {
-        let selector = match PackageSelector::parse(&query) {
-            Some(s) => s,
-            None => {
-                table.add_row(vec![
-                    query,
-                    "Invalid selector".to_string(),
-                    "-".to_string(),
-                ]);
-                continue;
-            }
-        };
-
-        let resolved = resolve_query(config, &repo_config, &selector);
-        match resolved {
-            Some((full_qualified_name, version)) => {
-                table.add_row(vec![
-                    query,
-                    full_qualified_name,
-                    version.release_date,
-                ]);
-            }
-            None => {
-                table.add_row(vec![
-                    query,
-                    "Not found".to_string(),
-                    "-".to_string(),
-                ]);
-            }
-        }
+    for (query, full_name, date) in results {
+        table.add_row(vec![query, full_name, date]);
     }
-
     println!("{table}");
 }
 
@@ -71,57 +56,64 @@ fn resolve_query(
             }
         }
 
-        let repo_cache_file = config.package_cache_file(&repo.uuid);
-        if !repo_cache_file.exists() {
-            continue;
-        }
-
-        let pkg_content =
-            fs::read_to_string(&repo_cache_file).expect("Failed to read repo cache file");
-        let pkg_list: PackageList =
-            serde_json::from_str(&pkg_content).expect("Failed to parse repo cache file");
+        let pkg_list = match PackageList::get_for_repo(config, repo) {
+            Some(l) => l,
+            None => continue,
+        };
 
         // Check direct packages
         if selector.prefix.is_none() {
-            for pkg in &pkg_list.packages {
-                if pkg.name == selector.package || pkg.name.contains(&selector.package) {
-                    let safe_name = pkg.name.replace('/', "#");
-                    let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
-                    if let Some(v) = find_best_version(&version_cache_file, target_version) {
+            if let Some(pkg) = pkg_list.package_map.get(&selector.package) {
+                if let Some(v_list) =
+                    VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
+                {
+                    if let Some(v) = find_best_version((*v_list).clone(), target_version) {
                         let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
                         return Some((full_qualified, v));
                     }
                 }
+            } else {
+                // Fallback to contains check if exact match fails (for globs or partials)
+                for pkg in &pkg_list.packages {
+                    if pkg.name.contains(&selector.package) {
+                        if let Some(v_list) =
+                            VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
+                        {
+                            if let Some(v) = find_best_version((*v_list).clone(), target_version) {
+                                let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
+                                return Some((full_qualified, v));
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Check installers
+        // Check managers
         if let Some(ref prefix) = selector.prefix {
-            for inst in &pkg_list.installers {
-                if inst.name == *prefix {
-                    let full_name = format!("{}:{}", prefix, selector.package);
-                    let safe_name = full_name.replace('/', "#");
-                    let version_cache_file = config.version_cache_file(&repo.uuid, &safe_name);
-                    if let Some(v) = find_best_version(&version_cache_file, target_version) {
-                        let full_qualified = format!("{}/{}={}", repo.name, full_name, v.version);
+            if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+                let full_name = format!("{}:{}", prefix, selector.package);
+                if let Some(v_list) = VersionList::get_for_package(
+                    config,
+                    repo,
+                    &full_name,
+                    None,
+                    Some((mgr, &selector.package)),
+                ) {
+                    if let Some(v) = find_best_version((*v_list).clone(), target_version) {
+                        let full_qualified =
+                            format!("{}/{}={}", repo.name, full_name, v.version);
                         return Some((full_qualified, v));
                     }
                 }
             }
         }
     }
-
     None
 }
 
-fn find_best_version(cache_file: &std::path::Path, target_version: &str) -> Option<VersionEntry> {
-    if !cache_file.exists() {
-        return None;
-    }
-
-    let v_content = fs::read_to_string(cache_file).ok()?;
-    let v_list: VersionList = serde_json::from_str(&v_content).ok()?;
-
+fn find_best_version(v_list: VersionList, target_version: &str) -> Option<VersionEntry> {
+    use glob::Pattern;
     let mut filtered_versions: Vec<_> = v_list
         .versions
         .into_iter()

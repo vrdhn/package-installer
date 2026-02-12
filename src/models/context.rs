@@ -1,4 +1,4 @@
-use crate::models::package_entry::{InstallerEntry, PackageEntry};
+use crate::models::package_entry::{ManagerEntry, PackageEntry};
 use crate::models::version_entry::VersionEntry;
 use allocative::{Allocative, Key, Visitor};
 use parking_lot::RwLock;
@@ -16,7 +16,7 @@ pub struct Context {
     pub filename: String,
     pub download_dir: PathBuf,
     pub packages: RwLock<Vec<PackageEntry>>,
-    pub installers: RwLock<Vec<InstallerEntry>>,
+    pub managers: RwLock<Vec<ManagerEntry>>,
     pub versions: RwLock<Vec<VersionEntry>>,
 }
 
@@ -28,7 +28,7 @@ impl Context {
             filename,
             download_dir,
             packages: RwLock::new(Vec::new()),
-            installers: RwLock::new(Vec::new()),
+            managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
         }
     }

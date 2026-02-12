@@ -13,14 +13,13 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     let download_dir = config.download_dir.clone();
 
     let path = Path::new(filename);
-    match evaluate_file(path, download_dir.clone()) {
-        Ok((packages, _installers)) => {
-            info!("Registered {} packages.", packages.len());
-            if let Some(package_name) = pkg {
-                process_package_matching(package_name, &packages, download_dir);
-            }
-        }
-        Err(e) => error!("Starlark evaluation failed: {}", e),
+        match evaluate_file(path, download_dir.clone()) {
+            Ok((packages, _managers)) => {
+                info!("Registered {} packages.", packages.len());
+                if let Some(package_name) = pkg {
+                    process_package_matching(package_name, &packages, download_dir);
+                }
+            }        Err(e) => error!("Starlark evaluation failed: {}", e),
     }
 }
 

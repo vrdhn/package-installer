@@ -1,5 +1,5 @@
 use crate::models::context::Context;
-use crate::models::package_entry::{InstallerEntry, PackageEntry};
+use crate::models::package_entry::{ManagerEntry, PackageEntry};
 use crate::models::version_entry::VersionEntry;
 use crate::starlark::api::register_api;
 use anyhow::Context as _;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub fn evaluate_file(
     path: &Path,
     download_dir: PathBuf,
-) -> anyhow::Result<(Vec<PackageEntry>, Vec<InstallerEntry>)> {
+) -> anyhow::Result<(Vec<PackageEntry>, Vec<ManagerEntry>)> {
     let filename = path.to_string_lossy().into_owned();
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
@@ -29,14 +29,14 @@ pub fn evaluate_file(
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     let packages = extract_packages(&module)?;
-    let installers = extract_installers(&module)?;
-    Ok((packages, installers))
+    let managers = extract_managers(&module)?;
+    Ok((packages, managers))
 }
 
-pub fn execute_installer_function(
+pub fn execute_manager_function(
     path: &Path,
     function_name: &str,
-    installer_name: &str,
+    manager_name: &str,
     package_name: &str,
     download_dir: PathBuf,
 ) -> anyhow::Result<Vec<VersionEntry>> {
@@ -50,7 +50,7 @@ pub fn execute_installer_function(
 
     setup_context(
         &module,
-        format!("{}:exec:{}", filename, installer_name),
+        format!("{}:exec:{}", filename, manager_name),
         download_dir,
     );
 
@@ -63,9 +63,9 @@ pub fn execute_installer_function(
         function_name, filename
     ))?;
 
-    let inst_val = eval.heap().alloc(installer_name);
+    let mgr_val = eval.heap().alloc(manager_name);
     let pkg_val = eval.heap().alloc(package_name);
-    eval.eval_function(function, &[inst_val, pkg_val], &[])
+    eval.eval_function(function, &[mgr_val, pkg_val], &[])
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     extract_versions(&module)
@@ -130,14 +130,14 @@ fn extract_packages(module: &Module) -> anyhow::Result<Vec<PackageEntry>> {
     Ok(context.packages.read().clone())
 }
 
-pub fn extract_installers(module: &Module) -> anyhow::Result<Vec<InstallerEntry>> {
+pub fn extract_managers(module: &Module) -> anyhow::Result<Vec<ManagerEntry>> {
     let context = module
         .extra_value()
         .context("Context missing after evaluation")?
         .downcast_ref::<Context>()
         .context("Extra value is not a Context")?;
 
-    Ok(context.installers.read().clone())
+    Ok(context.managers.read().clone())
 }
 
 fn extract_versions(module: &Module) -> anyhow::Result<Vec<VersionEntry>> {
@@ -163,7 +163,7 @@ mod tests {
         writeln!(file, "add_package('^vlc', install_vlc)").unwrap();
 
         let download_dir = PathBuf::from("/tmp/pi-test");
-        let (packages, _installers) = evaluate_file(file.path(), download_dir.clone()).unwrap();
+        let (packages, _managers) = evaluate_file(file.path(), download_dir.clone()).unwrap();
         assert_eq!(packages.len(), 1);
         assert_eq!(packages[0].name, "^vlc");
 

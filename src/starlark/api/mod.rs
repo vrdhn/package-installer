@@ -1,6 +1,6 @@
 use crate::models::context::Context;
-use crate::models::package_entry::{InstallerEntry, PackageEntry};
-use crate::models::version_entry::{InstallerCommand, VersionEntry};
+use crate::models::package_entry::{ManagerEntry, PackageEntry};
+use crate::models::version_entry::{ManagerCommand, VersionEntry};
 use crate::services::cache::Cache;
 use crate::services::downloader::Downloader;
 use anyhow::Context as _;
@@ -43,7 +43,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         Ok(NoneType)
     }
 
-    fn add_installer<'v>(
+    fn add_manager<'v>(
         name: String,
         function: Value<'v>,
         eval: &mut Evaluator<'v, '_, '_>,
@@ -51,7 +51,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         let context = get_context(eval)?;
         let function_name = extract_function_name(function);
 
-        context.installers.write().push(InstallerEntry {
+        context.managers.write().push(ManagerEntry {
             name,
             function_name,
             filename: context.filename.clone(),
@@ -118,13 +118,13 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         filename: String,
         checksum: String,
         checksum_url: String,
-        installer_command: Option<String>,
+        manager_command: Option<String>,
         eval: &mut Evaluator<'_, '_, '_>,
     ) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
-        let cmd = match installer_command {
-            Some(c) => InstallerCommand::Custom(c),
-            None => InstallerCommand::Auto,
+        let cmd = match manager_command {
+            Some(c) => ManagerCommand::Custom(c),
+            None => ManagerCommand::Auto,
         };
 
         context.versions.write().push(VersionEntry {
@@ -136,7 +136,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             filename,
             checksum,
             checksum_url,
-            installer_command: cmd,
+            manager_command: cmd,
         });
         Ok(NoneType)
     }

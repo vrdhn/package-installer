@@ -1,46 +1,44 @@
 # pi (package-installer) - Rust
-deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, regex, ureq, sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, glob
+deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, regex, ureq, sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, glob, rayon, dashmap
 
 src/
  models/
-  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir }
-  repository: Repository { uuid, path, name }, Repositories { repositories }
-  package_entry: PackageEntry { name, function_name, filename }, InstallerEntry { name, function_name, filename }
-  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, installer_command: Auto|Custom(String) }
-  context: Context { os, arch, filename, download_dir, packages: RwLock, installers: RwLock, versions: RwLock }
+  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, state: Arc<State> }, State { repositories: OnceLock, package_lists: DashMap, version_lists: DashMap }
+  repository: Repository { uuid, path, name }, Repositories { repositories, get_all(config), load, save }
+  package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo), load, save, exists }
+  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, manager_command: Auto|Custom(String) }, VersionList { versions, get_for_package(config, repo, name, pkg_entry, mgr_entry), load, save, exists }
   selector: PackageSelector { recipe, prefix, package, version }
  starlark/
-  api: register_api (get_os, get_arch, add_package(name, fn), add_installer(name, fn), download, json_parse, json_dump, add_version(..., installer_command))
-  runtime:
-   - evaluate_file -> (Vec<PackageEntry>, Vec<InstallerEntry>)
+  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download, json_parse, json_dump, add_version(..., manager_command))
+  runtime: 
+   - evaluate_file -> (Vec<PackageEntry>, Vec<ManagerEntry>)
    - execute_function -> Vec<VersionEntry>
-   - execute_installer_function -> Vec<VersionEntry>
+   - execute_manager_function -> Vec<VersionEntry>
  services/
   downloader: ureq-based GET requests
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
+  sync: core logic for sync_repo, sync_package, and sync_manager_package
  cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List, Resolve }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
  logging/init: init_logging(verbose)
  commands/repo:
   - add: register repo path, generate UUID, store in repositories.json, trigger sync
-  - sync: walk repo for .star files, evaluate, cache packages-<uuid>.json (includes installers), trigger list
+  - sync: triggers sync_all -> calls services::sync::sync_repo
   - list: display table of repo, type, name, and discovery function
  commands/package:
-  - sync: [recipe]/[prefix]:package -> match & discover (handles installers), cache version-<uuid>-<sanitized_name>.json (sanitized with #)
-  - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support), sanitized with #
-  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps
-  - selector: handles glob (v1.*) and symbolic (latest, stable, lts) versions
+  - sync: sync_all(config, selector) -> calls services::sync::{sync_package, sync_manager_package}
+  - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support)
+  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps.
  commands/disk:
   - info: show disk usage of config, cache, and state directories
   - clean: delete the cache directory
   - uninstall: delete config, cache, and state directories (requires --confirm)
- commands/devel/test:
-  1. evaluate_file -> collect PackageEntry & InstallerEntry list
-  2. if pkg: match name -> execute_function -> collect VersionEntry list
-  3. sort versions (date, version) -> print table (comfy-table)
 
 logic:
+- Lazy Loading: Models use Config.state to cache data. get_all / get_for_repo / get_for_package methods handle thread-safe lazy loading and automatically trigger synchronization if data is missing.
+- Concurrency: Rayon used for parallel resolution; DashMap and OnceLock ensure threads wait for shared resources during automagic syncs.
 - json_parse: trick using eval_statements("json") to get built-in module then calling .decode()
 - json_dump: converts Starlark -> Serde, applies JSONPath (serde_json_path), prints pretty JSON
-- add_version: stores metadata including checksum_url and optional installer_command; type logic (stable/lts/obsolete) handled in .star
+- add_version: stores metadata including checksum_url and optional manager_command; type logic (stable/lts/obsolete) handled in .star
 - sorting: VersionEntry sorted by release_date then version string before display
 - Sanitization: Package names in version cache filenames have '/' replaced with '#' to avoid directory issues.
+- Refactoring: Renamed "installer" to "manager" throughout the codebase.
