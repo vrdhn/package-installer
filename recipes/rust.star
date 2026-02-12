@@ -32,6 +32,10 @@ def discover_rust_component(package_name):
         pkgs = data.get("pkg", {})
         pkg = pkgs.get(package_name)
         
+        # Try -preview suffix (e.g. rustfmt -> rustfmt-preview)
+        if not pkg:
+            pkg = pkgs.get(package_name + "-preview")
+            
         if not pkg:
             continue
             
@@ -96,16 +100,7 @@ def cargo_discovery(manager, package):
         )
 
 # Register toolchain components
-COMPONENTS = [
-    "rust",
-    "cargo",
-    "rust-analyzer-preview",
-    "rust-src",
-    "rustfmt-preview",
-    "clippy-preview",
-    "rustc",
-    "rust-std",
-]
+COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]
 for c in COMPONENTS:
     add_package(c, discover_rust_component)
 
