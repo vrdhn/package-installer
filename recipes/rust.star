@@ -70,7 +70,8 @@ def discover_rust_component(package_name):
             url = dl_url,
             filename = filename,
             checksum = checksum,
-            checksum_url = ""
+            checksum_url = "",
+            filemap = {"bin/*": "bin"}
         )
 
 def cargo_discovery(manager, package):
@@ -95,6 +96,7 @@ def cargo_discovery(manager, package):
             filename = package + "-" + version + ".crate",
             checksum = v["checksum"],
             checksum_url = "",
+            filemap = {"bin/*": "bin"},
             manager_command = "cargo install " + package + " --version " + version
         )
 

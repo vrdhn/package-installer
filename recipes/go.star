@@ -51,7 +51,8 @@ def install_go(package_name):
                     url = "https://go.dev/dl/" + f["filename"],
                     filename = f["filename"],
                     checksum = f["sha256"],
-                    checksum_url = ""
+                    checksum_url = "",
+                    filemap = {"bin/*": "bin"}
                 )
 
 add_package("go", install_go)
@@ -97,6 +98,7 @@ def go_discovery(manager, package):
             filename = package.split("/")[-1] + "-" + version + ".zip",
             checksum = "",
             checksum_url = "",
+            filemap = {"bin/*": "bin"},
             manager_command = "go install " + package + "@" + version
         )
 

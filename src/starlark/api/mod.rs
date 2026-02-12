@@ -146,6 +146,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         filename: String,
         checksum: String,
         checksum_url: String,
+        filemap: Option<Value>,
         manager_command: Option<String>,
         eval: &mut Evaluator<'_, '_, '_>,
     ) -> anyhow::Result<NoneType> {
@@ -153,6 +154,16 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         let cmd = match manager_command {
             Some(c) => ManagerCommand::Custom(c),
             None => ManagerCommand::Auto,
+        };
+
+        let mut parsed_filemap = std::collections::HashMap::new();
+        if let Some(s) = filemap {
+            let dict = DictRef::from_value(s).context("filemap must be a dictionary")?;
+            for (k, v) in dict.iter_hashed() {
+                let key = k.key().unpack_str().context("filemap key must be a string")?;
+                let val = v.unpack_str().context("filemap value must be a string")?;
+                parsed_filemap.insert(key.to_string(), val.to_string());
+            }
         };
 
         context.versions.write().push(VersionEntry {
@@ -164,6 +175,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             filename,
             checksum,
             checksum_url,
+            filemap: parsed_filemap,
             manager_command: cmd,
         });
         Ok(NoneType)

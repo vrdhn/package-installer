@@ -62,7 +62,8 @@ def install_node(package_name):
                 url = url,
                 filename = filename,
                 checksum = "",
-                checksum_url = shasums_url
+                checksum_url = shasums_url,
+                filemap = {"bin/*": "bin"}
             )
 
 add_package("node", install_node)
@@ -98,6 +99,7 @@ def npm_discovery(manager, package):
             filename = package.split("/")[-1] + "-" + version + ".tgz",
             checksum = v_data["dist"]["shasum"],
             checksum_url = "",
+            filemap = {"bin/*": "bin"},
             manager_command = "npm --global install " + package
         )
 
