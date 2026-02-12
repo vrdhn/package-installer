@@ -1,5 +1,5 @@
 # pi (package-installer) - Rust
-deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, regex, ureq, sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, glob, rayon, dashmap
+deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq, sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap
 
 src/
  models/

@@ -15,7 +15,7 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
     let repo_config = Repositories::get_all(config);
 
     repo_config.repositories.par_iter().for_each(|repo| {
-        // If recipe is specified, it must match repo name
+        // If recipe is specified, it must match repo name exactly
         if let Some(ref s) = selector {
             if let Some(ref r_name) = s.recipe {
                 if repo.name != *r_name {
@@ -26,25 +26,12 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
 
         if let Some(pkg_list) = PackageList::get_for_repo(config, repo) {
             pkg_list.packages.par_iter().for_each(|pkg| {
-                // Match package name
+                // Match package name exactly
                 if let Some(ref s) = selector {
                     if !s.package.is_empty() && s.package != "*" {
-                        if !pkg.name.contains(&s.package) {
+                        if pkg.name != s.package {
                             return;
                         }
-                    }
-                }
-
-                // Prefix handling:
-                if pkg.name.contains(':') {
-                    if let Some(ref s) = selector {
-                        if s.prefix.is_none() {
-                            if pkg.name != s.package {
-                                return;
-                            }
-                        }
-                    } else {
-                        return;
                     }
                 }
 
@@ -53,17 +40,15 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
 
             if let Some(ref s) = selector {
                 if let Some(ref prefix) = s.prefix {
-                    pkg_list.managers.par_iter().for_each(|mgr| {
-                        if mgr.name == *prefix {
-                            crate::services::sync::sync_manager_package(
-                                config,
-                                repo,
-                                mgr,
-                                prefix,
-                                &s.package,
-                            );
-                        }
-                    });
+                    if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+                        crate::services::sync::sync_manager_package(
+                            config,
+                            repo,
+                            mgr,
+                            prefix,
+                            &s.package,
+                        );
+                    }
                 }
             }
         }

@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "pi")]
 #[command(about = "A package manager", long_about = None)]
+#[command(arg_required_else_help = true)]
 pub struct Cli {
     /// Enable verbose logging (shows all log levels)
     #[arg(short, long, global = true)]
@@ -16,22 +17,22 @@ pub struct Cli {
 pub enum Commands {
     /// Print version information
     Version,
-    /// Repository management
+    /// {add, sync, list}       Repository management
     Repo {
         #[command(subcommand)]
         command: RepoCommands,
     },
-    /// Package management
+    /// {sync, list, resolve}   Package management
     Package {
         #[command(subcommand)]
         command: PackageCommands,
     },
-    /// Disk management
+    /// {info, clean, uninstall} Disk management
     Disk {
         #[command(subcommand)]
         command: DiskCommands,
     },
-    /// Development commands
+    /// {test}                  Development commands
     Devel {
         #[command(subcommand)]
         command: DevelCommands,

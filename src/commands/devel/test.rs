@@ -4,7 +4,6 @@ use crate::models::version_entry::VersionEntry;
 use crate::starlark::runtime::{evaluate_file, execute_function};
 use comfy_table::Table;
 use log::{error, info};
-use regex::Regex;
 use std::path::{Path, PathBuf};
 
 pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
@@ -13,33 +12,71 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     let download_dir = config.download_dir.clone();
 
     let path = Path::new(filename);
-        match evaluate_file(path, download_dir.clone()) {
-            Ok((packages, _managers)) => {
-                info!("Registered {} packages.", packages.len());
-                if let Some(package_name) = pkg {
-                    process_package_matching(package_name, &packages, download_dir);
+    match evaluate_file(path, download_dir.clone()) {
+        Ok((packages, managers)) => {
+            info!("Registered {} packages and {} managers.", packages.len(), managers.len());
+            if let Some(package_name) = pkg {
+                // Try manager first if it's a manager:package format
+                if let Some(colon_idx) = package_name.find(':') {
+                    let mgr_name = &package_name[..colon_idx];
+                    let pkg_inner = &package_name[colon_idx + 1..];
+
+                    if let Some(mgr) = managers.iter().find(|m| m.name == mgr_name) {
+                        run_manager_function(mgr_name, pkg_inner, mgr, download_dir.clone());
+                        return;
+                    }
                 }
-            }        Err(e) => error!("Starlark evaluation failed: {}", e),
+
+                // Try exact package name match
+                if let Some(pkg_entry) = packages.iter().find(|p| p.name == package_name) {
+                    run_package_function(package_name, pkg_entry, download_dir.clone());
+                    return;
+                }
+
+                error!("Package or manager '{}' not found in file.", package_name);
+            }
+        }
+        Err(e) => error!("Starlark evaluation failed: {}", e),
     }
 }
 
-fn process_package_matching(package_name: &str, packages: &[PackageEntry], download_dir: PathBuf) {
-    for entry in packages {
-        match Regex::new(&entry.name) {
-            Ok(re) => {
-                if re.is_match(package_name) {
-                    run_package_function(package_name, entry, download_dir.clone());
-                }
-            }
-            Err(e) => error!("Invalid regex '{}': {}", entry.name, e),
+fn run_manager_function(manager_name: &str, package_name: &str, entry: &crate::models::package_entry::ManagerEntry, download_dir: PathBuf) {
+    info!(
+        "Manager '{}' matched exactly. Calling function '{}' for package '{}' from '{}'.",
+        manager_name, entry.function_name, package_name, entry.filename
+    );
+
+    let starlark_path = Path::new(&entry.filename);
+    match crate::starlark::runtime::execute_manager_function(
+        starlark_path,
+        &entry.function_name,
+        manager_name,
+        package_name,
+        download_dir,
+    ) {
+        Ok(mut versions) => {
+            info!(
+                "Function execution finished. Found {} versions.",
+                versions.len()
+            );
+
+            // Sort by date then by version
+            versions.sort_by(|a, b| {
+                a.release_date
+                    .cmp(&b.release_date)
+                    .then_with(|| a.version.cmp(&b.version))
+            });
+
+            print_versions_table(&versions);
         }
+        Err(e) => error!("Manager function execution failed: {}", e),
     }
 }
 
 fn run_package_function(package_name: &str, entry: &PackageEntry, download_dir: PathBuf) {
     info!(
-        "Package '{}' matched regex '{}'. Calling function '{}' from '{}'.",
-        package_name, entry.name, entry.function_name, entry.filename
+        "Package '{}' matched exactly. Calling function '{}' from '{}'.",
+        package_name, entry.function_name, entry.filename
     );
 
     let starlark_path = Path::new(&entry.filename);

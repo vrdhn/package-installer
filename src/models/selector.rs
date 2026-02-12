@@ -1,5 +1,3 @@
-use regex::Regex;
-
 #[derive(Debug, Clone)]
 pub struct PackageSelector {
     pub recipe: Option<String>,
@@ -11,20 +9,50 @@ pub struct PackageSelector {
 impl PackageSelector {
     /// Parses a selector string in the format: [recipe]/[prefix]:package[=version]
     pub fn parse(s: &str) -> Option<Self> {
-        // Updated regex to handle [recipe/][prefix:]package
-        // 1. Optional recipe followed by /
-        // 2. Optional prefix followed by :
-        // 3. Package name (can contain /)
-        // 4. Optional version starting with =
+        let mut prefix = None;
+        let package;
+        let mut version = None;
 
-        let re = Regex::new(r"^(?:([^/:]+)/)?(?:([^/:]+):)?([^=]+)(?:=(.+))?$").unwrap();
-        let caps = re.captures(s)?;
+        let rest = if let Some(idx) = s.find('=') {
+            version = Some(s[idx + 1..].to_string());
+            &s[..idx]
+        } else {
+            s
+        };
+
+        // Find recipe if present (first / before any :)
+        let (rest, recipe) = if let Some(idx) = rest.find('/') {
+            // Check if there's a : before this /
+            if let Some(c_idx) = rest.find(':') {
+                if c_idx < idx {
+                    // : comes first, so no recipe, this / is part of package name
+                    (rest, None)
+                } else {
+                    (&rest[idx + 1..], Some(rest[..idx].to_string()))
+                }
+            } else {
+                (&rest[idx + 1..], Some(rest[..idx].to_string()))
+            }
+        } else {
+            (rest, None)
+        };
+
+        if let Some(idx) = rest.find(':') {
+            prefix = Some(rest[..idx].to_string());
+            package = rest[idx + 1..].to_string();
+        } else {
+            package = rest.to_string();
+        }
+
+        if package.is_empty() {
+            return None;
+        }
 
         Some(Self {
-            recipe: caps.get(1).map(|m| m.as_str().to_string()),
-            prefix: caps.get(2).map(|m| m.as_str().to_string()),
-            package: caps.get(3).map(|m| m.as_str().to_string()).unwrap(),
-            version: caps.get(4).map(|m| m.as_str().to_string()),
+            recipe,
+            prefix,
+            package,
+            version,
         })
     }
 }

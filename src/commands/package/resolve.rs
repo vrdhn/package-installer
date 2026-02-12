@@ -72,20 +72,6 @@ fn resolve_query(
                         return Some((full_qualified, v));
                     }
                 }
-            } else {
-                // Fallback to contains check if exact match fails (for globs or partials)
-                for pkg in &pkg_list.packages {
-                    if pkg.name.contains(&selector.package) {
-                        if let Some(v_list) =
-                            VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
-                        {
-                            if let Some(v) = find_best_version((*v_list).clone(), target_version) {
-                                let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
-                                return Some((full_qualified, v));
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -113,7 +99,6 @@ fn resolve_query(
 }
 
 fn find_best_version(v_list: VersionList, target_version: &str) -> Option<VersionEntry> {
-    use glob::Pattern;
     let mut filtered_versions: Vec<_> = v_list
         .versions
         .into_iter()
@@ -123,12 +108,8 @@ fn find_best_version(v_list: VersionList, target_version: &str) -> Option<Versio
                 v.release_type.to_lowercase() == target_version
             }
             _ => {
-                if target_version.contains('*') || target_version.contains('?') {
-                    if let Ok(pattern) = Pattern::new(target_version) {
-                        pattern.matches(&v.version)
-                    } else {
-                        v.version == target_version
-                    }
+                if target_version.contains('*') {
+                    match_version_with_wildcard(&v.version, target_version)
                 } else {
                     v.version == target_version
                 }
@@ -140,4 +121,20 @@ fn find_best_version(v_list: VersionList, target_version: &str) -> Option<Versio
     filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
 
     filtered_versions.into_iter().next()
+}
+
+fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
+    let version_parts: Vec<&str> = version.split('.').collect();
+    let pattern_parts: Vec<&str> = pattern.split('.').collect();
+
+    if version_parts.len() != pattern_parts.len() {
+        return false;
+    }
+
+    for (v, p) in version_parts.iter().zip(pattern_parts.iter()) {
+        if *p != "*" && v != p {
+            return false;
+        }
+    }
+    true
 }

@@ -4,7 +4,6 @@ use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
 use comfy_table::Table;
-use glob::Pattern;
 
 pub fn run(config: &Config, selector_str: Option<&str>) {
     let selector = selector_str.and_then(PackageSelector::parse);
@@ -32,7 +31,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
             for pkg in &pkg_list.packages {
                 if let Some(ref s) = selector {
                     if !s.package.is_empty() && s.package != "*" {
-                        if !pkg.name.contains(&s.package) {
+                        if pkg.name != s.package {
                             continue;
                         }
                     }
@@ -51,19 +50,17 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
             // Handle managers
             if let Some(ref s) = selector {
                 if let Some(ref prefix) = s.prefix {
-                    for mgr in &pkg_list.managers {
-                        if mgr.name == *prefix {
-                            let full_name = format!("{}:{}", prefix, s.package);
-                            if let Some(v_list) =
-                                VersionList::get_for_package(config, repo, &full_name, None, Some((mgr, &s.package)))
-                            {
-                                add_versions_to_table(
-                                    &mut table,
-                                    repo.name.clone(),
-                                    (*v_list).clone(),
-                                    &target_version,
-                                );
-                            }
+                    if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+                        let full_name = format!("{}:{}", prefix, s.package);
+                        if let Some(v_list) =
+                            VersionList::get_for_package(config, repo, &full_name, None, Some((mgr, &s.package)))
+                        {
+                            add_versions_to_table(
+                                &mut table,
+                                repo.name.clone(),
+                                (*v_list).clone(),
+                                &target_version,
+                            );
                         }
                     }
                 }
@@ -89,12 +86,8 @@ fn add_versions_to_table(
                 v.release_type.to_lowercase() == target_version
             }
             _ => {
-                if target_version.contains('*') || target_version.contains('?') {
-                    if let Ok(pattern) = Pattern::new(target_version) {
-                        pattern.matches(&v.version)
-                    } else {
-                        v.version == target_version
-                    }
+                if target_version.contains('*') {
+                    match_version_with_wildcard(&v.version, target_version)
                 } else {
                     v.version == target_version
                 }
@@ -114,4 +107,20 @@ fn add_versions_to_table(
             v.release_type,
         ]);
     }
+}
+
+fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
+    let version_parts: Vec<&str> = version.split('.').collect();
+    let pattern_parts: Vec<&str> = pattern.split('.').collect();
+
+    if version_parts.len() != pattern_parts.len() {
+        return false;
+    }
+
+    for (v, p) in version_parts.iter().zip(pattern_parts.iter()) {
+        if *p != "*" && v != p {
+            return false;
+        }
+    }
+    true
 }
