@@ -2,6 +2,8 @@ use crate::models::config::Config;
 use crate::models::package_entry::PackageEntry;
 use crate::models::version_entry::VersionEntry;
 use crate::starlark::runtime::{evaluate_file, execute_function};
+use crate::services::downloader::Downloader;
+use crate::services::unarchiver::Unarchiver;
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 use log::{error, info};
@@ -61,12 +63,19 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
 
             // Sort by date then by version
             versions.sort_by(|a, b| {
-                a.release_date
-                    .cmp(&b.release_date)
-                    .then_with(|| a.version.cmp(&b.version))
+                b.release_date
+                    .cmp(&a.release_date)
+                    .then_with(|| b.version.cmp(&a.version))
             });
 
             print_versions_table(&versions);
+
+            // For testing, just take the first one (latest)
+            if let Some(v) = versions.first() {
+                if let Err(e) = test_package_download_unarchive(config, v, "devel-test") {
+                    error!("Test download/unarchive failed: {}", e);
+                }
+            }
         }
         Err(e) => error!("Manager function execution failed: {}", e),
     }
@@ -93,15 +102,43 @@ fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntr
 
             // Sort by date then by version
             versions.sort_by(|a, b| {
-                a.release_date
-                    .cmp(&b.release_date)
-                    .then_with(|| a.version.cmp(&b.version))
+                b.release_date
+                    .cmp(&a.release_date)
+                    .then_with(|| b.version.cmp(&a.version))
             });
 
             print_versions_table(&versions);
+
+            // For testing, just take the first one (latest)
+            if let Some(v) = versions.first() {
+                if let Err(e) = test_package_download_unarchive(config, v, "devel-test") {
+                    error!("Test download/unarchive failed: {}", e);
+                }
+            }
         }
         Err(e) => error!("Function execution failed: {}", e),
     }
+}
+
+fn test_package_download_unarchive(config: &Config, v: &VersionEntry, repo_uuid: &str) -> anyhow::Result<()> {
+    println!("\n--- Testing Download & Unarchive ---");
+    
+    let download_dest = config.download_dir.join(&v.filename);
+    let checksum = if v.checksum.is_empty() { None } else { Some(v.checksum.as_str()) };
+
+    Downloader::download_to_file(&v.url, &download_dest, checksum)?;
+
+    let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&v.pkgname), sanitize_name(&v.version), repo_uuid);
+    let extract_dest = config.packages_dir.join(pkg_dir_name);
+
+    Unarchiver::unarchive(&download_dest, &extract_dest)?;
+
+    println!("--- Test Finished Successfully ---\n");
+    Ok(())
+}
+
+fn sanitize_name(name: &str) -> String {
+    name.replace(['/', '\\', ' ', ':'], "_")
 }
 
 fn print_versions_table(versions: &[VersionEntry]) {
@@ -119,7 +156,7 @@ fn print_versions_table(versions: &[VersionEntry]) {
         "Filename",
     ]);
 
-    for v in versions {
+    for v in versions.iter().take(5) {
         table.add_row(vec![
             &v.pkgname,
             &v.version,

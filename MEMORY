@@ -1,50 +1,28 @@
 # pi (package-installer) - Rust
-deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq(3.x), sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap, toml
+deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq(3.x), sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap, toml, tar, flate2, xz2, zip
 
 src/
  models/
-  config: Config { cache_dir, config_dir, state_dir, meta_dir, state: Arc<State> }, State { repositories: OnceLock, package_lists: DashMap, version_lists: DashMap, meta_dir }
+  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, packages_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir }
   repository: Repository { uuid, path, name }, Repositories { repositories, get_all(config), load, save }
-  package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo), load, save, exists }
-  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, manager_command: Auto|Custom(String) }, VersionList { versions, get_for_package(config, repo, name, pkg_entry, mgr_entry), load, save, exists }
-  selector: PackageSelector { recipe, prefix, package, version }
-  context: Context { os, arch, filename, meta_dir, state: Arc<State> }
+  package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo) }
+  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, manager_command }
+  context: Context { os, arch, filename, meta_dir, download_dir, packages_dir, state }
  starlark/
-  api: register_api (get_os, get_arch, add_package(name, fn), add_manager(name, fn), download (caches to meta_dir), json_parse, toml_parse, json_dump, add_version(..., manager_command))
-  runtime: 
-   - evaluate_file(path, state) -> (Vec<PackageEntry>, Vec<ManagerEntry>)
-   - execute_function(path, name, arg, state) -> Vec<VersionEntry>
-   - execute_manager_function(path, name, mgr, pkg, state) -> Vec<VersionEntry>
+  api: register_api (get_os, get_arch, add_package, add_manager, download, json_parse, toml_parse, json_dump, add_version)
+  runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State>)
  services/
-  downloader: ureq-based streaming GET requests with progress reporting (10s interval), bandwidth calc, and IPv4 preference.
+  downloader: download (String), download_to_file (Path, checksum check, progress)
+  unarchiver: unarchive (tar.gz, tar.xz, zip) to destination directory
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
-  sync: core logic for sync_repo, sync_package, and sync_manager_package
- cli/parser: Cli { verbose }, Repo { Add, Sync, List }, Package { Sync, List, Info, Resolve }, Cave { Init, Info, Add, Rem, Resolve }, Disk { Info, Clean, Uninstall }, Devel { Test { filename, pkg } }
- logging/init: init_logging(verbose)
- commands/repo:
-  - add: register repo path, generate UUID, store in repositories.json, trigger sync
-  - sync: triggers sync_all -> calls services::sync::sync_repo
-  - list: display table (no separators) of repo, type, name, and discovery function
- commands/package:
-  - sync: sync_all(config, selector) -> calls services::sync::{sync_package, sync_manager_package}
-  - list: [recipe]/[prefix]:package[=version] -> list latest 5 (glob/symbolic support), no separators
-  - info: display detailed metadata (URL, checksum, etc.) for matching packages, no separators
-  - resolve: <pkg-query>... -> resolve to fully qualified recipe/[prefix:]name=version and release timestamps, no separators.
- commands/cave:
-  - init, info, add, rem, resolve: Cave management for environments and package sets.
- commands/disk:
-  - info: show disk usage of config, cache, and state directories, no separators
-  - clean: delete the cache directory
-  - uninstall: delete config, cache, and state directories (requires --confirm)
+  sync: core logic for syncing repo/package/manager data
+ cli/parser: Cli { verbose }, Repo, Package, Cave, Disk, Devel { Test { filename, pkg } }
+ commands/devel:
+  - test: Evaluates .star, calls discovery function, then performs test download and unarchive for the latest version found.
 
 logic:
-- Lazy Loading: Models use Config.state to cache data. get_all / get_for_repo / get_for_package methods handle thread-safe lazy loading and automatically trigger synchronization if data is missing.
-- Concurrency: Rayon used for parallel resolution; DashMap and OnceLock ensure threads wait for shared resources during automagic syncs.
-- json_parse: trick using eval_statements("json") to get built-in module then calling .decode()
-- toml_parse: parses TOML string -> serde_json::Value -> Starlark Value.
-- json_dump: converts Starlark -> Serde, applies JSONPath (serde_json_path), prints pretty JSON
-- add_version: stores metadata including checksum_url and optional manager_command; type logic (stable/lts/obsolete) handled in .star
-- sorting: VersionEntry sorted by release_date then version string before display
-- Sanitization: Package names in version cache filenames have '/' replaced with '#' to avoid directory issues.
-- Refactoring: Removed download_dir, moved Starlark API download caching to meta_dir. Removed table separators.
-- Rust Discovery: `discover_rust_component` handles wildcard targets and auto-appends `-preview` suffix for components like `rustfmt` to match manifest entries while keeping base names in `COMPONENTS`.
+- Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<recipe-uuid>/`.
+- Test Hook: `devel test` uses "devel-test" as the repo-uuid for extraction paths.
+- Deduplication: `Downloader::download_to_file` skips downloading if the file exists and the checksum matches.
+- Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.
+- Sorting: `devel test` sorts versions descending (latest first) before selecting the test candidate.

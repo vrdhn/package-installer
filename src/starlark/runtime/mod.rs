@@ -28,6 +28,8 @@ pub fn evaluate_file(
         &module,
         filename,
         state.meta_dir.clone(),
+        state.download_dir.clone(),
+        state.packages_dir.clone(),
         state.clone(),
     );
 
@@ -59,6 +61,8 @@ pub fn execute_manager_function(
         &module,
         format!("{}:exec:{}", filename, manager_name),
         state.meta_dir.clone(),
+        state.download_dir.clone(),
+        state.packages_dir.clone(),
         state.clone(),
     );
 
@@ -97,6 +101,8 @@ pub fn execute_function(
         &module,
         format!("{}:exec", filename),
         state.meta_dir.clone(),
+        state.download_dir.clone(),
+        state.packages_dir.clone(),
         state.clone(),
     );
 
@@ -131,9 +137,11 @@ fn setup_context(
     module: &Module,
     filename: String,
     meta_dir: PathBuf,
+    download_dir: PathBuf,
+    packages_dir: PathBuf,
     state: Arc<State>,
 ) {
-    let context = Context::new(filename, meta_dir, state);
+    let context = Context::new(filename, meta_dir, download_dir, packages_dir, state);
     let context_value = module.heap().alloc_simple(context);
     module.set_extra_value(context_value);
 }
@@ -181,8 +189,12 @@ mod tests {
         writeln!(file, "add_package('^vlc', install_vlc)").unwrap();
 
         let meta_dir = PathBuf::from("/tmp/pi-test-meta");
+        let download_dir = PathBuf::from("/tmp/pi-test-downloads");
+        let packages_dir = PathBuf::from("/tmp/pi-test-packages");
         let state = Arc::new(State {
             meta_dir,
+            download_dir,
+            packages_dir,
             ..Default::default()
         });
         let (packages, _managers) = evaluate_file(file.path(), state.clone()).unwrap();
