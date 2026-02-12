@@ -10,9 +10,8 @@ pub struct Unarchiver;
 
 impl Unarchiver {
     pub fn unarchive(src: &Path, dest: &Path) -> Result<()> {
-        if dest.exists() {
-            // For now, if it exists, assume it's already unarchived correctly
-            // In a real scenario we might want to check for a "completed" marker
+        let marker_file = dest.join(".unarchived");
+        if marker_file.exists() {
             return Ok(());
         }
 
@@ -40,6 +39,7 @@ impl Unarchiver {
             return Err(anyhow::anyhow!("Unsupported archive format: {}", filename));
         }
 
+        fs::write(&marker_file, "").context("Failed to create unarchive marker file")?;
         println!("Unarchived {} to {}", filename, dest.display());
         Ok(())
     }

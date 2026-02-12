@@ -33,6 +33,7 @@ impl CaveSettings {
 pub struct Cave {
     pub name: String,
     pub workspace: PathBuf,
+    pub homedir: PathBuf,
     #[serde(default)]
     pub settings: CaveSettings,
     #[serde(default)]
@@ -42,7 +43,7 @@ pub struct Cave {
 impl Cave {
     pub const FILENAME: &'static str = "pi.cave.json";
 
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, homedir: PathBuf) -> Self {
         let name = path.file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "default".to_string());
@@ -50,6 +51,7 @@ impl Cave {
         Self {
             name,
             workspace: path,
+            homedir,
             settings: CaveSettings::default(),
             variants: HashMap::new(),
         }

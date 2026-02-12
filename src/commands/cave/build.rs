@@ -70,25 +70,22 @@ pub fn run(config: &Config, variant: Option<String>) {
         }
     }
 
-    let home_dir = config.cave_home(&cave.name);
-    fs::create_dir_all(&home_dir).expect("Failed to create home directory");
+    let home_dir = &cave.homedir;
+    let pitree_dir = home_dir.join(".pitree");
+    fs::create_dir_all(&pitree_dir).expect("Failed to create .pitree directory");
 
-    println!("Applying filemap to home: {}", home_dir.display());
+    println!("Applying filemap to pitree: {}", pitree_dir.display());
 
     for (pkg_dir, filemap) in all_filemap {
         for (src_pattern, dest_rel) in filemap {
-            apply_filemap_entry(&pkg_dir, &home_dir, &src_pattern, &dest_rel);
+            apply_filemap_entry(&pkg_dir, &pitree_dir, &src_pattern, &dest_rel);
         }
     }
-
-    // Create .pitree
-    let pitree_path = home_dir.join(".pitree");
-    fs::write(&pitree_path, "pi cave build completed").expect("Failed to write .pitree");
     
     println!("Build finished successfully.");
 }
 
-fn apply_filemap_entry(pkg_dir: &Path, home_dir: &Path, src_pattern: &str, dest_rel: &str) {
+fn apply_filemap_entry(pkg_dir: &Path, pitree_dir: &Path, src_pattern: &str, dest_rel: &str) {
     if src_pattern.contains('*') {
         // Glob-like resolution using walkdir (simple * at end support)
         let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
@@ -100,13 +97,13 @@ fn apply_filemap_entry(pkg_dir: &Path, home_dir: &Path, src_pattern: &str, dest_
                 let _rel_to_pkg = entry.path().strip_prefix(pkg_dir).unwrap();
                 let file_name = entry.file_name();
                 
-                let target_dest = home_dir.join(dest_rel).join(file_name);
+                let target_dest = pitree_dir.join(dest_rel).join(file_name);
                 create_symlink(entry.path(), &target_dest);
             }
         }
     } else {
         let src_path = pkg_dir.join(src_pattern);
-        let dest_path = home_dir.join(dest_rel);
+        let dest_path = pitree_dir.join(dest_rel);
         
         if src_path.exists() {
             if dest_rel.ends_with('/') || dest_path.is_dir() {

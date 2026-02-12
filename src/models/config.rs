@@ -70,8 +70,4 @@ impl Config {
     pub fn version_cache_file(&self, uuid: &str, safe_name: &str) -> PathBuf {
         self.meta_dir.join(format!("version-{}-{}.json", uuid, safe_name))
     }
-
-    pub fn cave_home(&self, name: &str) -> PathBuf {
-        self.state_dir.join("homes").join(name)
-    }
 }

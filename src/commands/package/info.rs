@@ -121,6 +121,17 @@ fn print_package_info(repo_name: String, _pkg_name: &str, v_list: VersionList, t
             table.add_row(vec!["Checksum URL", &v.checksum_url]);
         }
 
+        if !v.filemap.is_empty() {
+            let mut filemap_str = String::new();
+            for (src, dest) in &v.filemap {
+                if !filemap_str.is_empty() {
+                    filemap_str.push('\n');
+                }
+                filemap_str.push_str(&format!("{} -> {}", src, dest));
+            }
+            table.add_row(vec!["Filemap", &filemap_str]);
+        }
+
         match v.manager_command {
             crate::models::version_entry::ManagerCommand::Custom(ref cmd) => {
                 table.add_row(vec!["Install Command", cmd]);
