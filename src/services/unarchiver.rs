@@ -9,9 +9,9 @@ use zip::ZipArchive;
 pub struct Unarchiver;
 
 impl Unarchiver {
-    pub fn unarchive(src: &Path, dest: &Path) -> Result<()> {
-        let marker_file = dest.join(".unarchived");
-        if marker_file.exists() {
+    pub fn unarchive(db: &crate::services::db::Db, src: &Path, dest: &Path) -> Result<()> {
+        let dest_str = dest.to_string_lossy();
+        if db.is_operation_done(&dest_str, "extracted") {
             return Ok(());
         }
 
@@ -39,7 +39,7 @@ impl Unarchiver {
             return Err(anyhow::anyhow!("Unsupported archive format: {}", filename));
         }
 
-        fs::write(&marker_file, "").context("Failed to create unarchive marker file")?;
+        db.log_operation(&dest_str, "extracted")?;
         log::debug!("[{}] unarchived to {}", filename, dest.display());
         Ok(())
     }

@@ -26,9 +26,17 @@ impl Downloader {
         Ok(String::from_utf8(content)?)
     }
 
-    pub fn download_to_file(url: &str, dest: &Path, expected_checksum: Option<&str>) -> Result<()> {
+    pub fn download_to_file(db: &crate::services::db::Db, url: &str, dest: &Path, expected_checksum: Option<&str>) -> Result<()> {
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).context("Failed to create download directory")?;
+        }
+
+        let dest_str = dest.to_string_lossy();
+        
+        // Check journal if file is already verified
+        if dest.exists() && db.is_operation_done(&dest_str, "verified") {
+            log::info!("[{}] skip, verified in journal", dest.display());
+            return Ok(());
         }
 
         // If file already exists and checksum matches, skip
@@ -37,6 +45,7 @@ impl Downloader {
             if let Ok(actual_checksum) = Self::calculate_checksum(dest, expected.len()) {
                 if actual_checksum == expected {
                     log::info!("[{}] skip, matches checksum", dest.display());
+                    db.log_operation(&dest_str, "verified")?;
                     return Ok(());
                 }
             }
@@ -107,6 +116,8 @@ impl Downloader {
             }
             log::debug!("[{}] checksum ok", filename);
         }
+
+        db.log_operation(&dest_str, "verified")?;
 
         Ok(())
     }

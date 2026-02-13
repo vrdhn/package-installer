@@ -63,7 +63,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
 
     fn download(url: String, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
         let context = get_context(eval)?;
-        let cache = Cache::new(context.meta_dir.clone(), Duration::from_secs(3600)); // 1 hour TTL
+        let cache = Cache::new(context.meta_dir.clone(), Duration::from_secs(3600), context.db.clone()); // 1 hour TTL
 
         if let Some(cached) = cache.read(&url)? {
             log::debug!("[{}] cache hit: {}", context.display_name(), url);

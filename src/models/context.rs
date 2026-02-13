@@ -11,6 +11,8 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::services::db::Db;
+
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
     pub os: String,
@@ -24,10 +26,12 @@ pub struct Context {
     pub versions: RwLock<Vec<VersionEntry>>,
     #[serde(skip)]
     pub state: Arc<State>,
+    #[serde(skip)]
+    pub db: Arc<Db>,
 }
 
 impl Context {
-    pub fn new(filename: String, meta_dir: PathBuf, download_dir: PathBuf, packages_dir: PathBuf, state: Arc<State>) -> Self {
+    pub fn new(filename: String, meta_dir: PathBuf, download_dir: PathBuf, packages_dir: PathBuf, state: Arc<State>, db: Arc<Db>) -> Self {
         Self {
             os: env::consts::OS.to_string(),
             arch: env::consts::ARCH.to_string(),
@@ -39,6 +43,7 @@ impl Context {
             managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
             state,
+            db,
         }
     }
 
