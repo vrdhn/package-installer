@@ -74,6 +74,14 @@ pub enum CaveCommands {
         /// Optional variant name (starts with :)
         variant: Option<String>,
     },
+    /// Run a command inside the cave sandbox
+    Run {
+        /// Optional variant name (starts with :)
+        variant: Option<String>,
+        /// The command to run
+        #[arg(last = true)]
+        command: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]

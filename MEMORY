@@ -1,5 +1,5 @@
 # pi (package-installer) - Rust
-deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq(3.x), sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap, toml, tar, flate2, xz2, zip
+deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_json, parking_lot, ureq(3.x), sha2, hex, dirs-next, serde_json_path, comfy-table, uuid, walkdir, rayon, dashmap, toml, tar, flate2, xz2, zip, whoami
 
 src/
  models/
@@ -15,12 +15,14 @@ src/
   runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State>)
  services/
   downloader: download (String), download_to_file (Path, checksum check, progress)
-  unarchiver: unarchive (tar.gz, tar.xz, zip) to destination directory. Creates `.unarchived` marker file to skip subsequent extractions.
+  unarchiver: unarchive (tar.gz, tar.xz, zip) to destination directory. Creates `.unarchived` marker file.
+  sandbox: Bubblewrap wrapper for `bwrap` (binds, envs, unsets, command execution).
   cache: SHA256-hashed filenames (URL-based), TTL-based validation
   sync: core logic for syncing repo/package/manager data
- cli/parser: Cli { verbose }, Repo, Package, Cave { Init, Info, Add, Rem, Resolve, Build }, Disk, Devel { Test { filename, pkg } }
+ cli/parser: Cli { verbose }, Repo, Package, Cave { Init, Info, Add, Rem, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
  commands/cave:
   - build: Resolves cave packages, downloads, unarchives, and applies filemap (symlinks) to `.pitree` inside cave homedir.
+  - run: Executes command inside a bubblewrap sandbox. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO.
   - info: Displays cave info, including stored homedir.
  commands/devel:
   - test: Evaluates .star, calls discovery function, then performs test download and unarchive.
@@ -29,5 +31,6 @@ logic:
 - Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-uuid>/`. Skipping if `.unarchived` marker exists.
 - Home Directory: Stored in `pi.cave.json` during `cave init`. Defaults to `XDG_STATE_DIR/pi/<name>`.
 - Filemap (Symlinks): Applied from package directory to `homedir/.pitree/`. Supports simple `*` globs for source patterns.
+- Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pitree/bin` is prepended to `PATH`.
 - Resolve Query: Returns `(full_name, version, repo_uuid)` for building unarchive paths.
 - Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.

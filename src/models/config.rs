@@ -70,4 +70,12 @@ impl Config {
     pub fn version_cache_file(&self, uuid: &str, safe_name: &str) -> PathBuf {
         self.meta_dir.join(format!("version-{}-{}.json", uuid, safe_name))
     }
+
+    pub fn get_user(&self) -> String {
+        whoami::username()
+    }
+
+    pub fn get_host_home(&self) -> PathBuf {
+        dirs_next::home_dir().expect("Failed to get home directory")
+    }
 }
