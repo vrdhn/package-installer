@@ -26,9 +26,6 @@ fn execute_run(config: &Config, variant: Option<String>, command: Vec<String>) -
     // Basic flags
     b.add_flag("--unshare-pid");
     b.add_flag("--die-with-parent");
-    b.add_flag("--unshare-net"); // Default to no net for now? Or keep it?
-    // Actually, user didn't specify net, but usually bwrap needs it if not unshared.
-    // Let's stick to the mapping requested.
 
     // Standard Linux file system (ReadOnly)
     b.add_bind(BindType::RoBind, "/usr");

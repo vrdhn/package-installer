@@ -22,7 +22,7 @@ src/
  cli/parser: Cli { verbose }, Repo, Package, Cave { Init, Info, Add, Rem, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
  commands/cave:
   - build: Resolves cave packages, downloads, unarchives, and applies filemap (symlinks) to `.pitree` inside cave homedir.
-  - run: Executes command inside a bubblewrap sandbox. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO.
+  - run: Executes command inside a bubblewrap sandbox. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Shared network namespace.
   - info: Displays cave info, including stored homedir.
  commands/devel:
   - test: Evaluates .star, calls discovery function, then performs test download and unarchive.
@@ -31,6 +31,6 @@ logic:
 - Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-uuid>/`. Skipping if `.unarchived` marker exists.
 - Home Directory: Stored in `pi.cave.json` during `cave init`. Defaults to `XDG_STATE_DIR/pi/<name>`.
 - Filemap (Symlinks): Applied from package directory to `homedir/.pitree/`. Supports simple `*` globs for source patterns.
-- Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pitree/bin` is prepended to `PATH`.
+- Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pitree/bin` is prepended to `PATH`. Network is shared with host.
 - Resolve Query: Returns `(full_name, version, repo_uuid)` for building unarchive paths.
 - Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.
