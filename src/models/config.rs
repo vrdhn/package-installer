@@ -84,6 +84,10 @@ impl Config {
         dirs_next::home_dir().expect("Failed to get home directory")
     }
 
+    pub fn is_inside_cave(&self) -> bool {
+        std::env::var("PI_CAVE").is_ok()
+    }
+
     pub fn pilocal_path(&self, cave_name: &str, variant: Option<&str>) -> PathBuf {
         let name = if let Some(v) = variant {
             let v = v.strip_prefix(':').unwrap_or(v);

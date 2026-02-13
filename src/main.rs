@@ -17,6 +17,23 @@ fn main() {
 
     init_logging(cli.verbose);
 
+    if config.is_inside_cave() {
+        match cli.command {
+            Commands::Version | 
+            Commands::Repo { command: cli::parser::RepoCommands::List { .. } } |
+            Commands::Package { command: cli::parser::PackageCommands::List { .. } } |
+            Commands::Package { command: cli::parser::PackageCommands::Info { .. } } |
+            Commands::Package { command: cli::parser::PackageCommands::Resolve { .. } } |
+            Commands::Cave { command: CaveCommands::Info } => {
+                // Allowed commands
+            }
+            _ => {
+                eprintln!("Error: Command not allowed inside a cave (read-only mode).");
+                std::process::exit(1);
+            }
+        }
+    }
+
     match cli.command {
         Commands::Version => {
             println!("pi version: {}", build::BUILD_VERSION);

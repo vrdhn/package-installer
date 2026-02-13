@@ -16,6 +16,83 @@ def get_rust_target():
 
     return triple_arch + "-" + triple_os
 
+def parse_rust_filename(package_name, target, filename):
+    """Parses version and top-level directory from a Rust component filename."""
+    # Remove extensions
+    v_tmp = filename
+    for ext in [".tar.gz", ".tar.xz", ".zip", ".tar.bz2"]:
+        if v_tmp.endswith(ext):
+            v_tmp = v_tmp[:-len(ext)]
+            break
+
+    top_dir = v_tmp
+
+    # Special case for rust-src: top_dir inside archive often lacks target triple
+    if package_name == "rust-src":
+        if target != "*" and top_dir.endswith("-" + target):
+            top_dir = top_dir[:-(len(target) + 1)]
+
+    # Extract version by stripping package prefix and target suffix
+    v_parse = v_tmp
+    if target != "*" and v_parse.endswith("-" + target):
+        v_parse = v_parse[:-(len(target) + 1)]
+
+    version = v_parse
+    for prefix in [package_name + "-preview", package_name]:
+        if v_parse.startswith(prefix + "-"):
+            version = v_parse[len(prefix) + 1:]
+            break
+
+    return top_dir, version
+
+def get_component_layout(package_name, target, top_dir):
+    """Determines the internal subfolder, file mapping, and environment variables."""
+    actual_target = target if target != "*" else ""
+    if package_name == "rust-src":
+        actual_target = ""
+
+    # Map package names to their internal directory names
+    component_map = {
+        "rust": "rustc",
+        "rust-src": "rust-src",
+    }
+
+    subfolder = component_map.get(package_name)
+    if subfolder == None: # Check for None specifically because "" is a valid subfolder
+        if package_name == "rust-std":
+            subfolder = "rust-std-" + actual_target
+        else:
+            subfolder = package_name + (("-" + actual_target) if actual_target else "")
+
+    component_root = top_dir
+    if subfolder:
+        component_root = top_dir + "/" + subfolder
+
+    # Default mapping and environment settings
+    filemap = {component_root + "/bin/*": "bin"}
+    env_vars = {
+        "RUSTC_SYSROOT": "$",
+        "RUSTFLAGS": "--sysroot=$"
+    }
+
+    if package_name == "rust-src":
+        # rust-src contents are directly in top_dir/rust-src/lib/rustlib/src/rust
+        src_base = component_root + "/lib/rustlib/src/rust"
+        filemap = {src_base + "/*": "lib/rustlib/src/rust"}
+        env_vars["RUST_SRC_PATH"] = "$/lib/rustlib/src/rust/library"
+    elif package_name == "rust-std":
+        # rust-std contents are in top_dir/rust-std-<target>/lib/rustlib/<target>/lib
+        std_base = component_root + "/lib/rustlib/" + target + "/lib"
+        filemap = {std_base + "/*": "lib/rustlib/" + target + "/lib"}
+    elif package_name == "rust":
+        # Main rust package (rustc) needs both bin and lib
+        filemap = {
+            component_root + "/bin/*": "bin",
+            component_root + "/lib/*": "lib",
+        }
+
+    return filemap, env_vars
+
 def discover_rust_component(package_name):
     target = get_rust_target()
 
@@ -27,83 +104,27 @@ def discover_rust_component(package_name):
 
         data = toml_parse(content)
         date = data.get("date", "")
-
         pkgs = data.get("pkg", {})
-        pkg = pkgs.get(package_name)
 
-        # Try -preview suffix (e.g. rustfmt -> rustfmt-preview)
-        if not pkg:
-            pkg = pkgs.get(package_name + "-preview")
-
+        # Look for the package (try preview if exact name not found)
+        pkg = pkgs.get(package_name) or pkgs.get(package_name + "-preview")
         if not pkg:
             continue
 
-        version_full = pkg.get("version", "")
-        if not version_full:
-            continue
-
-        # Check if target is supported for this component
+        # Find target data (try wildcard if specific target not found)
         target_dict = pkg.get("target", {})
-        target_data = target_dict.get(target)
-        if not target_data or not target_data.get("available"):
-            # Try wildcard target
-            target_data = target_dict.get("*")
+        target_data = target_dict.get(target) or target_dict.get("*")
 
         if not target_data or not target_data.get("available"):
             continue
 
         dl_url = target_data.get("url")
-        checksum = target_data.get("hash")
-
         if not dl_url:
             continue
 
         filename = dl_url.split('/')[-1]
-
-        # Parse version from filename: <prefix>-<version>-<target>.<ext>
-        v_tmp = filename
-        for ext in [".tar.gz", ".tar.xz", ".zip", ".tar.bz2"]:
-            if v_tmp.endswith(ext):
-                v_tmp = v_tmp[:-len(ext)]
-                break
-
-        # Remove target suffix if present
-        if target != "*" and v_tmp.endswith("-" + target):
-            v_tmp = v_tmp[:-(len(target) + 1)]
-
-        # The version is what's left after removing the package prefix
-        # We try to match the package name or its preview variant
-        version = v_tmp
-        for prefix in [package_name + "-preview", package_name]:
-            if v_tmp.startswith(prefix + "-"):
-                version = v_tmp[len(prefix) + 1:]
-                break
-
-        # Special casing for component subfolders
-        component_map = {
-            "rust": "rustc",
-            "rust-src": "rust-src/lib/rustlib/src/rust",
-            "rust-std": "rust-std-" + target + "/lib/rustlib/" + target + "/lib",
-        }
-        subfolder = component_map.get(package_name, package_name)
-        
-        pitree_root = package_name + "-" + version + "-" + target + "/" + subfolder
-
-        # File mapping and environment logic
-        filemap = {pitree_root + "/bin/*": "bin"}
-        env_vars = {}
-
-        if package_name == "rust-src":
-            # rust-src extracts to lib/rustlib/src/rust
-            # We map its contents to the same relative path in .pilocal
-            filemap = {pitree_root + "/*": "lib/rustlib/src/rust"}
-            env_vars = {"RUST_SRC_PATH": "$/lib/rustlib/src/rust/library"}
-        elif package_name == "rust-std":
-            filemap = {pitree_root + "/*": "lib/rustlib/" + target + "/lib"}
-        elif package_name == "rust":
-            # Main rust package might need LD_LIBRARY_PATH if it has libs in a non-standard place
-            # but usually it finds them relative to bin/rustc
-            pass
+        top_dir, version = parse_rust_filename(package_name, target, filename)
+        filemap, env_vars = get_component_layout(package_name, target, top_dir)
 
         add_version(
             pkgname = package_name,
@@ -112,7 +133,7 @@ def discover_rust_component(package_name):
             release_type = channel,
             url = dl_url,
             filename = filename,
-            checksum = checksum,
+            checksum = target_data.get("hash", ""),
             checksum_url = "",
             filemap = filemap,
             env = env_vars
@@ -140,8 +161,7 @@ def cargo_discovery(manager, package):
             filename = package + "-" + version + ".crate",
             checksum = v["checksum"],
             checksum_url = "",
-            filemap = {"bin/*": "bin"},
-            manager_command = "cargo install " + package + " --version " + version
+            filemap = {"bin/*": "bin"}
         )
 
 # Register toolchain components

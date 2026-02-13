@@ -132,6 +132,19 @@ fn print_package_info(repo_name: String, _pkg_name: &str, v_list: VersionList, t
             table.add_row(vec!["Filemap", &filemap_str]);
         }
 
+        if !v.env.is_empty() {
+            let mut env_str = String::new();
+            let mut sorted_keys: Vec<_> = v.env.keys().collect();
+            sorted_keys.sort();
+            for k in sorted_keys {
+                if !env_str.is_empty() {
+                    env_str.push('\n');
+                }
+                env_str.push_str(&format!("{}={}", k, v.env.get(k).unwrap()));
+            }
+            table.add_row(vec!["Environment", &env_str]);
+        }
+
         match v.manager_command {
             crate::models::version_entry::ManagerCommand::Custom(ref cmd) => {
                 table.add_row(vec!["Install Command", cmd]);
