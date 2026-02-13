@@ -48,21 +48,20 @@ def parse_rust_filename(package_name, target, filename):
 def get_component_layout(package_name, target, top_dir):
     """Determines the internal subfolder, file mapping, and environment variables."""
     actual_target = target if target != "*" else ""
-    if package_name == "rust-src":
-        actual_target = ""
-
-    # Map package names to their internal directory names
+    
+    # Map package names to their internal directory names if they differ from package_name
     component_map = {
         "rust": "rustc",
-        "rust-src": "rust-src",
     }
 
     subfolder = component_map.get(package_name)
-    if subfolder == None: # Check for None specifically because "" is a valid subfolder
+    if subfolder == None:
         if package_name == "rust-std":
             subfolder = "rust-std-" + actual_target
         else:
-            subfolder = package_name + (("-" + actual_target) if actual_target else "")
+            # Most components (cargo, rust-analyzer, etc) just use the package name
+            # as the subfolder name, even if the manifest uses -preview suffix.
+            subfolder = package_name
 
     component_root = top_dir
     if subfolder:
@@ -140,7 +139,6 @@ def discover_rust_component(package_name):
         )
 
 def cargo_discovery(manager, package):
-    print("Syncing cargo package:", package)
     url = "https://crates.io/api/v1/crates/" + package
     content = download(url)
     if not content:

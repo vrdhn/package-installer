@@ -3,27 +3,26 @@ use std::fs;
 
 pub fn run(config: &Config, confirm: bool) {
     if !confirm {
-        println!("Please provide the --confirm flag to proceed with uninstallation.");
-        println!("This will delete config, state, and cache directories.");
+        log::warn!("needs --confirm to delete config, state, and cache");
         return;
     }
 
     let dirs = [
-        ("Config", &config.config_dir),
-        ("Cache", &config.cache_dir),
-        ("State", &config.state_dir),
+        ("config", &config.config_dir),
+        ("cache", &config.cache_dir),
+        ("state", &config.state_dir),
     ];
 
     for (name, path) in dirs {
         if path.exists() {
             match fs::remove_dir_all(path) {
-                Ok(_) => println!("Successfully removed {} directory: {}", name, path.display()),
-                Err(e) => eprintln!("Failed to remove {} directory {}: {}", name, path.display(), e),
+                Ok(_) => log::info!("removed {}: {}", name, path.display()),
+                Err(e) => log::error!("failed to remove {} {}: {}", name, path.display(), e),
             }
         } else {
-            println!("{} directory does not exist: {}", name, path.display());
+            log::debug!("{} missing: {}", name, path.display());
         }
     }
 
-    println!("Uninstallation complete.");
+    log::info!("uninstall complete");
 }

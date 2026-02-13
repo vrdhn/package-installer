@@ -35,22 +35,22 @@ impl PackageList {
     pub fn get_for_repo(config: &Config, repo: &crate::models::repository::Repository) -> Option<Arc<Self>> {
         use dashmap::mapref::entry::Entry;
 
-        match config.state.package_lists.entry(repo.uuid.clone()) {
+        match config.state.package_lists.entry(repo.name.clone()) {
             Entry::Occupied(occupied) => Some(occupied.get().clone()),
             Entry::Vacant(vacant) => {
                 // Try to load from disk first
-                if let Ok(mut list) = Self::load(config, &repo.uuid) {
+                if let Ok(mut list) = Self::load(config, &repo.name) {
                     list.initialize_maps();
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
                 }
 
                 // If not on disk, sync
-                println!("Repository cache missing for {}, syncing...", repo.name);
+                log::info!("[{}] cache missing, syncing", repo.name);
                 crate::services::sync::sync_repo(config, repo);
 
                 // Try to load again after sync
-                if let Ok(mut list) = Self::load(config, &repo.uuid) {
+                if let Ok(mut list) = Self::load(config, &repo.name) {
                     list.initialize_maps();
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
@@ -69,8 +69,8 @@ impl PackageList {
         }
     }
 
-    pub fn load(config: &Config, repo_uuid: &str) -> anyhow::Result<Self> {
-        let cache_file = config.package_cache_file(repo_uuid);
+    pub fn load(config: &Config, repo_name: &str) -> anyhow::Result<Self> {
+        let cache_file = config.package_cache_file(repo_name);
         let content = fs::read_to_string(&cache_file)
             .with_context(|| format!("Failed to read package cache file: {:?}", cache_file))?;
         let mut list: Self = serde_json::from_str(&content)
@@ -79,9 +79,9 @@ impl PackageList {
         Ok(list)
     }
 
-    pub fn save(&self, config: &Config, repo_uuid: &str) -> anyhow::Result<()> {
+    pub fn save(&self, config: &Config, repo_name: &str) -> anyhow::Result<()> {
         fs::create_dir_all(&config.meta_dir).context("Failed to create meta directory")?;
-        let cache_file = config.package_cache_file(repo_uuid);
+        let cache_file = config.package_cache_file(repo_name);
         let content =
             serde_json::to_string_pretty(self).context("Failed to serialize package list")?;
         fs::write(&cache_file, content)

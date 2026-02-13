@@ -7,7 +7,7 @@ pub fn run(config: &Config) {
     let cave_file = current_dir.join(Cave::FILENAME);
 
     if cave_file.exists() {
-        println!("Cave already initialized in {}", current_dir.display());
+        log::warn!("cave exists in {}", current_dir.display());
         return;
     }
 
@@ -18,5 +18,5 @@ pub fn run(config: &Config) {
     let homedir = config.state_dir.join(&name);
     let cave = Cave::new(current_dir.clone(), homedir);
     cave.save(&cave_file).expect("Failed to save cave file");
-    println!("Initialized new cave in {}", current_dir.display());
+    log::info!("init cave in {}", current_dir.display());
 }

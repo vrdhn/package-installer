@@ -13,7 +13,7 @@ pub fn run(config: &Config, variant: Option<String>) {
     let (_path, cave) = match Cave::find_in_ancestry(&current_dir) {
         Some(res) => res,
         None => {
-            println!("No cave found.");
+            log::error!("no cave found");
             return;
         }
     };
@@ -21,12 +21,12 @@ pub fn run(config: &Config, variant: Option<String>) {
     let settings = match cave.get_effective_settings(variant.as_deref()) {
         Ok(s) => s,
         Err(e) => {
-            println!("Error: {}", e);
+            log::error!("settings error: {}", e);
             return;
         }
     };
 
-    println!("Resolving packages for cave {} (variant {:?})...", cave.name, variant);
+    log::info!("resolving cave: {} (var: {:?})", cave.name, variant);
 
     let repo_config = Repositories::get_all(config);
 
@@ -39,7 +39,7 @@ pub fn run(config: &Config, variant: Option<String>) {
             };
 
             match resolve::resolve_query(config, repo_config, &selector) {
-                Some((full_name, version, _uuid)) => (query.clone(), full_name, version.release_date),
+                Some((full_name, version, _repo_name)) => (query.clone(), full_name, version.release_date),
                 None => (query.clone(), "Not found".to_string(), "-".to_string()),
             }
         })

@@ -46,14 +46,14 @@ impl VersionList {
         package_entry: Option<&crate::models::package_entry::PackageEntry>,
         manager_entry: Option<(&crate::models::package_entry::ManagerEntry, &str)>,
     ) -> Option<Arc<Self>> {
-        let key = format!("{}:{}", repo.uuid, package_name);
+        let key = format!("{}:{}", repo.name, package_name);
         use dashmap::mapref::entry::Entry;
 
         match config.state.version_lists.entry(key) {
             Entry::Occupied(occupied) => Some(occupied.get().clone()),
             Entry::Vacant(vacant) => {
                 // Try to load from disk first
-                if let Ok(list) = Self::load(config, &repo.uuid, package_name) {
+                if let Ok(list) = Self::load(config, &repo.name, package_name) {
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
                 }
@@ -72,7 +72,7 @@ impl VersionList {
                 }
 
                 // Try to load again after sync
-                if let Ok(list) = Self::load(config, &repo.uuid, package_name) {
+                if let Ok(list) = Self::load(config, &repo.name, package_name) {
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
                 }
@@ -81,19 +81,19 @@ impl VersionList {
         }
     }
 
-    pub fn load(config: &Config, repo_uuid: &str, package_name: &str) -> anyhow::Result<Self> {
+    pub fn load(config: &Config, repo_name: &str, package_name: &str) -> anyhow::Result<Self> {
         let safe_name = package_name.replace('/', "#");
-        let cache_file = config.version_cache_file(repo_uuid, &safe_name);
+        let cache_file = config.version_cache_file(repo_name, &safe_name);
         let content = fs::read_to_string(&cache_file)
             .with_context(|| format!("Failed to read version cache file: {:?}", cache_file))?;
         serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse version cache file: {:?}", cache_file))
     }
 
-    pub fn save(&self, config: &Config, repo_uuid: &str, package_name: &str) -> anyhow::Result<()> {
+    pub fn save(&self, config: &Config, repo_name: &str, package_name: &str) -> anyhow::Result<()> {
         fs::create_dir_all(&config.meta_dir).context("Failed to create meta directory")?;
         let safe_name = package_name.replace('/', "#");
-        let cache_file = config.version_cache_file(repo_uuid, &safe_name);
+        let cache_file = config.version_cache_file(repo_name, &safe_name);
         let content =
             serde_json::to_string_pretty(self).context("Failed to serialize version list")?;
         fs::write(&cache_file, content)

@@ -40,7 +40,7 @@ impl Unarchiver {
         }
 
         fs::write(&marker_file, "").context("Failed to create unarchive marker file")?;
-        println!("Unarchived {} to {}", filename, dest.display());
+        log::debug!("[{}] unarchived to {}", filename, dest.display());
         Ok(())
     }
 }

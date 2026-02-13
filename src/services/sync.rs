@@ -1,3 +1,4 @@
+use log::{error, info};
 use crate::models::config::Config;
 use crate::models::package_entry::{ManagerEntry, PackageEntry, PackageList};
 use crate::models::repository::Repository;
@@ -7,7 +8,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 pub fn sync_repo(config: &Config, repo: &Repository) {
-    println!("Syncing repository: {}...", repo.name);
+    info!("[{}] syncing repo", repo.name);
     let mut all_packages = Vec::new();
     let mut all_managers = Vec::new();
     let repo_path = Path::new(&repo.path);
@@ -36,7 +37,7 @@ pub fn sync_repo(config: &Config, repo: &Repository) {
                 }
             }
             Err(e) => {
-                eprintln!("Error evaluating {}: {}", star_file_path.display(), e);
+                error!("[{}] eval failed {}: {}", repo.name, star_file_path.display(), e);
             }
         }
     }
@@ -49,18 +50,18 @@ pub fn sync_repo(config: &Config, repo: &Repository) {
     };
     package_list.initialize_maps();
     package_list
-        .save(config, &repo.uuid)
+        .save(config, &repo.name)
         .expect("Failed to save package list");
-    println!(
-        "Synced {} packages and {} managers for {}",
+    info!(
+        "[{}] synced: {} pkgs, {} mgrs",
+        repo.name,
         package_list.packages.len(),
-        package_list.managers.len(),
-        repo.name
+        package_list.managers.len()
     );
 }
 
 pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) {
-    println!("Syncing package: {} in repo: {}...", pkg.name, repo.name);
+    info!("[{}/{}] syncing pkg", repo.name, pkg.name);
 
     let star_path = Path::new(&repo.path).join(&pkg.filename);
     match execute_function(
@@ -72,16 +73,17 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) {
         Ok(versions) => {
             let version_list = VersionList { versions };
             version_list
-                .save(config, &repo.uuid, &pkg.name)
+                .save(config, &repo.name, &pkg.name)
                 .expect("Failed to save version list");
-            println!(
-                "Synced {} versions for {}",
-                version_list.versions.len(),
-                pkg.name
+            info!(
+                "[{}/{}] synced {} versions",
+                repo.name,
+                pkg.name,
+                version_list.versions.len()
             );
         }
         Err(e) => {
-            eprintln!("Error syncing package {}: {}", pkg.name, e);
+            error!("[{}/{}] sync failed: {}", repo.name, pkg.name, e);
         }
     }
 }
@@ -93,10 +95,8 @@ pub fn sync_manager_package(
     manager_name: &str,
     package_name: &str,
 ) {
-    println!(
-        "Syncing package: {}:{} using manager: {} in repo: {}...",
-        manager_name, package_name, mgr.name, repo.name
-    );
+    let full_name = format!("{}:{}", manager_name, package_name);
+    info!("[{}/{}] syncing mgr pkg", repo.name, full_name);
 
     let star_path = Path::new(&repo.path).join(&mgr.filename);
     match execute_manager_function(
@@ -108,21 +108,18 @@ pub fn sync_manager_package(
     ) {
         Ok(versions) => {
             let version_list = VersionList { versions };
-            let full_name = format!("{}:{}", manager_name, package_name);
             version_list
-                .save(config, &repo.uuid, &full_name)
+                .save(config, &repo.name, &full_name)
                 .expect("Failed to save version list");
-            println!(
-                "Synced {} versions for {}",
-                version_list.versions.len(),
-                full_name
+            info!(
+                "[{}/{}] synced {} versions",
+                repo.name,
+                full_name,
+                version_list.versions.len()
             );
         }
         Err(e) => {
-            eprintln!(
-                "Error syncing package {}:{}: {}",
-                manager_name, package_name, e
-            );
+            error!("[{}/{}] sync failed: {}", repo.name, full_name, e);
         }
     }
 }

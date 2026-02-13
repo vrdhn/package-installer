@@ -8,7 +8,9 @@ use rayon::prelude::*;
 pub fn run(config: &Config, selector_str: Option<&str>) {
     let selector = selector_str.and_then(PackageSelector::parse);
     sync_all(config, selector);
-    list::run(config, selector_str);
+    if log::log_enabled!(log::Level::Info) {
+        list::run(config, selector_str);
+    }
 }
 
 pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {

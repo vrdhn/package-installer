@@ -5,7 +5,9 @@ use rayon::prelude::*;
 
 pub fn run(config: &Config, name: Option<&str>) {
     sync_all(config, name);
-    list::run(config, name);
+    if log::log_enabled!(log::Level::Info) {
+        list::run(config, name);
+    }
 }
 
 pub fn sync_all(config: &Config, name: Option<&str>) {

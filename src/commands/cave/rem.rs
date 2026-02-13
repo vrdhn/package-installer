@@ -7,7 +7,7 @@ pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
         if let Some(q) = arg2 {
             (Some(arg1), q)
         } else {
-            println!("Error: Missing package query after variant.");
+            log::error!("missing query after variant");
             return;
         }
     } else {
@@ -18,7 +18,7 @@ pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
     let (path, mut cave) = match Cave::find_in_ancestry(&current_dir) {
         Some(res) => res,
         None => {
-            println!("No cave found.");
+            log::error!("no cave found");
             return;
         }
     };
@@ -28,7 +28,7 @@ pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
         match cave.variants.get_mut(v_name) {
             Some(s) => s,
             None => {
-                println!("Variant '{}' not found in cave.", v_name);
+                log::error!("variant {} not found", v_name);
                 return;
             }
         }
@@ -41,8 +41,8 @@ pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
 
     if settings.packages.len() < original_len {
         cave.save(&path).expect("Failed to save cave file");
-        println!("Removed {} from cave {}{}", query, cave.name, variant.map(|v| format!(" (variant {})", v)).unwrap_or_default());
+        log::info!("removed {} from {}{}", query, cave.name, variant.map(|v| format!(" (var {})", v)).unwrap_or_default());
     } else {
-        println!("Package {} not found in cave {}{}", query, cave.name, variant.map(|v| format!(" (variant {})", v)).unwrap_or_default());
+        log::warn!("pkg {} not found in {}{}", query, cave.name, variant.map(|v| format!(" (var {})", v)).unwrap_or_default());
     }
 }

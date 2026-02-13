@@ -10,7 +10,7 @@ pub fn run(config: &Config, arg1: String, arg2: Option<String>) {
         if let Some(q) = arg2 {
             (Some(arg1), q)
         } else {
-            println!("Error: Missing package query after variant.");
+            log::error!("missing query after variant");
             return;
         }
     } else {
@@ -21,14 +21,14 @@ pub fn run(config: &Config, arg1: String, arg2: Option<String>) {
     let (path, mut cave) = match Cave::find_in_ancestry(&current_dir) {
         Some(res) => res,
         None => {
-            println!("No cave found.");
+            log::error!("no cave found");
             return;
         }
     };
 
     // Parse query to ensure it's valid
     if PackageSelector::parse(&query).is_none() {
-        println!("Invalid package query: {}", query);
+        log::error!("invalid query: {}", query);
         return;
     }
 
@@ -36,11 +36,11 @@ pub fn run(config: &Config, arg1: String, arg2: Option<String>) {
     let repo_config = Repositories::get_all(config);
     let selector = PackageSelector::parse(&query).unwrap();
     
-    println!("Resolving {}...", query);
-    if let Some((full_name, version, _uuid)) = resolve::resolve_query(config, repo_config, &selector) {
-        println!("Resolved to: {} ({} - {})", full_name, version.version, version.release_type);
+    log::info!("[{}] resolving", query);
+    if let Some((full_name, version, repo_name)) = resolve::resolve_query(config, repo_config, &selector) {
+        log::info!("[{}/{}] resolved: {} ({})", repo_name, full_name, version.version, version.release_type);
     } else {
-        println!("Warning: Could not resolve {}, but adding anyway.", query);
+        log::warn!("[{}] could not resolve, adding anyway", query);
     }
     
     let settings = if let Some(ref v_name) = variant {
@@ -55,5 +55,5 @@ pub fn run(config: &Config, arg1: String, arg2: Option<String>) {
     }
 
     cave.save(&path).expect("Failed to save cave file");
-    println!("Added {} to cave {}{}", query, cave.name, variant.map(|v| format!(" (variant {})", v)).unwrap_or_default());
+    log::info!("[{}] added {} to {}", cave.name, query, variant.map(|v| format!("var {}", v)).unwrap_or_else(|| "default".to_string()));
 }

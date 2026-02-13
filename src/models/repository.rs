@@ -2,22 +2,16 @@ use crate::models::config::Config;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Repository {
-    pub uuid: String,
     pub path: String,
     pub name: String,
 }
 
 impl Repository {
     pub fn new(path: String, name: String) -> Self {
-        Self {
-            uuid: Uuid::new_v4().to_string(),
-            path,
-            name,
-        }
+        Self { path, name }
     }
 }
 
@@ -30,7 +24,7 @@ impl Repositories {
     pub fn get_all(config: &Config) -> &Self {
         config.state.repositories.get_or_init(|| {
             Self::load(config).unwrap_or_else(|e| {
-                eprintln!("Warning: Failed to load repositories: {}", e);
+                log::warn!("failed to load repos: {}", e);
                 Self {
                     repositories: Vec::new(),
                 }

@@ -4,7 +4,7 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 src/
  models/
   config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, packages_dir, pilocals_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir, pilocals_dir }, is_inside_cave()
-  repository: Repository { uuid, path, name }, Repositories { repositories, get_all(config), load, save }
+  repository: Repository { path, name }, Repositories { repositories, get_all(config), load, save }
   package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo) }
   version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, filemap, env, manager_command }
   selector: PackageSelector { recipe, prefix, package, version }
@@ -28,11 +28,11 @@ src/
   - test: Evaluates .star, calls discovery function, then performs test download and unarchive.
 
 logic:
-- Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-uuid>/`. Skipping if `.unarchived` marker exists.
+- Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-name>/`. Skipping if `.unarchived` marker exists.
 - Home Directory: Stored in `pi.cave.json` during `cave init`. Defaults to `XDG_STATE_DIR/pi/<name>`.
 - Filemap (Symlinks): Applied from package directory to `.pilocal` cache. Supports simple `*` globs for source patterns.
 - Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pilocal/bin` is prepended to `PATH`. PI_CAVE set to cave name. Prints "you are now in cave" and shows `cave info` on start.
-- Resolve Query: Returns `(full_name, version, repo_uuid)` for building unarchive paths.
+- Resolve Query: Returns `(full_name, version, repo_name)` for building unarchive paths.
 - Cave Mode (Read-Only): If `PI_CAVE` is detected, `pi` enters read-only mode. Only `list`, `info`, `resolve`, and `version` commands are allowed.
 - Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.
 - Rust Component Handling: Correctly maps `rust-src` to `lib/rustlib/src/rust` and `rust-std` to `lib/rustlib/<target>/lib`. Sets `RUST_SRC_PATH` for `rust-analyzer` support using `$` placeholder.

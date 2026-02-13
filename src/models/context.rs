@@ -41,6 +41,14 @@ impl Context {
             state,
         }
     }
+
+    pub fn display_name(&self) -> String {
+        let p = self.filename.split(':').next().unwrap_or(&self.filename);
+        PathBuf::from(p)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| p.to_string())
+    }
 }
 
 impl Allocative for Context {

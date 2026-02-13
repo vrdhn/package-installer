@@ -9,7 +9,7 @@ pub fn run(config: &Config, selector_str: &str) {
     let selector = match PackageSelector::parse(selector_str) {
         Some(s) => s,
         None => {
-            println!("Invalid package selector: {}", selector_str);
+            log::error!("invalid selector: {}", selector_str);
             return;
         }
     };
@@ -68,7 +68,7 @@ pub fn run(config: &Config, selector_str: &str) {
     }
 
     if !found {
-        println!("No packages found matching: {}", selector_str);
+        log::warn!("no pkgs matching: {}", selector_str);
     }
 }
 

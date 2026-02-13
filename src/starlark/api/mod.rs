@@ -66,7 +66,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         let cache = Cache::new(context.meta_dir.clone(), Duration::from_secs(3600)); // 1 hour TTL
 
         if let Some(cached) = cache.read(&url)? {
-            println!("From Cache: {}", url);
+            log::debug!("[{}] cache hit: {}", context.display_name(), url);
             return Ok(cached);
         }
 
@@ -82,11 +82,11 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
 
         // Check cache again after acquiring lock to see if another thread finished it
         if let Some(cached) = cache.read(&url)? {
-            println!("From Cache: {}", url);
+            log::debug!("[{}] cache hit: {}", context.display_name(), url);
             return Ok(cached);
         }
 
-        println!("Fetching: {}", url);
+        log::info!("[{}] fetching: {}", context.display_name(), url);
         let content = Downloader::download(&url)?;
         cache.write(&url, &content)?;
         Ok(content)
@@ -96,42 +96,45 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         content: String,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
+        let context = get_context(eval)?;
         let ast = AstModule::parse("internal", "json".to_string(), &Dialect::Extended)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            .map_err(|e| anyhow::anyhow!("[{}] JSON parse error: {}", context.display_name(), e))?;
         let json_val = eval
             .eval_statements(ast)
-            .map_err(|e| anyhow::anyhow!("Failed to retrieve json module: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("[{}] failed to retrieve json module: {}", context.display_name(), e))?;
 
         let decode = json_val
             .get_attr("decode", eval.heap())
-            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .map_err(|e| anyhow::anyhow!("[{}] {}", context.display_name(), e))?
             .context("json.decode not found")?;
 
         let content_val = eval.heap().alloc(content);
 
         eval.eval_function(decode, &[content_val], &[])
-            .map_err(|e| anyhow::anyhow!("{}", e))
+            .map_err(|e| anyhow::anyhow!("[{}] {}", context.display_name(), e))
     }
 
     fn toml_parse<'v>(
         content: String,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
+        let context = get_context(eval)?;
         let json_value: serde_json::Value = toml::from_str(&content)
-            .map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("[{}] TOML parse error: {}", context.display_name(), e))?;
         Ok(serde_to_starlark(json_value, eval.heap()))
     }
 
-    fn json_dump(data: Value, query: Option<String>) -> anyhow::Result<NoneType> {
+    fn json_dump(data: Value, query: Option<String>, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<NoneType> {
+        let context = get_context(eval)?;
         let json_val = starlark_to_serde(data)?;
 
         if let Some(q) = query {
             let path =
-                JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("JSONPath parse error: {}", e))?;
+                JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("[{}] JSONPath parse error: {}", context.display_name(), e))?;
             let node = path.query(&json_val);
-            println!("{}", serde_json::to_string_pretty(&node)?);
+            log::info!("[{}] {}", context.display_name(), serde_json::to_string_pretty(&node)?);
         } else {
-            println!("{}", serde_json::to_string_pretty(&json_val)?);
+            log::info!("[{}] {}", context.display_name(), serde_json::to_string_pretty(&json_val)?);
         }
 
         Ok(NoneType)

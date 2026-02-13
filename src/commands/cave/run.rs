@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 
 pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
     if let Err(e) = execute_run(config, variant, command) {
-        eprintln!("Error: {}", e);
+        log::error!("run failed: {}", e);
         std::process::exit(1);
     }
 }
@@ -15,7 +15,7 @@ pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
 fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String>) -> Result<()> {
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let (_path, cave) = Cave::find_in_ancestry(&current_dir)
-        .context("No cave found in current directory or its ancestors.")?;
+        .context("no cave found")?;
 
     // Detect if variant_opt is actually a variant or just the first part of the command
     let (variant, final_command) = if let Some(ref v) = variant_opt {
@@ -35,7 +35,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
     let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant)?;
 
     let settings = cave.get_effective_settings(variant)
-        .context("Failed to get effective cave settings")?;
+        .context("failed to get cave settings")?;
 
     let mut b = Bubblewrap::new();
     let host_home = config.get_host_home();
@@ -123,8 +123,10 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
         b.set_env(&k, &v);
     }
 
-    println!("you are now in cave");
-    crate::commands::cave::info::run(config);
+    log::info!("entering cave");
+    if log::log_enabled!(log::Level::Info) {
+        crate::commands::cave::info::run(config);
+    }
 
     if !final_command.is_empty() {
         b.set_command(&final_command[0], &final_command[1..]);

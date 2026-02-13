@@ -5,9 +5,17 @@ use clap::{Parser, Subcommand};
 #[command(about = "A package manager", long_about = None)]
 #[command(arg_required_else_help = true)]
 pub struct Cli {
-    /// Enable verbose logging (shows all log levels)
+    /// Enable verbose logging
     #[arg(short, long, global = true)]
     pub verbose: bool,
+
+    /// Enable debug logging
+    #[arg(short, long, global = true)]
+    pub debug: bool,
+
+    /// Suppress all non-error output
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
 
     #[command(subcommand)]
     pub command: Commands,

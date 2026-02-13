@@ -6,28 +6,26 @@ pub fn run(config: &Config) {
     let current_dir = env::current_dir().expect("Failed to get current directory");
     if let Some((path, cave)) = Cave::find_in_ancestry(&current_dir) {
         let active_status = if config.is_inside_cave() { " (ACTIVE)" } else { "" };
-        println!("Cave Name: {}{}", cave.name, active_status);
-        println!("Cave File: {}", path.display());
-        println!("Workspace: {}", cave.workspace.display());
-        println!("Home:      {}", cave.homedir.display());
+        println!("name: {}{}", cave.name, active_status);
+        println!("file: {}", path.display());
+        println!("work: {}", cave.workspace.display());
+        println!("home: {}", cave.homedir.display());
         
-        println!("
-Default Settings:");
-        println!("  Packages: {:?}", cave.settings.packages);
-        println!("  Set:      {:?}", cave.settings.set);
-        println!("  Unset:    {:?}", cave.settings.unset);
+        println!("\nsettings:");
+        println!("  pkgs: {:?}", cave.settings.packages);
+        println!("  set:  {:?}", cave.settings.set);
+        println!("  uns:  {:?}", cave.settings.unset);
 
         if !cave.variants.is_empty() {
-            println!("
-Variants:");
+            println!("\nvariants:");
             for (name, settings) in &cave.variants {
                 println!("  :{}", name);
-                println!("    Packages: {:?}", settings.packages);
-                println!("    Set:      {:?}", settings.set);
-                println!("    Unset:    {:?}", settings.unset);
+                println!("    pkgs: {:?}", settings.packages);
+                println!("    set:  {:?}", settings.set);
+                println!("    uns:  {:?}", settings.unset);
             }
         }
     } else {
-        println!("No cave found in current directory or its ancestors.");
+        log::error!("no cave found");
     }
 }

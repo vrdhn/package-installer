@@ -10,12 +10,12 @@ use log::{error, info};
 use std::path::Path;
 
 pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
-    info!("Executing devel test command for file: {}", filename);
+    info!("testing file: {}", filename);
 
     let path = Path::new(filename);
     match evaluate_file(path, config.state.clone()) {
         Ok((packages, managers)) => {
-            info!("Registered {} packages and {} managers.", packages.len(), managers.len());
+            info!("registered {} pkgs, {} mgrs", packages.len(), managers.len());
             if let Some(package_name) = pkg {
                 // Try manager first if it's a manager:package format
                 if let Some(colon_idx) = package_name.find(':') {
@@ -34,16 +34,16 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
                     return;
                 }
 
-                error!("Package or manager '{}' not found in file.", package_name);
+                error!("pkg/mgr {} not found", package_name);
             }
         }
-        Err(e) => error!("Starlark evaluation failed: {}", e),
+        Err(e) => error!("eval failed: {}", e),
     }
 }
 
 fn run_manager_function(config: &Config, manager_name: &str, package_name: &str, entry: &crate::models::package_entry::ManagerEntry) {
     info!(
-        "Manager '{}' matched exactly. Calling function '{}' for package '{}' from '{}'.",
+        "matched mgr: {} calling {} for {} in {}",
         manager_name, entry.function_name, package_name, entry.filename
     );
 
@@ -56,10 +56,7 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
         config.state.clone(),
     ) {
         Ok(mut versions) => {
-            info!(
-                "Function execution finished. Found {} versions.",
-                versions.len()
-            );
+            info!("found {} versions", versions.len());
 
             // Sort by date then by version
             versions.sort_by(|a, b| {
@@ -73,17 +70,17 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
             // For testing, just take the first one (latest)
             if let Some(v) = versions.first() {
                 if let Err(e) = test_package_download_unarchive(config, v, "devel-test") {
-                    error!("Test download/unarchive failed: {}", e);
+                    error!("download/unarchive failed: {}", e);
                 }
             }
         }
-        Err(e) => error!("Manager function execution failed: {}", e),
+        Err(e) => error!("mgr function failed: {}", e),
     }
 }
 
 fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntry) {
     info!(
-        "Package '{}' matched exactly. Calling function '{}' from '{}'.",
+        "matched pkg: {} calling {} from {}",
         package_name, entry.function_name, entry.filename
     );
 
@@ -95,10 +92,7 @@ fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntr
         config.state.clone(),
     ) {
         Ok(mut versions) => {
-            info!(
-                "Function execution finished. Found {} versions.",
-                versions.len()
-            );
+            info!("found {} versions", versions.len());
 
             // Sort by date then by version
             versions.sort_by(|a, b| {
@@ -112,28 +106,28 @@ fn run_package_function(config: &Config, package_name: &str, entry: &PackageEntr
             // For testing, just take the first one (latest)
             if let Some(v) = versions.first() {
                 if let Err(e) = test_package_download_unarchive(config, v, "devel-test") {
-                    error!("Test download/unarchive failed: {}", e);
+                    error!("download/unarchive failed: {}", e);
                 }
             }
         }
-        Err(e) => error!("Function execution failed: {}", e),
+        Err(e) => error!("function failed: {}", e),
     }
 }
 
-fn test_package_download_unarchive(config: &Config, v: &VersionEntry, repo_uuid: &str) -> anyhow::Result<()> {
-    println!("\n--- Testing Download & Unarchive ---");
+fn test_package_download_unarchive(config: &Config, v: &VersionEntry, repo_name: &str) -> anyhow::Result<()> {
+    info!("testing download & unarchive");
     
     let download_dest = config.download_dir.join(&v.filename);
     let checksum = if v.checksum.is_empty() { None } else { Some(v.checksum.as_str()) };
 
     Downloader::download_to_file(&v.url, &download_dest, checksum)?;
 
-    let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&v.pkgname), sanitize_name(&v.version), repo_uuid);
+    let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&v.pkgname), sanitize_name(&v.version), repo_name);
     let extract_dest = config.packages_dir.join(pkg_dir_name);
 
     Unarchiver::unarchive(&download_dest, &extract_dest)?;
 
-    println!("--- Test Finished Successfully ---\n");
+    info!("test success");
     Ok(())
 }
 

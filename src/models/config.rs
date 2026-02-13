@@ -68,12 +68,12 @@ impl Config {
         self.config_dir.join("repositories.json")
     }
 
-    pub fn package_cache_file(&self, uuid: &str) -> PathBuf {
-        self.meta_dir.join(format!("packages-{}.json", uuid))
+    pub fn package_cache_file(&self, repo_name: &str) -> PathBuf {
+        self.meta_dir.join(format!("packages-{}.json", repo_name))
     }
 
-    pub fn version_cache_file(&self, uuid: &str, safe_name: &str) -> PathBuf {
-        self.meta_dir.join(format!("version-{}-{}.json", uuid, safe_name))
+    pub fn version_cache_file(&self, repo_name: &str, safe_name: &str) -> PathBuf {
+        self.meta_dir.join(format!("version-{}-{}.json", repo_name, safe_name))
     }
 
     pub fn get_user(&self) -> String {

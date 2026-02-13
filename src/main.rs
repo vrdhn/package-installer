@@ -15,7 +15,7 @@ fn main() {
     let cli = Cli::parse();
     let config = Config::new();
 
-    init_logging(cli.verbose);
+    init_logging(cli.quiet, cli.verbose, cli.debug);
 
     if config.is_inside_cave() {
         match cli.command {
@@ -28,7 +28,7 @@ fn main() {
                 // Allowed commands
             }
             _ => {
-                eprintln!("Error: Command not allowed inside a cave (read-only mode).");
+                log::error!("command not allowed inside cave");
                 std::process::exit(1);
             }
         }
@@ -36,8 +36,8 @@ fn main() {
 
     match cli.command {
         Commands::Version => {
-            println!("pi version: {}", build::BUILD_VERSION);
-            println!("build date: {}", build::BUILD_DATE);
+            println!("v{}", build::BUILD_VERSION);
+            println!("build {}", build::BUILD_DATE);
         }
         Commands::Repo { command } => match command {
             cli::parser::RepoCommands::Add { path } => {

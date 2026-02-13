@@ -34,7 +34,7 @@ impl Downloader {
         if dest.exists() && expected_checksum.is_some() {
             if let Ok(actual_checksum) = Self::calculate_checksum(dest) {
                 if actual_checksum == expected_checksum.unwrap() {
-                    println!("File already exists and checksum matches, skipping download.");
+                    log::info!("[{}] skip, matches checksum", dest.display());
                     return Ok(());
                 }
             }
@@ -45,7 +45,7 @@ impl Downloader {
             .build();
         let agent = Agent::new_with_config(config);
 
-        println!("Fetching: {}", url);
+        log::info!("[{}] fetching", url);
         let response = agent.get(url).call()?;
 
         let content_length = response
@@ -84,11 +84,11 @@ impl Downloader {
 
                 let expected_str = match content_length {
                     Some(len) => len.to_string(),
-                    None => "unknown".to_string(),
+                    None => "???".to_string(),
                 };
 
-                println!(
-                    "Downloading {}: received {} bytes, expected {} bytes, bandwidth {:.2} KB/s",
+                log::debug!(
+                    "[{}] recv {}/{} ({:.2} KB/s)",
                     filename, downloaded_bytes, expected_str, bandwidth / 1024.0
                 );
                 last_report_time = now;
@@ -99,11 +99,11 @@ impl Downloader {
             let actual = Self::calculate_checksum(dest)?;
             if actual != expected {
                 return Err(anyhow::anyhow!(
-                    "Checksum mismatch for {}. Expected {}, got {}",
-                    url, expected, actual
+                    "[{}] checksum mismatch: got {}, want {}",
+                    url, actual, expected
                 ));
             }
-            println!("Checksum verified for {}", filename);
+            log::debug!("[{}] checksum ok", filename);
         }
 
         Ok(())

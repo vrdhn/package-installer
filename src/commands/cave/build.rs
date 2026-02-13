@@ -18,7 +18,7 @@ pub fn run(config: &Config, variant: Option<String>) {
     let (_path, cave) = match Cave::find_in_ancestry(&current_dir) {
         Some(res) => res,
         None => {
-            println!("No cave found.");
+            log::error!("no cave found");
             return;
         }
     };
@@ -26,7 +26,7 @@ pub fn run(config: &Config, variant: Option<String>) {
     let variant_str = variant.as_deref().and_then(|v| if v.starts_with(':') { Some(v) } else { None });
 
     if let Err(e) = execute_build(config, &cave, variant_str) {
-        eprintln!("Build failed: {}", e);
+        log::error!("build failed: {}", e);
         std::process::exit(1);
     }
 }
@@ -35,30 +35,31 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     let settings = cave.get_effective_settings(variant)
         .context("Failed to get effective cave settings")?;
 
-    println!("Building cave {} (variant {:?})...", cave.name, variant);
+    log::info!("[{}] building (var: {:?})", cave.name, variant);
 
     let repo_config = Repositories::get_all(config);
 
-    let results: Vec<Result<(String, PathBuf, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>)>> = settings.packages
+    let results: Vec<Result<(String, String, PathBuf, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>)>> = settings.packages
         .par_iter()
         .map(|query| {
             let selector = PackageSelector::parse(query)
                 .ok_or_else(|| anyhow::anyhow!("Invalid selector: {}", query))?;
 
-            let (full_name, version, repo_uuid) = resolve::resolve_query(config, repo_config, &selector)
+            let (full_name, version, repo_name) = resolve::resolve_query(config, repo_config, &selector)
                 .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
+            let pkg_ctx = format!("{}:{}={}", repo_name, full_name, version.version);
             let download_dest = config.download_dir.join(&version.filename);
             let checksum = if version.checksum.is_empty() { None } else { Some(version.checksum.as_str()) };
 
             Downloader::download_to_file(&version.url, &download_dest, checksum)?;
 
-            let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version), repo_uuid);
+            let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version), repo_name);
             let extract_dest = config.packages_dir.join(pkg_dir_name);
 
             Unarchiver::unarchive(&download_dest, &extract_dest)?;
 
-            Ok((full_name, extract_dest, version.filemap, version.env))
+            Ok((pkg_ctx, full_name, extract_dest, version.filemap, version.env))
         })
         .collect();
 
@@ -66,15 +67,15 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     let mut all_env = std::collections::HashMap::new();
     for res in results {
         match res {
-            Ok((full_name, extract_dest, filemap, env)) => {
-                println!("Resolved {} to {}", full_name, extract_dest.display());
-                all_filemap.push((extract_dest, filemap));
+            Ok((pkg_ctx, _full_name, extract_dest, filemap, env)) => {
+                log::debug!("[{}] resolved to {}", pkg_ctx, extract_dest.display());
+                all_filemap.push((pkg_ctx, extract_dest, filemap));
                 for (k, v) in env {
                     all_env.insert(k, v);
                 }
             }
             Err(e) => {
-                error!("Build failed for a package: {}", e);
+                error!("build failed: {}", e);
                 return Err(e);
             }
         }
@@ -83,27 +84,27 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     let pilocal_dir = config.pilocal_path(&cave.name, variant);
     fs::create_dir_all(&pilocal_dir).context("Failed to create .pilocal directory")?;
 
-    println!("Applying filemap to pilocal: {}", pilocal_dir.display());
+    log::debug!("[{}] applying filemap: {}", cave.name, pilocal_dir.display());
 
-    for (pkg_dir, filemap) in all_filemap {
+    for (pkg_ctx, pkg_dir, filemap) in all_filemap {
         for (src_pattern, dest_rel) in filemap {
-            apply_filemap_entry(&pkg_dir, &pilocal_dir, &src_pattern, &dest_rel)
+            apply_filemap_entry(&pkg_ctx, &pkg_dir, &pilocal_dir, &src_pattern, &dest_rel)
                 .with_context(|| format!("Failed to apply filemap entry '{}' for {}", src_pattern, pkg_dir.display()))?;
         }
     }
     
-    println!("Build finished successfully.");
+    log::info!("[{}] build success", cave.name);
     Ok(all_env)
 }
 
-fn apply_filemap_entry(pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
+fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
     if src_pattern.contains('*') {
         // Glob-like resolution using walkdir (simple * at end support)
         let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
         let search_path = pkg_dir.join(base_pattern);
         
         if !search_path.exists() {
-            return Err(anyhow::anyhow!("Source pattern base path does not exist: {}", search_path.display()));
+            return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
         }
 
         let mut matched = false;
@@ -114,21 +115,26 @@ fn apply_filemap_entry(pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, de
                 let file_name = entry.file_name();
                 
                 let target_dest = pilocal_dir.join(dest_rel).join(file_name);
-                println!("  Symlinking {} -> {}", target_dest.display(), entry.path().display());
+                log::trace!(
+                    "[{}] link {} -> {}",
+                    pkg_ctx,
+                    target_dest.strip_prefix(pilocal_dir).unwrap_or(&target_dest).display(),
+                    entry.file_name().to_string_lossy()
+                );
                 create_symlink(entry.path(), &target_dest)?;
                 matched = true;
             }
         }
 
         if !matched {
-            return Err(anyhow::anyhow!("Source pattern '{}' did not match any files in {}", src_pattern, pkg_dir.display()));
+            return Err(anyhow::anyhow!("[{}] pattern '{}' no match in {}", pkg_ctx, src_pattern, pkg_dir.display()));
         }
     } else {
         let src_path = pkg_dir.join(src_pattern);
         let dest_path = pilocal_dir.join(dest_rel);
         
         if !src_path.exists() {
-            return Err(anyhow::anyhow!("Source path does not exist: {}", src_path.display()));
+            return Err(anyhow::anyhow!("[{}] source missing: {}", pkg_ctx, src_path.display()));
         }
 
         let final_dest = if dest_rel.ends_with('/') || dest_path.is_dir() {
@@ -138,7 +144,12 @@ fn apply_filemap_entry(pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, de
             dest_path
         };
 
-        println!("  Symlinking {} -> {}", final_dest.display(), src_path.display());
+        log::trace!(
+            "[{}] link {} -> {}",
+            pkg_ctx,
+            final_dest.strip_prefix(pilocal_dir).unwrap_or(&final_dest).display(),
+            src_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| src_path.to_string_lossy())
+        );
         create_symlink(&src_path, &final_dest)?;
     }
     Ok(())
