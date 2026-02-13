@@ -28,6 +28,7 @@ pub struct VersionEntry {
     pub checksum: String,
     pub checksum_url: String,
     pub filemap: std::collections::HashMap<String, String>,
+    pub env: std::collections::HashMap<String, String>,
     #[serde(default)]
     pub manager_command: ManagerCommand,
 }

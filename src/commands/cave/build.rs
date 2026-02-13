@@ -8,7 +8,7 @@ use crate::services::unarchiver::Unarchiver;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::Context;
+use anyhow::{Context, Result};
 use rayon::prelude::*;
 use log::error;
 use walkdir::WalkDir;
@@ -23,19 +23,23 @@ pub fn run(config: &Config, variant: Option<String>) {
         }
     };
 
-    let settings = match cave.get_effective_settings(variant.as_deref()) {
-        Ok(s) => s,
-        Err(e) => {
-            println!("Error: {}", e);
-            return;
-        }
-    };
+    let variant_str = variant.as_deref().and_then(|v| if v.starts_with(':') { Some(v) } else { None });
+
+    if let Err(e) = execute_build(config, &cave, variant_str) {
+        eprintln!("Build failed: {}", e);
+        std::process::exit(1);
+    }
+}
+
+pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Result<std::collections::HashMap<String, String>> {
+    let settings = cave.get_effective_settings(variant)
+        .context("Failed to get effective cave settings")?;
 
     println!("Building cave {} (variant {:?})...", cave.name, variant);
 
     let repo_config = Repositories::get_all(config);
 
-    let results: Vec<anyhow::Result<(String, PathBuf, std::collections::HashMap<String, String>)>> = settings.packages
+    let results: Vec<Result<(String, PathBuf, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>)>> = settings.packages
         .par_iter()
         .map(|query| {
             let selector = PackageSelector::parse(query)
@@ -54,41 +58,45 @@ pub fn run(config: &Config, variant: Option<String>) {
 
             Unarchiver::unarchive(&download_dest, &extract_dest)?;
 
-            Ok((full_name, extract_dest, version.filemap))
+            Ok((full_name, extract_dest, version.filemap, version.env))
         })
         .collect();
 
     let mut all_filemap = Vec::new();
+    let mut all_env = std::collections::HashMap::new();
     for res in results {
         match res {
-            Ok((full_name, extract_dest, filemap)) => {
+            Ok((full_name, extract_dest, filemap, env)) => {
                 println!("Resolved {} to {}", full_name, extract_dest.display());
                 all_filemap.push((extract_dest, filemap));
+                for (k, v) in env {
+                    all_env.insert(k, v);
+                }
             }
             Err(e) => {
                 error!("Build failed for a package: {}", e);
+                return Err(e);
             }
         }
     }
 
-    let home_dir = &cave.homedir;
-    let pitree_dir = home_dir.join(".pitree");
-    fs::create_dir_all(&pitree_dir).expect("Failed to create .pitree directory");
+    let pilocal_dir = config.pilocal_path(&cave.name, variant);
+    fs::create_dir_all(&pilocal_dir).context("Failed to create .pilocal directory")?;
 
-    println!("Applying filemap to pitree: {}", pitree_dir.display());
+    println!("Applying filemap to pilocal: {}", pilocal_dir.display());
 
     for (pkg_dir, filemap) in all_filemap {
         for (src_pattern, dest_rel) in filemap {
-            if let Err(e) = apply_filemap_entry(&pkg_dir, &pitree_dir, &src_pattern, &dest_rel) {
-                error!("Failed to apply filemap entry '{}' for {}: {}", src_pattern, pkg_dir.display(), e);
-            }
+            apply_filemap_entry(&pkg_dir, &pilocal_dir, &src_pattern, &dest_rel)
+                .with_context(|| format!("Failed to apply filemap entry '{}' for {}", src_pattern, pkg_dir.display()))?;
         }
     }
     
     println!("Build finished successfully.");
+    Ok(all_env)
 }
 
-fn apply_filemap_entry(pkg_dir: &Path, pitree_dir: &Path, src_pattern: &str, dest_rel: &str) -> anyhow::Result<()> {
+fn apply_filemap_entry(pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
     if src_pattern.contains('*') {
         // Glob-like resolution using walkdir (simple * at end support)
         let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
@@ -105,7 +113,7 @@ fn apply_filemap_entry(pkg_dir: &Path, pitree_dir: &Path, src_pattern: &str, des
                 let _rel_to_pkg = entry.path().strip_prefix(pkg_dir).unwrap();
                 let file_name = entry.file_name();
                 
-                let target_dest = pitree_dir.join(dest_rel).join(file_name);
+                let target_dest = pilocal_dir.join(dest_rel).join(file_name);
                 println!("  Symlinking {} -> {}", target_dest.display(), entry.path().display());
                 create_symlink(entry.path(), &target_dest)?;
                 matched = true;
@@ -117,7 +125,7 @@ fn apply_filemap_entry(pkg_dir: &Path, pitree_dir: &Path, src_pattern: &str, des
         }
     } else {
         let src_path = pkg_dir.join(src_pattern);
-        let dest_path = pitree_dir.join(dest_rel);
+        let dest_path = pilocal_dir.join(dest_rel);
         
         if !src_path.exists() {
             return Err(anyhow::anyhow!("Source path does not exist: {}", src_path.display()));
@@ -136,7 +144,7 @@ fn apply_filemap_entry(pkg_dir: &Path, pitree_dir: &Path, src_pattern: &str, des
     Ok(())
 }
 
-fn create_symlink(src: &Path, dest: &Path) -> anyhow::Result<()> {
+fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).context("Failed to create parent directory for symlink")?;
     }

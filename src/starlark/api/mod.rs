@@ -147,6 +147,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         checksum: String,
         checksum_url: String,
         filemap: Option<Value>,
+        env: Option<Value>,
         manager_command: Option<String>,
         eval: &mut Evaluator<'_, '_, '_>,
     ) -> anyhow::Result<NoneType> {
@@ -166,6 +167,16 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             }
         };
 
+        let mut parsed_env = std::collections::HashMap::new();
+        if let Some(e) = env {
+            let dict = DictRef::from_value(e).context("env must be a dictionary")?;
+            for (k, v) in dict.iter_hashed() {
+                let key = k.key().unpack_str().context("env key must be a string")?;
+                let val = v.unpack_str().context("env value must be a string")?;
+                parsed_env.insert(key.to_string(), val.to_string());
+            }
+        };
+
         context.versions.write().push(VersionEntry {
             pkgname,
             version,
@@ -176,6 +187,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             checksum,
             checksum_url,
             filemap: parsed_filemap,
+            env: parsed_env,
             manager_command: cmd,
         });
         Ok(NoneType)

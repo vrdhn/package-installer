@@ -3,15 +3,15 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 
 src/
  models/
-  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, packages_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir }
+  config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, packages_dir, pilocals_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir, pilocals_dir }
   repository: Repository { uuid, path, name }, Repositories { repositories, get_all(config), load, save }
   package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo) }
-  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, filemap, manager_command }
+  version_entry: VersionEntry { pkgname, version, release_date, release_type, url, filename, checksum, checksum_url, filemap, env, manager_command }
   selector: PackageSelector { recipe, prefix, package, version }
   context: Context { os, arch, filename, meta_dir, download_dir, packages_dir, state }
   cave: Cave { name, workspace, homedir, settings, variants }, CaveSettings { packages, set, unset }
  starlark/
-  api: register_api (get_os, get_arch, add_package, add_manager, download, json_parse, toml_parse, json_dump, add_version(..., filemap))
+  api: register_api (get_os, get_arch, add_package, add_manager, download, json_parse, toml_parse, json_dump, add_version(..., filemap, env))
   runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State>)
  services/
   downloader: download (String), download_to_file (Path, checksum check, progress)
@@ -21,8 +21,8 @@ src/
   sync: core logic for syncing repo/package/manager data
  cli/parser: Cli { verbose }, Repo, Package, Cave { Init, Info, Add, Rem, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
  commands/cave:
-  - build: Resolves cave packages, downloads, unarchives, and applies filemap (symlinks) to `.pitree` inside cave homedir.
-  - run: Executes command inside a bubblewrap sandbox. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Shared network namespace.
+  - build: Resolves cave packages, downloads, unarchives, and applies filemap (symlinks) to `.pilocal` inside `XDG_CACHE_DIR/pi/pilocals/<cavename>[-<variant>]`. Returns collected env vars.
+  - run: Executes command inside a bubblewrap sandbox. Automatically runs build first. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Mounts `.pilocal` cache RO to `~/.pilocal`. Shared network namespace. Sets PI_CAVE and prepends `~/.pilocal/bin` to PATH. Applies package and cave env vars (supports @HOME placeholder).
   - info: Displays cave info, including stored homedir.
  commands/devel:
   - test: Evaluates .star, calls discovery function, then performs test download and unarchive.
@@ -30,7 +30,8 @@ src/
 logic:
 - Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-uuid>/`. Skipping if `.unarchived` marker exists.
 - Home Directory: Stored in `pi.cave.json` during `cave init`. Defaults to `XDG_STATE_DIR/pi/<name>`.
-- Filemap (Symlinks): Applied from package directory to `homedir/.pitree/`. Supports simple `*` globs for source patterns.
-- Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pitree/bin` is prepended to `PATH`. Network is shared with host.
+- Filemap (Symlinks): Applied from package directory to `~/.pilocal/`. Supports simple `*` globs for source patterns. Renamed from .pitree to .pilocal.
+- Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pilocal/bin` is prepended to `PATH`. PI_CAVE set to cave name. Prints "you are now in cave" and shows `cave info` on start.
 - Resolve Query: Returns `(full_name, version, repo_uuid)` for building unarchive paths.
 - Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.
+- Rust Component Handling: Correctly maps `rust-src` to `lib/rustlib/src/rust` and `rust-std` to `lib/rustlib/<target>/lib`. Sets `RUST_SRC_PATH` for `rust-analyzer` support.

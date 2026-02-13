@@ -79,11 +79,31 @@ def discover_rust_component(package_name):
                 version = v_tmp[len(prefix) + 1:]
                 break
 
-        pitree_root = ""
-        if package_name == "rust":
-                pitree_root = package_name + "-" + version + "-" + target + "/" + "rustc"
-        else:
-                pitree_root = package_name + "-" + version + "-" + target + "/" + package_name
+        # Special casing for component subfolders
+        component_map = {
+            "rust": "rustc",
+            "rust-src": "rust-src/lib/rustlib/src/rust",
+            "rust-std": "rust-std-" + target + "/lib/rustlib/" + target + "/lib",
+        }
+        subfolder = component_map.get(package_name, package_name)
+        
+        pitree_root = package_name + "-" + version + "-" + target + "/" + subfolder
+
+        # File mapping and environment logic
+        filemap = {pitree_root + "/bin/*": "bin"}
+        env_vars = {}
+
+        if package_name == "rust-src":
+            # rust-src extracts to lib/rustlib/src/rust
+            # We map its contents to the same relative path in .pilocal
+            filemap = {pitree_root + "/*": "lib/rustlib/src/rust"}
+            env_vars = {"RUST_SRC_PATH": "@HOME/.pilocal/lib/rustlib/src/rust/library"}
+        elif package_name == "rust-std":
+            filemap = {pitree_root + "/*": "lib/rustlib/" + target + "/lib"}
+        elif package_name == "rust":
+            # Main rust package might need LD_LIBRARY_PATH if it has libs in a non-standard place
+            # but usually it finds them relative to bin/rustc
+            pass
 
         add_version(
             pkgname = package_name,
@@ -94,7 +114,8 @@ def discover_rust_component(package_name):
             filename = filename,
             checksum = checksum,
             checksum_url = "",
-            filemap = {pitree_root +  "/bin/*": "bin"}
+            filemap = filemap,
+            env = env_vars
         )
 
 def cargo_discovery(manager, package):

@@ -12,12 +12,29 @@ pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
     }
 }
 
-fn execute_run(config: &Config, variant: Option<String>, command: Vec<String>) -> Result<()> {
+fn execute_run(config: &Config, variant_opt: Option<String>, mut command: Vec<String>) -> Result<()> {
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let (_path, cave) = Cave::find_in_ancestry(&current_dir)
         .context("No cave found in current directory or its ancestors.")?;
 
-    let _settings = cave.get_effective_settings(variant.as_deref())
+    // Detect if variant_opt is actually a variant or just the first part of the command
+    let (variant, final_command) = if let Some(ref v) = variant_opt {
+        if v.starts_with(':') {
+            (Some(v.as_str()), command)
+        } else {
+            // It's not a variant, it's the command
+            let mut new_cmd = vec![v.clone()];
+            new_cmd.extend(command);
+            (None, new_cmd)
+        }
+    } else {
+        (None, command)
+    };
+
+    // Perform build before run and collect package-provided env vars
+    let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant)?;
+
+    let settings = cave.get_effective_settings(variant)
         .context("Failed to get effective cave settings")?;
 
     let mut b = Bubblewrap::new();
@@ -53,6 +70,12 @@ fn execute_run(config: &Config, variant: Option<String>, command: Vec<String>) -
     }
     b.add_map_bind(BindType::Bind, &cave.homedir, &host_home);
 
+    // .pilocal maintenance: cache -> RO mount in cave home
+    let host_pilocal = config.pilocal_path(&cave.name, variant);
+    if host_pilocal.exists() {
+        b.add_map_bind(BindType::RoBind, &host_pilocal, host_home.join(".pilocal"));
+    }
+
     // ~/.cache/pi and ~/.config/pi (ReadOnly bind)
     let host_cache_pi = config.cache_dir.clone();
     let host_config_pi = config.config_dir.clone();
@@ -75,14 +98,31 @@ fn execute_run(config: &Config, variant: Option<String>, command: Vec<String>) -
     b.set_env("HOME", host_home.to_str().unwrap());
     b.set_env("USER", &config.get_user());
     b.set_env("PI_WORKSPACE", cave.workspace.to_str().unwrap());
+    b.set_env("PI_CAVE", &cave.name);
     
-    // PATH setup: .pitree/bin from home should be first
-    let pitree_bin = host_home.join(".pitree/bin");
+    // PATH setup: .pilocal/bin from home should be first
+    let pilocal_bin = host_home.join(".pilocal/bin");
     b.add_env_first("PATH", "/usr/bin:/bin");
-    b.add_env_first("PATH", pitree_bin.to_str().unwrap());
+    b.add_env_first("PATH", pilocal_bin.to_str().unwrap());
 
-    if !command.is_empty() {
-        b.set_command(&command[0], &command[1..]);
+    // Apply package-provided environment variables
+    for (k, v) in package_envs {
+        // Resolve placeholders like @HOME
+        let v = v.replace("@HOME", host_home.to_str().unwrap());
+        b.set_env(&k, &v);
+    }
+
+    // Apply cave settings environment variables (overrides package-provided ones)
+    for (k, v) in settings.set {
+        let v = v.replace("@HOME", host_home.to_str().unwrap());
+        b.set_env(&k, &v);
+    }
+
+    println!("you are now in cave");
+    crate::commands::cave::info::run(config);
+
+    if !final_command.is_empty() {
+        b.set_command(&final_command[0], &final_command[1..]);
     } else {
         b.set_command("/bin/bash", &[]);
     }

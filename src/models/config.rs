@@ -13,6 +13,7 @@ pub struct Config {
     pub meta_dir: PathBuf,
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
+    pub pilocals_dir: PathBuf,
     pub state: Arc<State>,
 }
 
@@ -25,6 +26,7 @@ pub struct State {
     pub meta_dir: PathBuf,
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
+    pub pilocals_dir: PathBuf,
 }
 
 impl Config {
@@ -42,6 +44,7 @@ impl Config {
         let meta_dir = cache_dir.join("meta");
         let download_dir = cache_dir.join("downloads");
         let packages_dir = cache_dir.join("packages");
+        let pilocals_dir = cache_dir.join("pilocals");
 
         Self {
             cache_dir,
@@ -50,10 +53,12 @@ impl Config {
             meta_dir: meta_dir.clone(),
             download_dir: download_dir.clone(),
             packages_dir: packages_dir.clone(),
+            pilocals_dir: pilocals_dir.clone(),
             state: Arc::new(State {
                 meta_dir,
                 download_dir,
                 packages_dir,
+                pilocals_dir,
                 ..Default::default()
             }),
         }
@@ -77,5 +82,15 @@ impl Config {
 
     pub fn get_host_home(&self) -> PathBuf {
         dirs_next::home_dir().expect("Failed to get home directory")
+    }
+
+    pub fn pilocal_path(&self, cave_name: &str, variant: Option<&str>) -> PathBuf {
+        let name = if let Some(v) = variant {
+            let v = v.strip_prefix(':').unwrap_or(v);
+            format!("{}-{}", cave_name, v)
+        } else {
+            cave_name.to_string()
+        };
+        self.pilocals_dir.join(name)
     }
 }
