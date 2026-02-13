@@ -1,6 +1,7 @@
 use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::version_entry::VersionList;
+use crate::services::db::Db;
 use dashmap::DashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -17,7 +18,6 @@ pub struct Config {
     pub state: Arc<State>,
 }
 
-#[derive(Debug, Default)]
 pub struct State {
     pub repositories: OnceLock<Repositories>,
     pub package_lists: DashMap<String, Arc<PackageList>>,
@@ -27,6 +27,18 @@ pub struct State {
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
     pub pilocals_dir: PathBuf,
+    pub db: Arc<Db>,
+}
+
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("meta_dir", &self.meta_dir)
+            .field("download_dir", &self.download_dir)
+            .field("packages_dir", &self.packages_dir)
+            .field("pilocals_dir", &self.pilocals_dir)
+            .finish()
+    }
 }
 
 impl Config {
@@ -46,6 +58,9 @@ impl Config {
         let packages_dir = cache_dir.join("packages");
         let pilocals_dir = cache_dir.join("pilocals");
 
+        let db_path = state_dir.join("state.db");
+        let db = Arc::new(Db::open(&db_path).expect("Failed to open database"));
+
         Self {
             cache_dir,
             config_dir,
@@ -59,7 +74,11 @@ impl Config {
                 download_dir,
                 packages_dir,
                 pilocals_dir,
-                ..Default::default()
+                repositories: OnceLock::new(),
+                package_lists: DashMap::new(),
+                version_lists: DashMap::new(),
+                download_locks: DashMap::new(),
+                db,
             }),
         }
     }

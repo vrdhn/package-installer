@@ -41,46 +41,54 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
 
     let repo_config = Repositories::get_all(config);
 
-    let results: Vec<Result<(String, String, Option<PathBuf>, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>, ManagerCommand)>> = settings.packages
+    let results: Vec<Result<(String, String, Option<PathBuf>, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>, ManagerCommand, String)>> = settings.packages
         .par_iter()
         .map(|query| {
             let selector = PackageSelector::parse(query)
                 .ok_or_else(|| anyhow::anyhow!("Invalid selector: {}", query))?;
 
-            let (full_name, version, repo_name) = resolve::resolve_query(config, repo_config, &selector)
+            let (pkg_name, version, repo_name) = resolve::resolve_query(config, repo_config, &selector)
                 .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
-            let pkg_ctx = format!("{}:{}={}", repo_name, full_name, version.version);
+            let package_id = format!("{}:/{}={}", repo_name, pkg_name, version.version);
+            let pkg_ctx = format!("{}:{}={}", repo_name, pkg_name, version.version);
+
+            // Check if package is already fully installed in this cave/variant
+            if config.state.db.is_installed(&cave.name, variant, &package_id).unwrap_or(false) {
+                log::info!("[{}] already installed", package_id);
+                // We still need to return the metadata to ensure env and filemap are handled
+            }
 
             if let ManagerCommand::Custom(_) = version.manager_command {
                 // Skip download/unarchive for managed packages
-                return Ok((pkg_ctx, full_name, None, version.filemap, version.env, version.manager_command));
+                return Ok((pkg_ctx, pkg_name, None, version.filemap, version.env, version.manager_command, package_id));
             }
 
             let download_dest = config.download_dir.join(&version.filename);
             let checksum = if version.checksum.is_empty() { None } else { Some(version.checksum.as_str()) };
 
-            Downloader::download_to_file(&version.url, &download_dest, checksum)?;
+            Downloader::download_to_file(&config.state.db, &version.url, &download_dest, checksum)?;
 
             let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version), repo_name);
             let extract_dest = config.packages_dir.join(pkg_dir_name);
 
-            Unarchiver::unarchive(&download_dest, &extract_dest)?;
+            Unarchiver::unarchive(&config.state.db, &download_dest, &extract_dest)?;
 
-            Ok((pkg_ctx, full_name, Some(extract_dest), version.filemap, version.env, version.manager_command))
+            Ok((pkg_ctx, pkg_name, Some(extract_dest), version.filemap, version.env, version.manager_command, package_id))
         })
         .collect();
 
-    let mut all_filemap = Vec::new();
+    let mut all_filemap: Vec<(String, PathBuf, std::collections::HashMap<String, String>)> = Vec::new();
     let mut all_env = std::collections::HashMap::new();
     let mut manager_commands = Vec::new();
+    let mut installed_package_ids: Vec<String> = Vec::new();
 
     for res in results {
         match res {
-            Ok((pkg_ctx, _full_name, extract_dest, filemap, env, manager_cmd)) => {
-                if let Some(ref dest) = extract_dest {
+            Ok((pkg_ctx, _full_name, extract_dest, filemap, env, manager_cmd, package_id)) => {
+                if let Some(dest) = extract_dest {
                     log::debug!("[{}] resolved to {}", pkg_ctx, dest.display());
-                    all_filemap.push((pkg_ctx, dest.clone(), filemap));
+                    all_filemap.push((pkg_ctx, dest, filemap));
                 } else {
                     log::debug!("[{}] managed pkg, skipping extraction", pkg_ctx);
                 }
@@ -92,6 +100,7 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
                     ManagerCommand::Custom(cmd) => manager_commands.push(cmd),
                     ManagerCommand::Auto => {}
                 }
+                installed_package_ids.push(package_id);
             }
             Err(e) => {
                 error!("build failed: {}", e);
@@ -116,6 +125,11 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
         run_manager_commands(config, cave, variant, &all_env, manager_commands)?;
     }
     
+    // Mark all packages as installed in this cave/variant
+    for package_id in installed_package_ids {
+        config.state.db.mark_installed(&cave.name, variant, &package_id)?;
+    }
+
     log::info!("[{}] build success", cave.name);
     Ok(all_env)
 }
