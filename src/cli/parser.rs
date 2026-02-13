@@ -58,19 +58,17 @@ pub enum CaveCommands {
     Init,
     /// Display information about the current cave
     Info,
-    /// Add a package to the cave or a variant
+    /// Add packages to the cave or a variant
     Add {
-        /// Optional variant name (starts with :) or package query
-        arg1: String,
-        /// Optional package query (if arg1 was a variant)
-        arg2: Option<String>,
+        /// Package queries (first one can be :variant)
+        #[arg(required = true)]
+        args: Vec<String>,
     },
-    /// Remove a package from the cave or a variant
+    /// Remove packages from the cave or a variant
     Rem {
-        /// Optional variant name (starts with :) or package query
-        arg1: String,
-        /// Optional package query (if arg1 was a variant)
-        arg2: Option<String>,
+        /// Package queries to remove (first one can be :variant)
+        #[arg(required = true)]
+        args: Vec<String>,
     },
     /// Resolve all packages in the cave or a variant
     Resolve {

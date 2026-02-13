@@ -67,8 +67,8 @@ fn main() {
         Commands::Cave { command } => match command {
             CaveCommands::Init => commands::cave::init::run(&config),
             CaveCommands::Info => commands::cave::info::run(&config),
-            CaveCommands::Add { arg1, arg2 } => commands::cave::add::run(&config, arg1, arg2),
-            CaveCommands::Rem { arg1, arg2 } => commands::cave::rem::run(&config, arg1, arg2),
+            CaveCommands::Add { args } => commands::cave::add::run(&config, args),
+            CaveCommands::Rem { args } => commands::cave::rem::run(&config, args),
             CaveCommands::Resolve { variant } => commands::cave::resolve::run(&config, variant),
             CaveCommands::Build { variant } => commands::cave::build::run(&config, variant),
             CaveCommands::Run { variant, command } => commands::cave::run::run(&config, variant, command),

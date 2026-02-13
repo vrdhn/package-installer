@@ -5,7 +5,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use ureq::Agent;
 use ureq::config::IpFamily;
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Sha512, Digest};
+use sha1::Sha1;
 use hex;
 
 pub struct Downloader;
@@ -32,8 +33,9 @@ impl Downloader {
 
         // If file already exists and checksum matches, skip
         if dest.exists() && expected_checksum.is_some() {
-            if let Ok(actual_checksum) = Self::calculate_checksum(dest) {
-                if actual_checksum == expected_checksum.unwrap() {
+            let expected = expected_checksum.unwrap();
+            if let Ok(actual_checksum) = Self::calculate_checksum(dest, expected.len()) {
+                if actual_checksum == expected {
                     log::info!("[{}] skip, matches checksum", dest.display());
                     return Ok(());
                 }
@@ -96,7 +98,7 @@ impl Downloader {
         }
 
         if let Some(expected) = expected_checksum {
-            let actual = Self::calculate_checksum(dest)?;
+            let actual = Self::calculate_checksum(dest, expected.len())?;
             if actual != expected {
                 return Err(anyhow::anyhow!(
                     "[{}] checksum mismatch: got {}, want {}",
@@ -109,17 +111,48 @@ impl Downloader {
         Ok(())
     }
 
-    fn calculate_checksum(path: &Path) -> Result<String> {
+    fn calculate_checksum(path: &Path, expected_len: usize) -> Result<String> {
         let mut file = File::open(path)?;
-        let mut hasher = Sha256::new();
         let mut buffer = [0; 8192];
-        loop {
-            let n = file.read(&mut buffer)?;
-            if n == 0 {
-                break;
+
+        match expected_len {
+            40 => {
+                let mut hasher = Sha1::new();
+                loop {
+                    let n = file.read(&mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    hasher.update(&buffer[..n]);
+                }
+                Ok(hex::encode(hasher.finalize()))
             }
-            hasher.update(&buffer[..n]);
+            64 => {
+                let mut hasher = Sha256::new();
+                loop {
+                    let n = file.read(&mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    hasher.update(&buffer[..n]);
+                }
+                Ok(hex::encode(hasher.finalize()))
+            }
+            128 => {
+                let mut hasher = Sha512::new();
+                loop {
+                    let n = file.read(&mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    hasher.update(&buffer[..n]);
+                }
+                Ok(hex::encode(hasher.finalize()))
+            }
+            _ => Err(anyhow::anyhow!(
+                "Unsupported checksum length: {}. Expected 40 (SHA-1), 64 (SHA-256), or 128 (SHA-512).",
+                expected_len
+            )),
         }
-        Ok(hex::encode(hasher.finalize()))
     }
 }

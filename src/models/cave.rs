@@ -31,6 +31,7 @@ impl CaveSettings {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Cave {
+    #[serde(default)]
     pub name: String,
     pub workspace: PathBuf,
     pub homedir: PathBuf,
@@ -62,8 +63,11 @@ impl Cave {
         loop {
             let cave_file = current.join(Self::FILENAME);
             if cave_file.exists() {
-                if let Ok(cave) = Self::load(&cave_file) {
-                    return Some((cave_file, cave));
+                match Self::load(&cave_file) {
+                    Ok(cave) => return Some((cave_file, cave)),
+                    Err(e) => {
+                        log::error!("failed to load cave {}: {}", cave_file.display(), e);
+                    }
                 }
             }
             if !current.pop() {

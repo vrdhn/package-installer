@@ -155,11 +155,12 @@ def cargo_discovery(manager, package):
             version = version,
             release_date = v["created_at"],
             release_type = "stable" if "-" not in version else "testing",
-            url = "https://crates.io/api/v1/crates/" + package + "/" + version + "/download",
-            filename = package + "-" + version + ".crate",
-            checksum = v["checksum"],
+            url = "",
+            filename = "",
+            checksum = "",
             checksum_url = "",
-            filemap = {"bin/*": "bin"}
+            filemap = {},
+            manager_command = "cargo install " + package + " --version " + version
         )
 
 # Register toolchain components

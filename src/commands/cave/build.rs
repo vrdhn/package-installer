@@ -13,6 +13,8 @@ use rayon::prelude::*;
 use log::error;
 use walkdir::WalkDir;
 
+use crate::models::version_entry::{ManagerCommand};
+
 pub fn run(config: &Config, variant: Option<String>) {
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let (_path, cave) = match Cave::find_in_ancestry(&current_dir) {
@@ -39,7 +41,7 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
 
     let repo_config = Repositories::get_all(config);
 
-    let results: Vec<Result<(String, String, PathBuf, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>)>> = settings.packages
+    let results: Vec<Result<(String, String, Option<PathBuf>, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>, ManagerCommand)>> = settings.packages
         .par_iter()
         .map(|query| {
             let selector = PackageSelector::parse(query)
@@ -49,6 +51,12 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
                 .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
             let pkg_ctx = format!("{}:{}={}", repo_name, full_name, version.version);
+
+            if let ManagerCommand::Custom(_) = version.manager_command {
+                // Skip download/unarchive for managed packages
+                return Ok((pkg_ctx, full_name, None, version.filemap, version.env, version.manager_command));
+            }
+
             let download_dest = config.download_dir.join(&version.filename);
             let checksum = if version.checksum.is_empty() { None } else { Some(version.checksum.as_str()) };
 
@@ -59,19 +67,30 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
 
             Unarchiver::unarchive(&download_dest, &extract_dest)?;
 
-            Ok((pkg_ctx, full_name, extract_dest, version.filemap, version.env))
+            Ok((pkg_ctx, full_name, Some(extract_dest), version.filemap, version.env, version.manager_command))
         })
         .collect();
 
     let mut all_filemap = Vec::new();
     let mut all_env = std::collections::HashMap::new();
+    let mut manager_commands = Vec::new();
+
     for res in results {
         match res {
-            Ok((pkg_ctx, _full_name, extract_dest, filemap, env)) => {
-                log::debug!("[{}] resolved to {}", pkg_ctx, extract_dest.display());
-                all_filemap.push((pkg_ctx, extract_dest, filemap));
+            Ok((pkg_ctx, _full_name, extract_dest, filemap, env, manager_cmd)) => {
+                if let Some(ref dest) = extract_dest {
+                    log::debug!("[{}] resolved to {}", pkg_ctx, dest.display());
+                    all_filemap.push((pkg_ctx, dest.clone(), filemap));
+                } else {
+                    log::debug!("[{}] managed pkg, skipping extraction", pkg_ctx);
+                }
+
                 for (k, v) in env {
                     all_env.insert(k, v);
+                }
+                match manager_cmd {
+                    ManagerCommand::Custom(cmd) => manager_commands.push(cmd),
+                    ManagerCommand::Auto => {}
                 }
             }
             Err(e) => {
@@ -92,9 +111,43 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
                 .with_context(|| format!("Failed to apply filemap entry '{}' for {}", src_pattern, pkg_dir.display()))?;
         }
     }
+
+    if !manager_commands.is_empty() {
+        run_manager_commands(config, cave, variant, &all_env, manager_commands)?;
+    }
     
     log::info!("[{}] build success", cave.name);
     Ok(all_env)
+}
+
+fn run_manager_commands(
+    config: &Config,
+    cave: &Cave,
+    variant: Option<&str>,
+    all_env: &std::collections::HashMap<String, String>,
+    commands: Vec<String>,
+) -> Result<()> {
+    log::info!("[{}] running manager commands", cave.name);
+
+    // Generate install script
+    let mut script_content = String::from("#!/bin/bash\nset -e\n");
+    for cmd in commands {
+        script_content.push_str(&cmd);
+        script_content.push('\n');
+    }
+
+    let script_path = cave.workspace.join(".pi_install.sh");
+    fs::write(&script_path, script_content).context("Failed to write install script")?;
+
+    let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, all_env.clone(), true)?;
+    b.set_command("/bin/bash", &[String::from(".pi_install.sh")]);
+    
+    let result = b.spawn();
+    
+    // Cleanup script
+    let _ = fs::remove_file(&script_path);
+    
+    result.context("Failed to execute manager commands in sandbox")
 }
 
 fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {

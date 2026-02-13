@@ -2,17 +2,21 @@ use crate::models::config::Config;
 use crate::models::cave::Cave;
 use std::env;
 
-pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
-    let (variant, query) = if arg1.starts_with(':') {
-        if let Some(q) = arg2 {
-            (Some(arg1), q)
-        } else {
-            log::error!("missing query after variant");
-            return;
-        }
+pub fn run(_config: &Config, args: Vec<String>) {
+    if args.is_empty() {
+        return;
+    }
+
+    let (variant, queries) = if args[0].starts_with(':') {
+        (Some(args[0].clone()), args[1..].to_vec())
     } else {
-        (None, arg1)
+        (None, args)
     };
+
+    if queries.is_empty() {
+        log::error!("missing package query");
+        return;
+    }
 
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let (path, mut cave) = match Cave::find_in_ancestry(&current_dir) {
@@ -36,13 +40,16 @@ pub fn run(_config: &Config, arg1: String, arg2: Option<String>) {
         &mut cave.settings
     };
 
-    let original_len = settings.packages.len();
-    settings.packages.retain(|p| p != &query);
+    for query in queries {
+        let original_len = settings.packages.len();
+        settings.packages.retain(|p| p != &query);
 
-    if settings.packages.len() < original_len {
-        cave.save(&path).expect("Failed to save cave file");
-        log::info!("removed {} from {}{}", query, cave.name, variant.map(|v| format!(" (var {})", v)).unwrap_or_default());
-    } else {
-        log::warn!("pkg {} not found in {}{}", query, cave.name, variant.map(|v| format!(" (var {})", v)).unwrap_or_default());
+        if settings.packages.len() < original_len {
+            log::info!("[{}] removed {} from {}", cave.name, query, variant.as_deref().unwrap_or("default"));
+        } else {
+            log::warn!("[{}] pkg {} not found in {}", cave.name, query, variant.as_deref().unwrap_or("default"));
+        }
     }
+
+    cave.save(&path).expect("Failed to save cave file");
 }

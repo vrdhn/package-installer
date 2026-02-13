@@ -70,7 +70,6 @@ def install_node(package_name):
 add_package("node", install_node)
 
 def npm_discovery(manager, package):
-    print("Syncing npm package:", package)
     url = "https://registry.npmjs.org/" + package
     content = download(url)
     data = json_parse(content)
@@ -96,12 +95,12 @@ def npm_discovery(manager, package):
             version = version,
             release_date = time.get(version, ""),
             release_type = release_type,
-            url = v_data["dist"]["tarball"],
-            filename = package.split("/")[-1] + "-" + version + ".tgz",
-            checksum = v_data["dist"]["shasum"],
+            url = "",
+            filename = "",
+            checksum = "",
             checksum_url = "",
-            filemap = {"package/bin/*": "bin"},
-            manager_command = "npm --global install " + package
+            filemap = {},
+            manager_command = "npm install -g " + package + "@" + version
         )
 
 add_manager("npm", npm_discovery)

@@ -12,28 +12,13 @@ pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
     }
 }
 
-fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String>) -> Result<()> {
-    let current_dir = env::current_dir().expect("Failed to get current directory");
-    let (_path, cave) = Cave::find_in_ancestry(&current_dir)
-        .context("no cave found")?;
-
-    // Detect if variant_opt is actually a variant or just the first part of the command
-    let (variant, final_command) = if let Some(ref v) = variant_opt {
-        if v.starts_with(':') {
-            (Some(v.as_str()), command)
-        } else {
-            // It's not a variant, it's the command
-            let mut new_cmd = vec![v.clone()];
-            new_cmd.extend(command);
-            (None, new_cmd)
-        }
-    } else {
-        (None, command)
-    };
-
-    // Perform build before run and collect package-provided env vars
-    let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant)?;
-
+pub fn prepare_sandbox(
+    config: &Config,
+    cave: &Cave,
+    variant: Option<&str>,
+    package_envs: std::collections::HashMap<String, String>,
+    writable_pilocal: bool,
+) -> Result<Bubblewrap> {
     let settings = cave.get_effective_settings(variant)
         .context("failed to get cave settings")?;
 
@@ -71,19 +56,22 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
     }
     b.add_map_bind(BindType::Bind, &cave.homedir, &host_home);
 
-    // .pilocal maintenance: cache -> RO mount in cave home
+    // .pilocal maintenance: cache -> mount in cave home
     let host_pilocal = config.pilocal_path(&cave.name, variant);
-    if host_pilocal.exists() {
-        b.add_map_bind(BindType::RoBind, &host_pilocal, &internal_pilocal);
+    if !host_pilocal.exists() {
+        std::fs::create_dir_all(&host_pilocal).context("Failed to create .pilocal directory")?;
     }
+    let bind_type = if writable_pilocal { BindType::Bind } else { BindType::RoBind };
+    b.add_map_bind(bind_type, &host_pilocal, &internal_pilocal);
 
-    // ~/.cache/pi and ~/.config/pi (ReadOnly bind)
+    // ~/.cache/pi and ~/.config/pi (ReadOnly bind by default)
     let host_cache_pi = config.cache_dir.clone();
     let host_config_pi = config.config_dir.clone();
     
     // In the sandbox, these are at the same path as host
     if host_cache_pi.exists() {
-        b.add_bind(BindType::RoBind, &host_cache_pi);
+        let bind_type = if writable_pilocal { BindType::Bind } else { BindType::RoBind };
+        b.add_bind(bind_type, &host_cache_pi);
     }
     if host_config_pi.exists() {
         b.add_bind(BindType::RoBind, &host_config_pi);
@@ -122,6 +110,33 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
                  .replace("@HOME", host_home.to_str().unwrap());
         b.set_env(&k, &v);
     }
+
+    Ok(b)
+}
+
+fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String>) -> Result<()> {
+    let current_dir = env::current_dir().expect("Failed to get current directory");
+    let (_path, cave) = Cave::find_in_ancestry(&current_dir)
+        .context("no cave found")?;
+
+    // Detect if variant_opt is actually a variant or just the first part of the command
+    let (variant, final_command) = if let Some(ref v) = variant_opt {
+        if v.starts_with(':') {
+            (Some(v.as_str()), command)
+        } else {
+            // It's not a variant, it's the command
+            let mut new_cmd = vec![v.clone()];
+            new_cmd.extend(command);
+            (None, new_cmd)
+        }
+    } else {
+        (None, command)
+    };
+
+    // Perform build before run and collect package-provided env vars
+    let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant)?;
+
+    let mut b = prepare_sandbox(config, &cave, variant, package_envs, false)?;
 
     log::info!("entering cave");
     if log::log_enabled!(log::Level::Info) {
