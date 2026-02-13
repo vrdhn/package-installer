@@ -12,7 +12,7 @@ pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
     }
 }
 
-fn execute_run(config: &Config, variant_opt: Option<String>, mut command: Vec<String>) -> Result<()> {
+fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String>) -> Result<()> {
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let (_path, cave) = Cave::find_in_ancestry(&current_dir)
         .context("No cave found in current directory or its ancestors.")?;
@@ -39,6 +39,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, mut command: Vec<St
 
     let mut b = Bubblewrap::new();
     let host_home = config.get_host_home();
+    let internal_pilocal = host_home.join(".pilocal");
 
     // Basic flags
     b.add_flag("--unshare-pid");
@@ -73,7 +74,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, mut command: Vec<St
     // .pilocal maintenance: cache -> RO mount in cave home
     let host_pilocal = config.pilocal_path(&cave.name, variant);
     if host_pilocal.exists() {
-        b.add_map_bind(BindType::RoBind, &host_pilocal, host_home.join(".pilocal"));
+        b.add_map_bind(BindType::RoBind, &host_pilocal, &internal_pilocal);
     }
 
     // ~/.cache/pi and ~/.config/pi (ReadOnly bind)
@@ -101,20 +102,24 @@ fn execute_run(config: &Config, variant_opt: Option<String>, mut command: Vec<St
     b.set_env("PI_CAVE", &cave.name);
     
     // PATH setup: .pilocal/bin from home should be first
-    let pilocal_bin = host_home.join(".pilocal/bin");
+    let pilocal_bin = internal_pilocal.join("bin");
     b.add_env_first("PATH", "/usr/bin:/bin");
     b.add_env_first("PATH", pilocal_bin.to_str().unwrap());
 
     // Apply package-provided environment variables
     for (k, v) in package_envs {
-        // Resolve placeholders like @HOME
-        let v = v.replace("@HOME", host_home.to_str().unwrap());
+        // Resolve placeholders
+        let v = v.replace("$/", &format!("{}/", internal_pilocal.display()))
+                 .replace("$", internal_pilocal.to_str().unwrap())
+                 .replace("@HOME", host_home.to_str().unwrap());
         b.set_env(&k, &v);
     }
 
     // Apply cave settings environment variables (overrides package-provided ones)
     for (k, v) in settings.set {
-        let v = v.replace("@HOME", host_home.to_str().unwrap());
+        let v = v.replace("$/", &format!("{}/", internal_pilocal.display()))
+                 .replace("$", internal_pilocal.to_str().unwrap())
+                 .replace("@HOME", host_home.to_str().unwrap());
         b.set_env(&k, &v);
     }
 

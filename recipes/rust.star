@@ -97,7 +97,7 @@ def discover_rust_component(package_name):
             # rust-src extracts to lib/rustlib/src/rust
             # We map its contents to the same relative path in .pilocal
             filemap = {pitree_root + "/*": "lib/rustlib/src/rust"}
-            env_vars = {"RUST_SRC_PATH": "@HOME/.pilocal/lib/rustlib/src/rust/library"}
+            env_vars = {"RUST_SRC_PATH": "$/lib/rustlib/src/rust/library"}
         elif package_name == "rust-std":
             filemap = {pitree_root + "/*": "lib/rustlib/" + target + "/lib"}
         elif package_name == "rust":

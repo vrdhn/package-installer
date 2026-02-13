@@ -22,7 +22,7 @@ src/
  cli/parser: Cli { verbose }, Repo, Package, Cave { Init, Info, Add, Rem, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
  commands/cave:
   - build: Resolves cave packages, downloads, unarchives, and applies filemap (symlinks) to `.pilocal` inside `XDG_CACHE_DIR/pi/pilocals/<cavename>[-<variant>]`. Returns collected env vars.
-  - run: Executes command inside a bubblewrap sandbox. Automatically runs build first. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Mounts `.pilocal` cache RO to `~/.pilocal`. Shared network namespace. Sets PI_CAVE and prepends `~/.pilocal/bin` to PATH. Applies package and cave env vars (supports @HOME placeholder).
+  - run: Executes command inside a bubblewrap sandbox. Automatically runs build first. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Mounts `.pilocal` cache RO to `~/.pilocal`. Shared network namespace. Sets PI_CAVE and prepends `~/.pilocal/bin` to PATH. Applies package and cave env vars (supports $ for .pilocal and @HOME placeholders).
   - info: Displays cave info, including stored homedir.
  commands/devel:
   - test: Evaluates .star, calls discovery function, then performs test download and unarchive.
@@ -30,8 +30,8 @@ src/
 logic:
 - Unarchiving: Packages are extracted to `CACHE/pi/packages/<name>-<version>-<repo-uuid>/`. Skipping if `.unarchived` marker exists.
 - Home Directory: Stored in `pi.cave.json` during `cave init`. Defaults to `XDG_STATE_DIR/pi/<name>`.
-- Filemap (Symlinks): Applied from package directory to `~/.pilocal/`. Supports simple `*` globs for source patterns. Renamed from .pitree to .pilocal.
+- Filemap (Symlinks): Applied from package directory to `.pilocal` cache. Supports simple `*` globs for source patterns.
 - Sandbox (Run): Uses `bwrap` to create an isolated environment. `~/.pilocal/bin` is prepended to `PATH`. PI_CAVE set to cave name. Prints "you are now in cave" and shows `cave info` on start.
 - Resolve Query: Returns `(full_name, version, repo_uuid)` for building unarchive paths.
 - Sanitization: Package name and version are sanitized (replacing slashes/spaces with underscores) for filesystem safety.
-- Rust Component Handling: Correctly maps `rust-src` to `lib/rustlib/src/rust` and `rust-std` to `lib/rustlib/<target>/lib`. Sets `RUST_SRC_PATH` for `rust-analyzer` support.
+- Rust Component Handling: Correctly maps `rust-src` to `lib/rustlib/src/rust` and `rust-std` to `lib/rustlib/<target>/lib`. Sets `RUST_SRC_PATH` for `rust-analyzer` support using `$` placeholder.
