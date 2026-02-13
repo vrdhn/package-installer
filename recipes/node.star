@@ -100,7 +100,7 @@ def npm_discovery(manager, package):
             checksum = "",
             checksum_url = "",
             filemap = {},
-            manager_command = "npm install -g " + package + "@" + version
+            manager_command = "npm install --prefix ~/.pilocal " + package + "@" + version
         )
 
 add_manager("npm", npm_discovery)

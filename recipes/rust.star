@@ -160,7 +160,7 @@ def cargo_discovery(manager, package):
             checksum = "",
             checksum_url = "",
             filemap = {},
-            manager_command = "cargo install " + package + " --version " + version
+            manager_command = "cargo install --root ~/.pilocal " + package + " --version " + version
         )
 
 # Register toolchain components
