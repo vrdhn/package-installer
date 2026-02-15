@@ -31,6 +31,7 @@ pub fn evaluate_file(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        state.db.clone(),
     );
 
     let mut eval = Evaluator::new(&module);
@@ -64,6 +65,7 @@ pub fn execute_manager_function(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        state.db.clone(),
     );
 
     let mut eval = Evaluator::new(&module);
@@ -104,6 +106,7 @@ pub fn execute_function(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        state.db.clone(),
     );
 
     let mut eval = Evaluator::new(&module);
@@ -133,6 +136,8 @@ fn create_globals() -> starlark::environment::Globals {
     builder.build()
 }
 
+use crate::services::db::Db;
+
 fn setup_context(
     module: &Module,
     filename: String,
@@ -140,8 +145,9 @@ fn setup_context(
     download_dir: PathBuf,
     packages_dir: PathBuf,
     state: Arc<State>,
+    db: Arc<Db>,
 ) {
-    let context = Context::new(filename, meta_dir, download_dir, packages_dir, state);
+    let context = Context::new(filename, meta_dir, download_dir, packages_dir, state, db);
     let context_value = module.heap().alloc_simple(context);
     module.set_extra_value(context_value);
 }

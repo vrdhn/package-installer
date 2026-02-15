@@ -26,8 +26,8 @@ pub fn run(config: &Config, queries: Vec<String>) {
             };
 
             match resolve_query(config, repo_config, &selector) {
-                Some((full_qualified_name, version, _repo_name)) => {
-                    (query.clone(), full_qualified_name, version.release_date)
+                Some((pkg_full_name, version, repo_name)) => {
+                    (query.clone(), format!("{}/{}", repo_name, pkg_full_name), version.version)
                 }
                 None => (query.clone(), "Not found".to_string(), "-".to_string()),
             }
@@ -37,9 +37,9 @@ pub fn run(config: &Config, queries: Vec<String>) {
     // Print results
     let mut table = Table::new();
     table.load_preset(NOTHING);
-    table.set_header(vec!["Query", "Resolved Full Name", "Release Date"]);
-    for (query, full_name, date) in results {
-        table.add_row(vec![query, full_name, date]);
+    table.set_header(vec!["Query", "Resolved Full Name", "Version"]);
+    for (query, full_name, version) in results {
+        table.add_row(vec![query, full_name, version]);
     }
     println!("{table}");
 }
@@ -70,8 +70,7 @@ pub fn resolve_query(
                     VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
                 {
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
-                        let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
-                        return Some((full_qualified, v, repo.name.clone()));
+                        return Some((pkg.name.clone(), v, repo.name.clone()));
                     }
                 }
             }
@@ -89,9 +88,7 @@ pub fn resolve_query(
                     Some((mgr, &selector.package)),
                 ) {
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
-                        let full_qualified =
-                            format!("{}/{}={}", repo.name, full_name, v.version);
-                        return Some((full_qualified, v, repo.name.clone()));
+                        return Some((full_name, v, repo.name.clone()));
                     }
                 }
             }

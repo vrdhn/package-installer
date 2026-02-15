@@ -120,12 +120,12 @@ fn test_package_download_unarchive(config: &Config, v: &VersionEntry, repo_name:
     let download_dest = config.download_dir.join(&v.filename);
     let checksum = if v.checksum.is_empty() { None } else { Some(v.checksum.as_str()) };
 
-    Downloader::download_to_file(&v.url, &download_dest, checksum)?;
+    Downloader::download_to_file(&config.state.db, &v.url, &download_dest, checksum)?;
 
     let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&v.pkgname), sanitize_name(&v.version), repo_name);
     let extract_dest = config.packages_dir.join(pkg_dir_name);
 
-    Unarchiver::unarchive(&download_dest, &extract_dest)?;
+    Unarchiver::unarchive(&config.state.db, &download_dest, &extract_dest)?;
 
     info!("test success");
     Ok(())
