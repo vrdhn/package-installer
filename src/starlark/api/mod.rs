@@ -4,16 +4,16 @@ use crate::models::version_entry::{ManagerCommand, VersionEntry};
 use crate::services::cache::Cache;
 use crate::services::downloader::Downloader;
 use anyhow::Context as _;
-use serde_json_path::JsonPath;
 use starlark::environment::GlobalsBuilder;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
-use starlark::syntax::{AstModule, Dialect};
-use starlark::values::dict::{DictRef, Dict};
-use starlark::values::list::ListRef;
-use starlark::values::{Heap, Value, ValueLike, none::NoneType};
-use starlark::collections::SmallMap;
+use starlark::values::dict::DictRef;
+use starlark::values::{Value, ValueLike, none::NoneType};
 use std::time::Duration;
+
+mod xml;
+mod html;
+mod data;
 
 #[starlark_module]
 pub fn register_api(builder: &mut GlobalsBuilder) {
@@ -92,45 +92,51 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         Ok(content)
     }
 
-    fn json_parse<'v>(
+    fn parse_json<'v>(
         content: String,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let context = get_context(eval)?;
-        let ast = AstModule::parse("internal", "json".to_string(), &Dialect::Extended)
+        let json_value: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| anyhow::anyhow!("[{}] JSON parse error: {}", context.display_name(), e))?;
-        let json_val = eval
-            .eval_statements(ast)
-            .map_err(|e| anyhow::anyhow!("[{}] failed to retrieve json module: {}", context.display_name(), e))?;
-
-        let decode = json_val
-            .get_attr("decode", eval.heap())
-            .map_err(|e| anyhow::anyhow!("[{}] {}", context.display_name(), e))?
-            .context("json.decode not found")?;
-
-        let content_val = eval.heap().alloc(content);
-
-        eval.eval_function(decode, &[content_val], &[])
-            .map_err(|e| anyhow::anyhow!("[{}] {}", context.display_name(), e))
+        Ok(eval.heap().alloc(data::DataDocument { value: json_value }))
     }
 
-    fn toml_parse<'v>(
+    fn parse_toml<'v>(
         content: String,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let context = get_context(eval)?;
         let json_value: serde_json::Value = toml::from_str(&content)
             .map_err(|e| anyhow::anyhow!("[{}] TOML parse error: {}", context.display_name(), e))?;
-        Ok(serde_to_starlark(json_value, eval.heap()))
+        Ok(eval.heap().alloc(data::DataDocument { value: json_value }))
+    }
+
+    fn parse_xml<'v>(
+        content: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        let element = xmltree::Element::parse(content.as_bytes())
+            .map_err(|e| anyhow::anyhow!("XML parse error: {}", e))?;
+        Ok(eval.heap().alloc(xml::XmlDocument { root: element }))
+    }
+
+    fn parse_html<'v>(
+        content: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        let document = std::sync::Arc::new(std::sync::Mutex::new(scraper::Html::parse_document(&content)));
+        let doc_obj = html::HtmlDocument { doc: document };
+        Ok(eval.heap().alloc(doc_obj))
     }
 
     fn json_dump(data: Value, query: Option<String>, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
-        let json_val = starlark_to_serde(data)?;
+        let json_val = data::starlark_to_serde(data)?;
 
         if let Some(q) = query {
             let path =
-                JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("[{}] JSONPath parse error: {}", context.display_name(), e))?;
+                serde_json_path::JsonPath::parse(&q).map_err(|e| anyhow::anyhow!("[{}] JSONPath parse error: {}", context.display_name(), e))?;
             let node = path.query(&json_val);
             log::info!("[{}] {}", context.display_name(), serde_json::to_string_pretty(&node)?);
         } else {
@@ -155,6 +161,15 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         eval: &mut Evaluator<'_, '_, '_>,
     ) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
+
+        if !is_valid_release_type(&release_type) {
+            anyhow::bail!(
+                "[{}] invalid release_type: '{}'. Must be 'lts', 'stable', 'testing', 'unstable' or match pattern 'major[.minor[.patch]][-suffix]'",
+                context.display_name(),
+                release_type
+            );
+        }
+
         let cmd = match manager_command {
             Some(c) => ManagerCommand::Custom(c),
             None => ManagerCommand::Auto,
@@ -197,6 +212,30 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
     }
 }
 
+fn is_valid_release_type(rt: &str) -> bool {
+    match rt {
+        "lts" | "stable" | "testing" | "unstable" => true,
+        _ => {
+            let (version_part, _suffix) = match rt.find('-') {
+                Some(idx) => (&rt[..idx], Some(&rt[idx + 1..])),
+                None => (rt, None),
+            };
+
+            let parts: Vec<&str> = version_part.split('.').collect();
+            if parts.is_empty() || parts.len() > 3 {
+                return false;
+            }
+
+            for part in parts {
+                if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+}
+
 fn get_context<'v, 'a, 'e>(eval: &Evaluator<'v, 'a, 'e>) -> anyhow::Result<&'v Context> {
     eval.module()
         .extra_value()
@@ -217,62 +256,4 @@ fn extract_function_name(function: Value) -> String {
         .map(|idx| &name[idx + 1..])
         .unwrap_or(name)
         .to_string()
-}
-
-fn starlark_to_serde(val: Value) -> anyhow::Result<serde_json::Value> {
-    if val.is_none() {
-        Ok(serde_json::Value::Null)
-    } else if let Some(b) = val.unpack_bool() {
-        Ok(serde_json::Value::Bool(b))
-    } else if let Some(i) = val.unpack_i32() {
-        Ok(serde_json::Value::Number(i.into()))
-    } else if let Some(s) = val.unpack_str() {
-        Ok(serde_json::Value::String(s.to_string()))
-    } else if let Some(list) = ListRef::from_value(val) {
-        let mut arr = Vec::new();
-        for v in list.content() {
-            arr.push(starlark_to_serde(*v)?);
-        }
-        Ok(serde_json::Value::Array(arr))
-    } else if let Some(dict) = DictRef::from_value(val) {
-        let mut obj = serde_json::Map::new();
-        for (k, v) in dict.iter_hashed() {
-            let key_str = k.key().to_str();
-            obj.insert(key_str, starlark_to_serde(v)?);
-        }
-        Ok(serde_json::Value::Object(obj))
-    } else {
-        Ok(serde_json::Value::String(val.to_str()))
-    }
-}
-
-fn serde_to_starlark<'v>(val: serde_json::Value, heap: &'v Heap) -> Value<'v> {
-    match val {
-        serde_json::Value::Null => Value::new_none(),
-        serde_json::Value::Bool(b) => Value::new_bool(b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                heap.alloc(i as i32) // Starlark i32
-            } else if let Some(f) = n.as_f64() {
-                heap.alloc(f)
-            } else {
-                heap.alloc(n.to_string())
-            }
-        }
-        serde_json::Value::String(s) => heap.alloc(s),
-        serde_json::Value::Array(arr) => {
-            let mut list = Vec::new();
-            for v in arr {
-                list.push(serde_to_starlark(v, heap));
-            }
-            heap.alloc(list)
-        }
-        serde_json::Value::Object(obj) => {
-            let mut dict = SmallMap::with_capacity(obj.len());
-            for (k, v) in obj {
-                dict.insert_hashed(heap.alloc(k).get_hashed().unwrap(), serde_to_starlark(v, heap));
-            }
-            heap.alloc(Dict::new(dict))
-        }
-    }
 }
