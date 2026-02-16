@@ -1,0 +1,2 @@
+[alias]
+cov = "llvm-cov --summary-only --color never --output-path COVERAGE.txt"
