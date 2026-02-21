@@ -59,11 +59,16 @@ add_package("node", install_node)
 def npm_discovery(manager, package):
     url = "https://registry.npmjs.org/" + package
     content = download(url)
-    data = parse_json(content)
+    if not content:
+        return
+    doc = parse_json(content)
+    data = doc.root
     
-    versions = data["versions"]
-    time = data["time"]
-    dist_tags = data["dist-tags"]
+    versions = data.get("versions")
+    if not versions:
+        return
+    time = data.get("time") or {}
+    dist_tags = data.get("dist-tags") or {}
     
     for version in versions:
         v_data = versions[version]

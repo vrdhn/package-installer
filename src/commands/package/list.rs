@@ -30,29 +30,58 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
         }
 
         if let Some(pkg_list) = PackageList::get_for_repo(config, repo) {
-            for pkg in &pkg_list.packages {
-                if let Some(ref s) = selector {
-                    if !s.package.is_empty() && s.package != "*" {
-                        if pkg.name != s.package {
-                            continue;
-                        }
+            // If no selector, try to show the latest version from cache for each package
+            if selector.is_none() {
+                for pkg in &pkg_list.packages {
+                    if let Ok(v_list) = VersionList::load(config, &repo.name, &pkg.name) {
+                        add_versions_to_table(&mut table, repo.name.clone(), v_list, "latest", 1);
+                    } else {
+                        table.add_row(vec![
+                            repo.name.clone(),
+                            pkg.name.clone(),
+                            "-".to_string(),
+                            "-".to_string(),
+                            "-".to_string(),
+                        ]);
                     }
                 }
+                continue;
+            }
 
-                if let Some(v_list) = VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None) {
-                    add_versions_to_table(
-                        &mut table,
-                        repo.name.clone(),
-                        (*v_list).clone(),
-                        &target_version,
-                    );
+            let s = selector.as_ref().unwrap();
+
+            // Filter packages if a package name is provided
+            if !s.package.is_empty() && s.prefix.is_none() {
+                for pkg in &pkg_list.packages {
+                    if s.package != "*" && pkg.name != s.package {
+                        continue;
+                    }
+
+                    if let Some(v_list) = VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None) {
+                        add_versions_to_table(
+                            &mut table,
+                            repo.name.clone(),
+                            (*v_list).clone(),
+                            &target_version,
+                            5,
+                        );
+                    }
                 }
             }
 
-            // Handle managers
-            if let Some(ref s) = selector {
-                if let Some(ref prefix) = s.prefix {
-                    if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+            // Handle managers if prefix is present
+            if let Some(ref prefix) = s.prefix {
+                if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+                    if s.package.is_empty() {
+                        // Just list the manager itself
+                        table.add_row(vec![
+                            repo.name.clone(),
+                            format!("{}:*", prefix),
+                            "-".to_string(),
+                            "-".to_string(),
+                            "manager".to_string(),
+                        ]);
+                    } else {
                         let full_name = format!("{}:{}", prefix, s.package);
                         if let Some(v_list) =
                             VersionList::get_for_package(config, repo, &full_name, None, Some((mgr, &s.package)))
@@ -62,6 +91,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                                 repo.name.clone(),
                                 (*v_list).clone(),
                                 &target_version,
+                                5,
                             );
                         }
                     }
@@ -78,6 +108,7 @@ fn add_versions_to_table(
     repo_name: String,
     v_list: VersionList,
     target_version: &str,
+    limit: usize,
 ) {
     let mut filtered_versions: Vec<_> = v_list
         .versions
@@ -97,10 +128,9 @@ fn add_versions_to_table(
         })
         .collect();
 
-    // Sort by release_date descending
-    filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+    filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date).then_with(|| b.version.cmp(&a.version)));
 
-    for v in filtered_versions.into_iter().take(5) {
+    for v in filtered_versions.into_iter().take(limit) {
         table.add_row(vec![
             repo_name.clone(),
             v.pkgname,

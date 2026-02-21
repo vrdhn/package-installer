@@ -71,6 +71,10 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) {
         config.state.clone(),
     ) {
         Ok(versions) => {
+            if versions.is_empty() {
+                info!("[{}/{}] no versions found, not caching", repo.name, pkg.name);
+                return;
+            }
             let version_list = VersionList { versions };
             version_list
                 .save(config, &repo.name, &pkg.name)
@@ -107,6 +111,10 @@ pub fn sync_manager_package(
         config.state.clone(),
     ) {
         Ok(versions) => {
+            if versions.is_empty() {
+                info!("[{}/{}] no versions found for manager pkg, not caching", repo.name, full_name);
+                return;
+            }
             let version_list = VersionList { versions };
             version_list
                 .save(config, &repo.name, &full_name)

@@ -44,7 +44,7 @@ impl PackageSelector {
             package = rest.to_string();
         }
 
-        if package.is_empty() {
+        if package.is_empty() && prefix.is_none() {
             return None;
         }
 

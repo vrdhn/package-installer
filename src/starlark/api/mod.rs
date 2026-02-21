@@ -215,7 +215,13 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         }
 
         log::info!("[{}] fetching: {}", context.display_name(), url);
-        let content = Downloader::download(&url)?;
+        let content = match Downloader::download(&url) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("[{}] download failed for {}: {}", context.display_name(), url, e);
+                return Ok(String::new());
+            }
+        };
         cache.write(&url, &content)?;
         Ok(content)
     }
@@ -225,6 +231,9 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let context = get_context(eval)?;
+        if content.is_empty() {
+            return Ok(eval.heap().alloc(data::DataDocument { value: serde_json::Value::Object(serde_json::Map::new()) }));
+        }
         let json_value: serde_json::Value = serde_json::from_str(&content)
             .map_err(|e| anyhow::anyhow!("[{}] JSON parse error: {}", context.display_name(), e))?;
         Ok(eval.heap().alloc(data::DataDocument { value: json_value }))
@@ -235,6 +244,9 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let context = get_context(eval)?;
+        if content.is_empty() {
+            return Ok(eval.heap().alloc(data::DataDocument { value: serde_json::Value::Object(serde_json::Map::new()) }));
+        }
         let json_value: serde_json::Value = toml::from_str(&content)
             .map_err(|e| anyhow::anyhow!("[{}] TOML parse error: {}", context.display_name(), e))?;
         Ok(eval.heap().alloc(data::DataDocument { value: json_value }))

@@ -43,13 +43,15 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
             if let Some(ref s) = selector {
                 if let Some(ref prefix) = s.prefix {
                     if let Some(mgr) = pkg_list.manager_map.get(prefix) {
-                        crate::services::sync::sync_manager_package(
-                            config,
-                            repo,
-                            mgr,
-                            prefix,
-                            &s.package,
-                        );
+                        if !s.package.is_empty() && s.package != "*" {
+                            crate::services::sync::sync_manager_package(
+                                config,
+                                repo,
+                                mgr,
+                                prefix,
+                                &s.package,
+                            );
+                        }
                     }
                 }
             }

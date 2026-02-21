@@ -117,11 +117,15 @@ def cargo_discovery(manager, package):
     content = download(url)
     if not content:
         return
-    data = parse_json(content)
+    doc = parse_json(content)
+    data = doc.root
 
-    versions = data.get("versions", [])
-    for v_data in versions:
-        if v_data.get("yanked"):
+    versions = data.get("versions")
+    if not versions:
+        return
+    for i in range(len(versions)):
+        v_data = versions[i]
+        if v_data.get("yanked").text() == "true":
             continue
         version = v_data["num"]
         
