@@ -81,7 +81,7 @@ def install_android_studio(package_name):
                 v.extract()
                 v.export_link("android-studio/bin/*", "bin")
                 
-                add_version(v)
+                v.register()
                 break
 
 def install_android_studio_official(package_name):
@@ -109,7 +109,7 @@ def install_android_studio_official(package_name):
             v.fetch(url = href, filename = filename)
             v.extract()
             v.export_link("android-studio/bin/*", "bin")
-            add_version(v)
+            v.register()
 
 def discover_google_sdk(pkgname, sdk_path, filemap):
     content = download("https://dl.google.com/android/repository/repository2-1.xml")
@@ -163,7 +163,7 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
                                         dest = filemap[src]
                                         v.export_link(src, dest)
                                     
-                                    add_version(v)
+                                    v.register()
                                     break
 
 def install_android_sdk(package_name):

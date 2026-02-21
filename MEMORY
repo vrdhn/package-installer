@@ -11,7 +11,8 @@ src/
   context: Context { os, arch, filename, meta_dir, download_dir, packages_dir, state }, display_name()
   cave: Cave { name, workspace, homedir, settings, variants }, CaveSettings { packages, set, unset }
  starlark/
-  api: register_api (get_os, get_arch, add_package, add_manager, download, parse_json, parse_toml, parse_xml, parse_html, json_dump, create_version -> VersionBuilder, add_version(builder))
+  api: register_api (get_os, get_arch, add_package, add_manager, download, parse_json, parse_toml, parse_xml, parse_html, json_dump, create_version -> VersionBuilder)
+  version: VersionBuilder (set_stream, fetch, extract, run, export_link, export_env, export_path, register)
   data: DataDocument, DataNode (support for select, get, and iteration)
   runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State>)
  services/

@@ -57,7 +57,7 @@ def install_node(package_name):
             v.extract()
             v.export_link(base_name + "/bin/*", "bin")
             
-            add_version(v)
+            v.register()
 
 add_package("node", install_node)
 
@@ -88,6 +88,6 @@ def npm_discovery(manager, package):
         v = create_version(package, version, release_date = time.get(version, ""), release_type = release_type)
         v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
         
-        add_version(v)
+        v.register()
 
 add_manager("npm", npm_discovery)

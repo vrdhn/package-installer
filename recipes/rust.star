@@ -110,7 +110,7 @@ def discover_rust_component(package_name):
         v.extract()
         add_rust_component(v, package_name, target, top_dir)
         
-        add_version(v)
+        v.register()
 
 def cargo_discovery(manager, package):
     url = "https://crates.io/api/v1/crates/" + package
@@ -134,7 +134,7 @@ def cargo_discovery(manager, package):
         # Note: cargo install handles exports by putting them in ~/.pilocal/bin
         # which is already in PATH in our cave setup.
         
-        add_version(v)
+        v.register()
 
 COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]
 for c in COMPONENTS:

@@ -30,7 +30,7 @@ def install_elixir(package_name):
                 v.export_link("bin/*", "bin")
                 v.export_link("lib/*", "lib")
                 
-                add_version(v)
+                v.register()
             elif name == "Precompiled.zip":
                 # Some releases use this name
                 v = create_version(
@@ -44,7 +44,7 @@ def install_elixir(package_name):
                 v.export_link("bin/*", "bin")
                 v.export_link("lib/*", "lib")
                 
-                add_version(v)
+                v.register()
 
 add_package("elixir", install_elixir)
 
@@ -53,6 +53,6 @@ def hex_discovery(manager, package):
     if package == "hex":
         v = create_version(pkgname = "hex", version = "latest")
         v.run("mix local.hex --force && mix local.rebar --force")
-        add_version(v)
+        v.register()
 
 add_manager("hex", hex_discovery)

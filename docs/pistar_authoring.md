@@ -52,6 +52,7 @@ Every document has a `.root` attribute that returns the top-level `Node`.
 
 Nodes provide the following methods for querying and data access:
 
+*   `node.get(key)`: Safely returns a child node or `None`.
 *   `node.select(query)`: Returns a list of matching child nodes.
 *   `node.select_one(query)`: Returns the first matching child node or `None`.
 *   `node.attribute(name)`: Returns the value of an attribute (or key) as a string, or `None`.
@@ -69,6 +70,9 @@ Pi uses a pipeline-based model for installation. Instead of passing a large dict
 
 ### VersionBuilder Methods
 
+#### Metadata
+*   `v.set_stream(name)`: Sets a human-readable stream name (e.g., "Panda", "Iron").
+
 #### Pipeline Steps
 Steps are executed in order. Each step's output (path) becomes the context for the next step.
 
@@ -83,9 +87,8 @@ Exports define how the results of the pipeline are exposed to the Cave environme
 *   `v.export_env(key, value)`: Sets an environment variable when the package is used.
 *   `v.export_path(path)`: Adds a directory (relative to `.pilocal`) to the `PATH`.
 
-### Registering the Version
-
-*   `add_version(builder)`: Finalizes and registers the version defined by the builder.
+#### Finalization
+*   `v.register()`: Finalizes and registers the version defined by the builder.
 
 ---
 
@@ -107,7 +110,7 @@ def install_erlang(pkg):
     v.export_link("_inst/bin/*", "bin")
     v.export_link("_inst/lib/erlang/*", "lib/erlang")
     
-    add_version(v)
+    v.register()
 ```
 
 ### Binary Release Example (Node.js)
@@ -118,7 +121,7 @@ def install_node(pkg):
     v.fetch("https://nodejs.org/dist/v20.5.0/node-v20.5.0-linux-x64.tar.gz")
     v.extract()
     v.export_link("node-v20.5.0-linux-x64/bin/*", "bin")
-    add_version(v)
+    v.register()
 ```
 
 ### Manager Example (npm)
@@ -129,5 +132,5 @@ def npm_discovery(manager, package):
     v = create_version(package, version)
     # Managers often just need a single 'run' step
     v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
-    add_version(v)
+    v.register()
 ```

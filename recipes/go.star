@@ -43,7 +43,7 @@ def install_go(package_name):
                 v.extract()
                 v.export_link("go/bin/*", "bin")
                 
-                add_version(v)
+                v.register()
 
 add_package("go", install_go)
 
@@ -78,6 +78,6 @@ def go_discovery(manager, package):
         # For 'go install', we can just use a run step.
         v.run("go install " + package + "@" + version)
         
-        add_version(v)
+        v.register()
 
 add_manager("go", go_discovery)

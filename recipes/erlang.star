@@ -59,6 +59,6 @@ def install_erlang(package_name):
         v.export_link("_inst/bin/*", "bin")
         v.export_link("_inst/lib/erlang/*", "lib/erlang")
         
-        add_version(v)
+        v.register()
 
 add_package("erlang", install_erlang)

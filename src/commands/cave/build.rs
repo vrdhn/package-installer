@@ -7,13 +7,13 @@ use crate::services::downloader::Downloader;
 use crate::services::unarchiver::Unarchiver;
 use crate::services::cache::{BuildCache, StepResult};
 use crate::models::version_entry::{InstallStep, Export, VersionEntry};
+use crate::commands::cave::fs::apply_filemap_entry;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use log::error;
-use walkdir::WalkDir;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use chrono;
@@ -123,34 +123,7 @@ fn execute_pipeline(
         }
 
         log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, step);
-        let result_path = match step {
-            InstallStep::Fetch { url, checksum, filename } => {
-                let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
-                let dest = config.download_dir.join(fname);
-                Downloader::download_to_file(url, &dest, checksum.as_deref())?;
-                dest
-            }
-            InstallStep::Extract { format: _ } => {
-                let src = current_path.as_ref().context("Extract step requires a previous Fetch step")?;
-                let pkg_dir_name = format!("{}-{}-extracted", sanitize_name(&version.pkgname), sanitize_name(&version.version));
-                let dest = config.packages_dir.join(pkg_dir_name);
-                Unarchiver::unarchive(src, &dest)?;
-                dest
-            }
-            InstallStep::Run { command, cwd } => {
-                let base_dir = match cwd {
-                    Some(c) => current_path.as_ref().context("Run with relative cwd requires previous step")?.join(c),
-                    None => current_path.clone().context("Run requires previous step to define working directory")?,
-                };
-                
-                let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
-                b.set_cwd(&base_dir);
-                b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
-                b.spawn().with_context(|| format!("Failed to execute pipeline command: {}", command))?;
-                
-                base_dir
-            }
-        };
+        let result_path = execute_step(config, cave, variant, step, &current_path, &env, &version.pkgname, &version.version)?;
 
         build_cache.update_step_result(&version.pkgname, &version.version, i, StepResult {
             step_hash,
@@ -174,6 +147,46 @@ fn execute_pipeline(
     Ok((pkg_ctx.to_string(), env, vec![(pkg_ctx.to_string(), source_root, version.exports.clone())]))
 }
 
+fn execute_step(
+    config: &Config,
+    cave: &Cave,
+    variant: Option<&str>,
+    step: &InstallStep,
+    current_path: &Option<PathBuf>,
+    env: &std::collections::HashMap<String, String>,
+    pkgname: &str,
+    version: &str,
+) -> Result<PathBuf> {
+    match step {
+        InstallStep::Fetch { url, checksum, filename } => {
+            let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
+            let dest = config.download_dir.join(fname);
+            Downloader::download_to_file(url, &dest, checksum.as_deref())?;
+            Ok(dest)
+        }
+        InstallStep::Extract { format: _ } => {
+            let src = current_path.as_ref().context("Extract step requires a previous Fetch step")?;
+            let pkg_dir_name = format!("{}-{}-extracted", sanitize_name(pkgname), sanitize_name(version));
+            let dest = config.packages_dir.join(pkg_dir_name);
+            Unarchiver::unarchive(src, &dest)?;
+            Ok(dest)
+        }
+        InstallStep::Run { command, cwd } => {
+            let base_dir = match cwd {
+                Some(c) => current_path.as_ref().context("Run with relative cwd requires previous step")?.join(c),
+                None => current_path.clone().context("Run requires previous step to define working directory")?,
+            };
+            
+            let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
+            b.set_cwd(&base_dir);
+            b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
+            b.spawn().with_context(|| format!("Failed to execute pipeline command: {}", command))?;
+            
+            Ok(base_dir)
+        }
+    }
+}
+
 fn hash_step(step: &InstallStep) -> String {
     let mut hasher = DefaultHasher::new();
     match step {
@@ -194,64 +207,6 @@ fn hash_step(step: &InstallStep) -> String {
         }
     }
     format!("{:x}", hasher.finish())
-}
-
-fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
-    if src_pattern.contains('*') {
-        let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
-        let search_path = pkg_dir.join(base_pattern);
-        if !search_path.exists() {
-            return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
-        }
-
-        let mut matched = false;
-        if search_path.is_dir() {
-            for entry in WalkDir::new(&search_path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
-                if entry.path() == search_path { continue; }
-                let file_name = entry.file_name();
-                let target_dest = pilocal_dir.join(dest_rel).join(file_name);
-                create_symlink(entry.path(), &target_dest)?;
-                matched = true;
-            }
-        }
-        if !matched {
-            return Err(anyhow::anyhow!("[{}] pattern '{}' no match in {}", pkg_ctx, src_pattern, pkg_dir.display()));
-        }
-    } else {
-        let src_path = pkg_dir.join(src_pattern);
-        let dest_path = pilocal_dir.join(dest_rel);
-        if !src_path.exists() {
-            return Err(anyhow::anyhow!("[{}] source missing: {}", pkg_ctx, src_path.display()));
-        }
-        let final_dest = if dest_rel.ends_with('/') || dest_path.is_dir() {
-            let file_name = src_path.file_name().ok_or_else(|| anyhow::anyhow!("Invalid source filename"))?;
-            dest_path.join(file_name)
-        } else {
-            dest_path
-        };
-        create_symlink(&src_path, &final_dest)?;
-    }
-    Ok(())
-}
-
-fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    if dest.exists() || dest.is_symlink() {
-        let metadata = fs::symlink_metadata(dest)?;
-        if metadata.is_dir() && !metadata.is_symlink() {
-            fs::remove_dir_all(dest)?;
-        } else {
-            fs::remove_file(dest)?;
-        }
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::symlink;
-        symlink(src, dest)?;
-    }
-    Ok(())
 }
 
 fn sanitize_name(name: &str) -> String {
