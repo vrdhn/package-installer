@@ -149,14 +149,19 @@ fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
     let version_parts: Vec<&str> = version.split('.').collect();
     let pattern_parts: Vec<&str> = pattern.split('.').collect();
 
-    if version_parts.len() != pattern_parts.len() {
-        return false;
-    }
+    for (i, p) in pattern_parts.iter().enumerate() {
+        if *p == "*" {
+            // As per user request: "the first * means match the rest"
+            // We only require that the version has at least as many segments
+            // as preceded the first wildcard.
+            return version_parts.len() >= i;
+        }
 
-    for (v, p) in version_parts.iter().zip(pattern_parts.iter()) {
-        if *p != "*" && v != p {
+        if i >= version_parts.len() || version_parts[i] != *p {
             return false;
         }
     }
-    true
+
+    // If no wildcard was found, length must match exactly
+    version_parts.len() == pattern_parts.len()
 }
