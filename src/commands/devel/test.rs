@@ -63,15 +63,18 @@ fn print_versions_table(versions: &[VersionEntry]) {
     table.set_header(vec![
         "Package",
         "Version",
+        "Stream",
         "Release Date",
         "Type",
         "Steps",
     ]);
 
     for v in versions.iter().take(5) {
+        let stream = if v.stream.is_empty() { "-" } else { &v.stream };
         table.add_row(vec![
             &v.pkgname,
             &v.version,
+            stream,
             &v.release_date,
             &v.release_type,
             &v.pipeline.len().to_string(),

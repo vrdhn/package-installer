@@ -13,7 +13,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
 
     let mut table = Table::new();
     table.load_preset(NOTHING);
-    table.set_header(vec!["Repo", "Package", "Version", "Date", "Type"]);
+    table.set_header(vec!["Repo", "Package", "Version", "Stream", "Date", "Type"]);
 
     let target_version = selector
         .as_ref()
@@ -37,12 +37,14 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                         add_versions_to_table(&mut table, repo.name.clone(), v_list, "latest", 1);
                     } else {
                         table.add_row(vec![
-                            repo.name.clone(),
-                            pkg.name.clone(),
-                            "-".to_string(),
-                            "-".to_string(),
-                            "-".to_string(),
-                        ]);
+                                                    repo.name.clone(),
+                                                    pkg.name.clone(),
+                                                    "-".to_string(),
+                                                    "-".to_string(),
+                                                    "-".to_string(),
+                                                    "-".to_string(),
+                                                ]);
+                            
                     }
                 }
                 continue;
@@ -77,6 +79,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                         table.add_row(vec![
                             repo.name.clone(),
                             format!("{}:*", prefix),
+                            "-".to_string(),
                             "-".to_string(),
                             "-".to_string(),
                             "manager".to_string(),
@@ -135,6 +138,7 @@ fn add_versions_to_table(
             repo_name.clone(),
             v.pkgname,
             v.version,
+            if v.stream.is_empty() { "-".to_string() } else { v.stream },
             v.release_date,
             v.release_type,
         ]);

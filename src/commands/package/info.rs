@@ -38,6 +38,9 @@ fn print_package_info(full_name: &str, v: &crate::models::version_entry::Version
     table.add_row(vec!["Package", full_name]);
     table.add_row(vec!["Repository", repo_name]);
     table.add_row(vec!["Version", &v.version]);
+    if !v.stream.is_empty() {
+        table.add_row(vec!["Stream", &v.stream]);
+    }
     table.add_row(vec!["Release Date", &v.release_date]);
     table.add_row(vec!["Release Type", &v.release_type]);
 

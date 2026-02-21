@@ -32,6 +32,7 @@ pub struct VersionBuilder {
     pub version: String,
     pub release_date: String,
     pub release_type: String,
+    pub stream: String,
     pub pipeline: Vec<InstallStep>,
     pub exports: Vec<Export>,
 }
@@ -71,6 +72,12 @@ impl<'v> AllocValue<'v> for StarlarkVersionBuilder {
 
 #[starlark_module]
 fn version_builder_methods(builder: &mut MethodsBuilder) {
+    fn set_stream(this: Value, name: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().stream = name;
+        Ok(NoneType)
+    }
+
     fn fetch(this: Value, url: String, checksum: Option<String>, filename: Option<String>) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
         this.builder.write().pipeline.push(InstallStep::Fetch { url, checksum, filename });
@@ -122,6 +129,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
                 version,
                 release_date: release_date.unwrap_or_default(),
                 release_type: release_type.unwrap_or_else(|| "stable".to_string()),
+                stream: String::new(),
                 pipeline: Vec::new(),
                 exports: Vec::new(),
             }))
@@ -141,6 +149,7 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             version: b.version.clone(),
             release_date: b.release_date.clone(),
             release_type: b.release_type.clone(),
+            stream: b.stream.clone(),
             pipeline: b.pipeline.clone(),
             exports: b.exports.clone(),
         });

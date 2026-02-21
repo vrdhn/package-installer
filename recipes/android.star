@@ -51,6 +51,10 @@ def install_android_studio(package_name):
         version = item.attribute("version")
         date = format_jb_date(item.attribute("date"))
         channel = item.attribute("channel")
+        name = item.attribute("name") or ""
+        
+        # Extract stream from name: "Android Studio Panda 1 | ..." -> "Panda 1"
+        stream = name.split("|")[0].replace("Android Studio", "").replace("Feature Drop", "").strip()
         
         release_type = "stable"
         if channel == "Beta" or channel == "RC":
@@ -71,6 +75,7 @@ def install_android_studio(package_name):
                     release_date = date,
                     release_type = release_type
                 )
+                v.set_stream(stream)
                 filename = link.split("/")[-1]
                 v.fetch(url = link, filename = filename, checksum = dl.attribute("checksum"))
                 v.extract()

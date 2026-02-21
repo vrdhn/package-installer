@@ -34,6 +34,8 @@ pub struct VersionEntry {
     pub version: String,
     pub release_date: String,
     pub release_type: String,
+    #[serde(default)]
+    pub stream: String,
     pub pipeline: Vec<InstallStep>,
     pub exports: Vec<Export>,
 }

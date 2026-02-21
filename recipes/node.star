@@ -44,10 +44,15 @@ def install_node(package_name):
             url = "https://nodejs.org/dist/" + version + "/" + filename
 
             release_type = "stable"
+            stream = ""
             if entry["lts"]:
                 release_type = "lts"
+                if entry["lts"] != "true" and entry["lts"] != True:
+                    stream = entry["lts"]
 
             v = create_version("node", version, release_date = entry["date"], release_type = release_type)
+            if stream:
+                v.set_stream(stream)
             v.fetch(url, filename = filename)
             v.extract()
             v.export_link(base_name + "/bin/*", "bin")
