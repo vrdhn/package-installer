@@ -47,6 +47,7 @@ pub struct Bubblewrap {
     envs: BTreeMap<String, String>,
     unsets: Vec<String>,
     flags: Vec<String>,
+    cwd: Option<PathBuf>,
     executable: Option<String>,
     args: Vec<String>,
 }
@@ -63,6 +64,7 @@ impl Bubblewrap {
             envs,
             unsets: Vec::new(),
             flags: Vec::new(),
+            cwd: None,
             executable: None,
             args: Vec::new(),
         }
@@ -124,6 +126,10 @@ impl Bubblewrap {
         self.envs.insert(name.to_string(), parts.join(":"));
     }
 
+    pub fn set_cwd<P: AsRef<Path>>(&mut self, path: P) {
+        self.cwd = Some(path.as_ref().to_path_buf());
+    }
+
     pub fn set_command(&mut self, executable: &str, args: &[String]) {
         self.executable = Some(executable.to_string());
         self.args = args.to_vec();
@@ -150,6 +156,10 @@ impl Bubblewrap {
 
         for unset in &self.unsets {
             cmd.arg("--unsetenv").arg(unset);
+        }
+
+        if let Some(ref cwd) = self.cwd {
+            cmd.arg("--chdir").arg(cwd);
         }
 
         if let Some(ref exe) = self.executable {

@@ -18,18 +18,18 @@ def get_platform_string():
 
 def install_node(package_name):
     platform = get_platform_string()
-    print("Detected platform for Node:", platform)
-
     content = download("https://nodejs.org/dist/index.json")
-    data = json_parse(content)
+    doc = parse_json(content)
+    data = doc.root
 
-    # Process all available versions
     for i in range(len(data)):
         entry = data[i]
         version = entry["version"]
 
         found = False
-        for f in entry["files"]:
+        files = entry["files"]
+        for j in range(len(files)):
+            f = files[j]
             if f == platform:
                 found = True
                 break
@@ -42,37 +42,24 @@ def install_node(package_name):
             base_name = "node-" + version + "-" + platform
             filename = base_name + "." + ext
             url = "https://nodejs.org/dist/" + version + "/" + filename
-            shasums_url = "https://nodejs.org/dist/" + version + "/SHASUMS256.txt"
 
-            # Determine release type
-            # Rule: if security update is not available (security: false), it's obsolete
-            # (unless it's LTS or the latest version)
             release_type = "stable"
-
             if entry["lts"]:
                 release_type = "lts"
 
-            # Note: 'unstable' and 'testing' are not easily distinguishable in nodejs index.json
-            # but we have 'stable', 'lts', and 'obsolete' covered.
-
-            add_version(
-                pkgname = "node",
-                version = version,
-                release_date = entry["date"],
-                release_type = release_type,
-                url = url,
-                filename = filename,
-                checksum = "",
-                checksum_url = shasums_url,
-                filemap = {base_name + "/bin/*": "bin"}
-            )
+            v = create_version("node", version, release_date = entry["date"], release_type = release_type)
+            v.fetch(url, filename = filename)
+            v.extract()
+            v.export_link(base_name + "/bin/*", "bin")
+            
+            add_version(v)
 
 add_package("node", install_node)
 
 def npm_discovery(manager, package):
     url = "https://registry.npmjs.org/" + package
     content = download(url)
-    data = json_parse(content)
+    data = parse_json(content)
     
     versions = data["versions"]
     time = data["time"]
@@ -82,25 +69,15 @@ def npm_discovery(manager, package):
         v_data = versions[version]
         
         release_type = "stable"
-        # Simple heuristic for release type
         if "-" in version:
             release_type = "testing"
         
-        # Check if it's the latest or lts (using dist-tags as a hint)
         if version == dist_tags.get("latest"):
             release_type = "stable"
         
-        add_version(
-            pkgname = package,
-            version = version,
-            release_date = time.get(version, ""),
-            release_type = release_type,
-            url = "",
-            filename = "",
-            checksum = "",
-            checksum_url = "",
-            filemap = {},
-            manager_command = "npm install --prefix ~/.pilocal " + package + "@" + version
-        )
+        v = create_version(package, version, release_date = time.get(version, ""), release_type = release_type)
+        v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
+        
+        add_version(v)
 
 add_manager("npm", npm_discovery)

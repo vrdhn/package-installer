@@ -6,9 +6,10 @@ Pi is a modern, sandbox-first package manager and workspace orchestrator. It all
 
 - **Sandboxed Execution**: All commands run inside a `bubblewrap` container with restricted access to your host system.
 - **Hermetic Workspaces (Caves)**: Define project-specific environments with their own set of packages and environment variables.
+- **Unified Pipeline Model**: A coherent installation sequence (Fetch -> Extract -> Run -> Export) that handles binaries, source builds, and managers identically.
+- **Stateful Build Caching**: Intelligent hashing of pipeline steps allows Pi to skip redundant work and resume failed builds exactly where they stopped.
 - **Starlark Recipes**: Package definitions are written in Starlark (a dialect of Python), making them flexible and easy to read.
 - **Multi-Manager Support**: Seamlessly integrate with language-specific managers like Go, Node.js (npm), and Rust (cargo).
-- **Intelligent Caching**: (Available in `better-cache` branch) Persistent state management and journaling to skip redundant downloads and extractions.
 - **Zero-Config Portability**: Shared `.pilocal` directories make it easy to move workspaces between machines.
 
 ## Requirements
@@ -55,6 +56,7 @@ pi cave run bash # Enter an interactive shell inside the sandbox
 |---------|-------------|
 | `pi repo sync` | Update package lists from all repositories. |
 | `pi package list` | Search for available packages. |
+| `pi package info <pkg>` | Show detailed version info and pipeline steps. |
 | `pi cave info` | Show details about the current cave and its mounts. |
 | `pi disk clean` | Clear the global download and package cache. |
 
@@ -71,9 +73,10 @@ Pi is built with a "zero-trust" approach to third-party packages:
 
 When you run a command in a Cave, Pi:
 1. Resolves the requested packages from your repositories.
-2. Downloads and extracts them to a global shared cache.
-3. Symlinks necessary binaries and files into a local `.pilocal` directory.
-4. Spawns `bubblewrap` to mount the Cave's workspace and `.pilocal` while hiding the rest of the host system.
+2. Checks the **Build Cache** to see which pipeline steps (Fetch, Extract, Run) have already been completed successfully.
+3. Executes any missing steps within a secure sandbox.
+4. Applies **Exports** by symlinking results into a local `.pilocal` directory.
+5. Spawns `bubblewrap` to mount the Cave's workspace and `.pilocal` while hiding the rest of the host system.
 
 ---
 *Pi: Simple, Safe, and Swift.*

@@ -92,6 +92,9 @@ pub fn prepare_sandbox(
     // PATH setup: .pilocal/bin from home should be first
     let pilocal_bin = internal_pilocal.join("bin");
     b.add_env_first("PATH", "/usr/bin:/bin");
+    b.add_env_first("PATH", host_home.join(".local").join("bin").to_str().unwrap());
+    b.add_env_first("PATH", host_home.join(".cargo").join("bin").to_str().unwrap());
+    b.add_env_first("PATH", host_home.join(".mix").join("escripts").to_str().unwrap());
     b.add_env_first("PATH", pilocal_bin.to_str().unwrap());
 
     // Apply package-provided environment variables

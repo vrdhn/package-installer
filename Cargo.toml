@@ -23,6 +23,7 @@ ureq = "3.2.0"
 walkdir = "2.5.0"
 rayon = "1.10.0"
 dashmap = "6.1.0"
+chrono = { version = "0.4.39", features = ["serde"] }
 tar = "0.4.43"
 flate2 = "1.0.35"
 xz2 = "0.1.7"

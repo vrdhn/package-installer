@@ -17,8 +17,6 @@ def get_rust_target():
     return triple_arch + "-" + triple_os
 
 def parse_rust_filename(package_name, target, filename):
-    """Parses version and top-level directory from a Rust component filename."""
-    # Remove extensions
     v_tmp = filename
     for ext in [".tar.gz", ".tar.xz", ".zip", ".tar.bz2"]:
         if v_tmp.endswith(ext):
@@ -27,12 +25,10 @@ def parse_rust_filename(package_name, target, filename):
 
     top_dir = v_tmp
 
-    # Special case for rust-src: top_dir inside archive often lacks target triple
     if package_name == "rust-src":
         if target != "*" and top_dir.endswith("-" + target):
             top_dir = top_dir[:-(len(target) + 1)]
 
-    # Extract version by stripping package prefix and target suffix
     v_parse = v_tmp
     if target != "*" and v_parse.endswith("-" + target):
         v_parse = v_parse[:-(len(target) + 1)]
@@ -45,11 +41,9 @@ def parse_rust_filename(package_name, target, filename):
 
     return top_dir, version
 
-def get_component_layout(package_name, target, top_dir):
-    """Determines the internal subfolder, file mapping, and environment variables."""
+def add_rust_component(v, package_name, target, top_dir):
     actual_target = target if target != "*" else ""
     
-    # Map package names to their internal directory names if they differ from package_name
     component_map = {
         "rust": "rustc",
     }
@@ -59,38 +53,26 @@ def get_component_layout(package_name, target, top_dir):
         if package_name == "rust-std":
             subfolder = "rust-std-" + actual_target
         else:
-            # Most components (cargo, rust-analyzer, etc) just use the package name
-            # as the subfolder name, even if the manifest uses -preview suffix.
             subfolder = package_name
 
     component_root = top_dir
     if subfolder:
         component_root = top_dir + "/" + subfolder
 
-    # Default mapping and environment settings
-    filemap = {component_root + "/bin/*": "bin"}
-    env_vars = {
-        "RUSTC_SYSROOT": "$",
-        "RUSTFLAGS": "--sysroot=$"
-    }
-
     if package_name == "rust-src":
-        # rust-src contents are directly in top_dir/rust-src/lib/rustlib/src/rust
         src_base = component_root + "/lib/rustlib/src/rust"
-        filemap = {src_base + "/*": "lib/rustlib/src/rust"}
-        env_vars["RUST_SRC_PATH"] = "$/lib/rustlib/src/rust/library"
+        v.export_link(src_base + "/*", "lib/rustlib/src/rust")
+        v.export_env("RUST_SRC_PATH", "$/lib/rustlib/src/rust/library")
     elif package_name == "rust-std":
-        # rust-std contents are in top_dir/rust-std-<target>/lib/rustlib/<target>/lib
         std_base = component_root + "/lib/rustlib/" + target + "/lib"
-        filemap = {std_base + "/*": "lib/rustlib/" + target + "/lib"}
+        v.export_link(std_base + "/*", "lib/rustlib/" + target + "/lib")
     elif package_name == "rust":
-        # Main rust package (rustc) needs both bin and lib
-        filemap = {
-            component_root + "/bin/*": "bin",
-            component_root + "/lib/*": "lib",
-        }
-
-    return filemap, env_vars
+        v.export_link(component_root + "/bin/*", "bin")
+        v.export_link(component_root + "/lib/*", "lib")
+        v.export_env("RUSTC_SYSROOT", "$")
+        v.export_env("RUSTFLAGS", "--sysroot=$")
+    else:
+        v.export_link(component_root + "/bin/*", "bin")
 
 def discover_rust_component(package_name):
     target = get_rust_target()
@@ -101,17 +83,16 @@ def discover_rust_component(package_name):
         if not content:
             continue
 
-        data = toml_parse(content)
-        date = data.get("date", "")
-        pkgs = data.get("pkg", {})
+        doc = parse_toml(content)
+        data = doc.root
+        date = data.attribute("date") or ""
+        pkgs = data.get("pkg")
 
-        # Look for the package (try preview if exact name not found)
         pkg = pkgs.get(package_name) or pkgs.get(package_name + "-preview")
         if not pkg:
             continue
 
-        # Find target data (try wildcard if specific target not found)
-        target_dict = pkg.get("target", {})
+        target_dict = pkg.get("target")
         target_data = target_dict.get(target) or target_dict.get("*")
 
         if not target_data or not target_data.get("available"):
@@ -123,50 +104,36 @@ def discover_rust_component(package_name):
 
         filename = dl_url.split('/')[-1]
         top_dir, version = parse_rust_filename(package_name, target, filename)
-        filemap, env_vars = get_component_layout(package_name, target, top_dir)
-
-        add_version(
-            pkgname = package_name,
-            version = version,
-            release_date = date,
-            release_type = channel,
-            url = dl_url,
-            filename = filename,
-            checksum = target_data.get("hash", ""),
-            checksum_url = "",
-            filemap = filemap,
-            env = env_vars
-        )
+        
+        v = create_version(package_name, version, release_date = date, release_type = channel)
+        v.fetch(dl_url, checksum = target_data.get("hash"), filename = filename)
+        v.extract()
+        add_rust_component(v, package_name, target, top_dir)
+        
+        add_version(v)
 
 def cargo_discovery(manager, package):
     url = "https://crates.io/api/v1/crates/" + package
     content = download(url)
     if not content:
         return
-    data = json_parse(content)
+    data = parse_json(content)
 
     versions = data.get("versions", [])
-    for v in versions:
-        if v.get("yanked"):
+    for v_data in versions:
+        if v_data.get("yanked"):
             continue
-        version = v["num"]
-        add_version(
-            pkgname = package,
-            version = version,
-            release_date = v["created_at"],
-            release_type = "stable" if "-" not in version else "testing",
-            url = "",
-            filename = "",
-            checksum = "",
-            checksum_url = "",
-            filemap = {},
-            manager_command = "cargo install --root ~/.pilocal " + package + " --version " + version
-        )
+        version = v_data["num"]
+        
+        v = create_version(package, version, release_date = v_data["created_at"])
+        v.run("cargo install --root ~/.pilocal " + package + " --version " + version)
+        # Note: cargo install handles exports by putting them in ~/.pilocal/bin
+        # which is already in PATH in our cave setup.
+        
+        add_version(v)
 
-# Register toolchain components
 COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]
 for c in COMPONENTS:
     add_package(c, discover_rust_component)
 
-# Add manager for cargo packages
 add_manager("cargo", cargo_discovery)

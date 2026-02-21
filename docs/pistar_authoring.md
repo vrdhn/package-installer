@@ -4,7 +4,7 @@ This guide describes how to write `pistar` recipes for the `pi` package manager.
 
 ## Core Concepts
 
-A recipe file (e.g., `mypackage.star`) defines how to discover versions of a package. The primary goal is to register versions using `add_version`.
+A recipe file (e.g., `mypackage.star`) defines how to discover versions of a package. The primary goal is to register versions using a **Pipeline**.
 
 ### Lifecycle
 
@@ -57,62 +57,77 @@ Nodes provide the following methods for querying and data access:
 *   `node.attribute(name)`: Returns the value of an attribute (or key) as a string, or `None`.
 *   `node.text()`: Returns the text content of the node.
 
-**Query Syntax per Format:**
+---
 
-| Format | Selector Type | Reference |
-| :--- | :--- | :--- |
-| **JSON / TOML** | **JSONPath** | [serde_json_path](https://github.com/freestrings/serde_json_path) |
-| **HTML** | **CSS Selectors** | [scraper / MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Selectors) |
-| **XML** | **Tag Name** | Matches direct children by tag name |
+## Pipeline API
 
-#### Node Attributes (Additional)
+Pi uses a pipeline-based model for installation. Instead of passing a large dictionary of fields, you create a `VersionBuilder` and define a sequence of steps.
 
-*   `node.tag`: Returns the tag name (HTML/XML only).
+### Creating a Version
 
-### Version Registration
+*   `create_version(pkgname, version, release_date=None, release_type="stable")`: Returns a `VersionBuilder`.
 
-*   `add_version(...)`: Registers a discovered version.
-    *   `pkgname`: Package name.
-    *   `version`: Version string.
-    *   `release_date`: Release date string (optional).
-    *   `release_type`: Validation rules apply. Must be one of:
-        *   `stable`, `testing`, `lts`, `unstable`
-        *   Pattern: `major[.minor[.patch]][-suffix]` (e.g., `1.0.0`, `2.1-beta`)
-    *   `url`: Download URL for the artifact.
-    *   `filename`: Local filename for the artifact.
-    *   `checksum`: SHA256 checksum (optional).
-    *   `checksum_url`: URL to checksum file (optional).
-    *   `filemap`: Dictionary mapping archive paths to install paths (e.g., `{"bin/*": "bin"}`).
-    *   `env`: Dictionary of environment variables to set.
-    *   `manager_command`: Command to install if using a manager (optional).
+### VersionBuilder Methods
+
+#### Pipeline Steps
+Steps are executed in order. Each step's output (path) becomes the context for the next step.
+
+*   `v.fetch(url, checksum=None, filename=None)`: Downloads a file.
+*   `v.extract(format=None)`: Extracts the result of the previous `fetch` step.
+*   `v.run(command, cwd=None)`: Runs a command in the sandbox. If `cwd` is provided, it is relative to the previous step's output.
+
+#### Exports
+Exports define how the results of the pipeline are exposed to the Cave environment.
+
+*   `v.export_link(src, dest)`: Symlinks files from the build directory into `.pilocal`. Supports globs (e.g., `bin/*`).
+*   `v.export_env(key, value)`: Sets an environment variable when the package is used.
+*   `v.export_path(path)`: Adds a directory (relative to `.pilocal`) to the `PATH`.
+
+### Registering the Version
+
+*   `add_version(builder)`: Finalizes and registers the version defined by the builder.
+
+---
 
 ## Examples
 
-### JSON Example (Node.js)
+### Unified Pipeline Example (Erlang Source Build)
+
+```python
+def install_erlang(pkg):
+    # ... version discovery logic ...
+    v = create_version("erlang", "26.0", release_type="stable")
+    
+    # Define Pipeline
+    v.fetch(url="https://.../otp_src_26.0.tar.gz")
+    v.extract()
+    v.run("./configure --prefix=$(pwd)/_inst && make -j$(nproc) && make install")
+    
+    # Define Exports
+    v.export_link("_inst/bin/*", "bin")
+    v.export_link("_inst/lib/erlang/*", "lib/erlang")
+    
+    add_version(v)
+```
+
+### Binary Release Example (Node.js)
 
 ```python
 def install_node(pkg):
-    doc = parse_json(download("https://nodejs.org/dist/index.json"))
-    # JSONPath query on root node
-    for entry in doc.root.select("$[*]"):
-        version = entry.attribute("version")
-        # ... logic ...
-        add_version(...)
-
-add_package("node", install_node)
+    v = create_version("node", "20.5.0")
+    v.fetch("https://nodejs.org/dist/v20.5.0/node-v20.5.0-linux-x64.tar.gz")
+    v.extract()
+    v.export_link("node-v20.5.0-linux-x64/bin/*", "bin")
+    add_version(v)
 ```
 
-### HTML Example (Web Scraping)
+### Manager Example (npm)
 
 ```python
-def install_app(pkg):
-    doc = parse_html(download("https://example.com/downloads"))
-    
-    # CSS Selector on root
-    for link in doc.root.select("a.download-link"):
-        url = link.attribute("href")
-        version = link.text()
-        add_version(...)
-
-add_package("app", install_app)
+def npm_discovery(manager, package):
+    # ... find version ...
+    v = create_version(package, version)
+    # Managers often just need a single 'run' step
+    v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
+    add_version(v)
 ```

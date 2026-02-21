@@ -1,22 +1,152 @@
 use crate::models::context::Context;
 use crate::models::package_entry::{ManagerEntry, PackageEntry};
-use crate::models::version_entry::{ManagerCommand, VersionEntry};
+use crate::models::version_entry::{VersionEntry, InstallStep, Export};
 use crate::services::cache::Cache;
 use crate::services::downloader::Downloader;
 use anyhow::Context as _;
 use starlark::environment::GlobalsBuilder;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
-use starlark::values::dict::DictRef;
 use starlark::values::{Value, ValueLike, none::NoneType};
 use std::time::Duration;
+use starlark::any::ProvidesStaticType;
+use starlark::environment::Methods;
+use starlark::environment::MethodsBuilder;
+use starlark::environment::MethodsStatic;
+use starlark::values::{
+    starlark_value, AllocValue, Heap, StarlarkValue,
+};
+use allocative::Allocative;
+use serde::Serialize;
+use std::fmt::{self, Debug, Display};
+use std::sync::Arc;
+use parking_lot::RwLock;
 
 mod xml;
 mod html;
 mod data;
 
+#[derive(Debug, ProvidesStaticType, Clone, Allocative, Serialize)]
+pub struct VersionBuilder {
+    pub pkgname: String,
+    pub version: String,
+    pub release_date: String,
+    pub release_type: String,
+    pub pipeline: Vec<InstallStep>,
+    pub exports: Vec<Export>,
+}
+
+#[derive(Debug, ProvidesStaticType, Clone, Serialize)]
+pub struct StarlarkVersionBuilder {
+    #[serde(skip)]
+    pub builder: Arc<RwLock<VersionBuilder>>,
+}
+
+impl Display for StarlarkVersionBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let b = self.builder.read();
+        write!(f, "VersionBuilder({}:{})", b.pkgname, b.version)
+    }
+}
+
+impl Allocative for StarlarkVersionBuilder {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let _visitor = visitor.enter_self_sized::<Self>();
+    }
+}
+
+#[starlark_value(type = "VersionBuilder")]
+impl<'v> StarlarkValue<'v> for StarlarkVersionBuilder {
+    fn get_methods() -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods(version_builder_methods)
+    }
+}
+
+impl<'v> AllocValue<'v> for StarlarkVersionBuilder {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
+
+#[starlark_module]
+fn version_builder_methods(builder: &mut MethodsBuilder) {
+    fn fetch(this: Value, url: String, checksum: Option<String>, filename: Option<String>) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().pipeline.push(InstallStep::Fetch { url, checksum, filename });
+        Ok(NoneType)
+    }
+
+    fn extract(this: Value, format: Option<String>) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().pipeline.push(InstallStep::Extract { format });
+        Ok(NoneType)
+    }
+
+    fn run(this: Value, command: String, cwd: Option<String>) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().pipeline.push(InstallStep::Run { command, cwd });
+        Ok(NoneType)
+    }
+
+    fn export_link(this: Value, src: String, dest: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().exports.push(Export::Link { src, dest });
+        Ok(NoneType)
+    }
+
+    fn export_env(this: Value, key: String, val: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().exports.push(Export::Env { key, val });
+        Ok(NoneType)
+    }
+
+    fn export_path(this: Value, path: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().exports.push(Export::Path(path));
+        Ok(NoneType)
+    }
+}
+
 #[starlark_module]
 pub fn register_api(builder: &mut GlobalsBuilder) {
+    fn create_version(
+        pkgname: String,
+        version: String,
+        release_date: Option<String>,
+        release_type: Option<String>,
+    ) -> anyhow::Result<StarlarkVersionBuilder> {
+        Ok(StarlarkVersionBuilder {
+            builder: Arc::new(RwLock::new(VersionBuilder {
+                pkgname,
+                version,
+                release_date: release_date.unwrap_or_default(),
+                release_type: release_type.unwrap_or_else(|| "stable".to_string()),
+                pipeline: Vec::new(),
+                exports: Vec::new(),
+            }))
+        })
+    }
+
+    fn add_version(
+        builder: Value,
+        eval: &mut Evaluator<'_, '_, '_>,
+    ) -> anyhow::Result<NoneType> {
+        let context = get_context(eval)?;
+        let svb = builder.downcast_ref::<StarlarkVersionBuilder>().context("builder must be a VersionBuilder")?;
+        let b = svb.builder.read();
+        
+        context.versions.write().push(VersionEntry {
+            pkgname: b.pkgname.clone(),
+            version: b.version.clone(),
+            release_date: b.release_date.clone(),
+            release_type: b.release_type.clone(),
+            pipeline: b.pipeline.clone(),
+            exports: b.exports.clone(),
+        });
+        Ok(NoneType)
+    }
+
     fn get_os(eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
         let context = get_context(eval)?;
         Ok(context.os.clone())
@@ -70,7 +200,6 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
             return Ok(cached);
         }
 
-        // Handle concurrent downloads by locking on the URL
         let lock = context
             .state
             .download_locks
@@ -80,7 +209,6 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
 
         let _guard = lock.lock();
 
-        // Check cache again after acquiring lock to see if another thread finished it
         if let Some(cached) = cache.read(&url)? {
             log::debug!("[{}] cache hit: {}", context.display_name(), url);
             return Ok(cached);
@@ -144,95 +272,6 @@ pub fn register_api(builder: &mut GlobalsBuilder) {
         }
 
         Ok(NoneType)
-    }
-
-    fn add_version(
-        pkgname: String,
-        version: String,
-        release_date: String,
-        release_type: String,
-        url: String,
-        filename: String,
-        checksum: String,
-        checksum_url: String,
-        filemap: Option<Value>,
-        env: Option<Value>,
-        manager_command: Option<String>,
-        eval: &mut Evaluator<'_, '_, '_>,
-    ) -> anyhow::Result<NoneType> {
-        let context = get_context(eval)?;
-
-        if !is_valid_release_type(&release_type) {
-            anyhow::bail!(
-                "[{}] invalid release_type: '{}'. Must be 'lts', 'stable', 'testing', 'unstable' or match pattern 'major[.minor[.patch]][-suffix]'",
-                context.display_name(),
-                release_type
-            );
-        }
-
-        let cmd = match manager_command {
-            Some(c) => ManagerCommand::Custom(c),
-            None => ManagerCommand::Auto,
-        };
-
-        let mut parsed_filemap = std::collections::HashMap::new();
-        if let Some(s) = filemap {
-            let dict = DictRef::from_value(s).context("filemap must be a dictionary")?;
-            for (k, v) in dict.iter_hashed() {
-                let key = k.key().unpack_str().context("filemap key must be a string")?;
-                let val = v.unpack_str().context("filemap value must be a string")?;
-                parsed_filemap.insert(key.to_string(), val.to_string());
-            }
-        };
-
-        let mut parsed_env = std::collections::HashMap::new();
-        if let Some(e) = env {
-            let dict = DictRef::from_value(e).context("env must be a dictionary")?;
-            for (k, v) in dict.iter_hashed() {
-                let key = k.key().unpack_str().context("env key must be a string")?;
-                let val = v.unpack_str().context("env value must be a string")?;
-                parsed_env.insert(key.to_string(), val.to_string());
-            }
-        };
-
-        context.versions.write().push(VersionEntry {
-            pkgname,
-            version,
-            release_date,
-            release_type,
-            url,
-            filename,
-            checksum,
-            checksum_url,
-            filemap: parsed_filemap,
-            env: parsed_env,
-            manager_command: cmd,
-        });
-        Ok(NoneType)
-    }
-}
-
-fn is_valid_release_type(rt: &str) -> bool {
-    match rt {
-        "lts" | "stable" | "testing" | "unstable" => true,
-        _ => {
-            let (version_part, _suffix) = match rt.find('-') {
-                Some(idx) => (&rt[..idx], Some(&rt[idx + 1..])),
-                None => (rt, None),
-            };
-
-            let parts: Vec<&str> = version_part.split('.').collect();
-            if parts.is_empty() || parts.len() > 3 {
-                return false;
-            }
-
-            for part in parts {
-                if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
-                    return false;
-                }
-            }
-            true
-        }
     }
 }
 

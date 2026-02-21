@@ -5,6 +5,8 @@ use crate::models::repository::Repositories;
 use crate::commands::package::resolve;
 use crate::services::downloader::Downloader;
 use crate::services::unarchiver::Unarchiver;
+use crate::services::cache::{BuildCache, StepResult};
+use crate::models::version_entry::{InstallStep, Export, VersionEntry};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,8 +14,9 @@ use anyhow::{Context, Result};
 use rayon::prelude::*;
 use log::error;
 use walkdir::WalkDir;
-
-use crate::models::version_entry::{ManagerCommand};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use chrono;
 
 pub fn run(config: &Config, variant: Option<String>) {
     let current_dir = env::current_dir().expect("Failed to get current directory");
@@ -40,8 +43,9 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     log::info!("[{}] building (var: {:?})", cave.name, variant);
 
     let repo_config = Repositories::get_all(config);
+    let build_cache = BuildCache::new(config.cache_dir.clone());
 
-    let results: Vec<Result<(String, String, Option<PathBuf>, std::collections::HashMap<String, String>, std::collections::HashMap<String, String>, ManagerCommand)>> = settings.packages
+    let results: Vec<Result<(String, std::collections::HashMap<String, String>, Vec<(String, PathBuf, Vec<Export>)>)>> = settings.packages
         .par_iter()
         .map(|query| {
             let selector = PackageSelector::parse(query)
@@ -51,47 +55,21 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
                 .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
             let pkg_ctx = format!("{}:{}={}", repo_name, full_name, version.version);
-
-            if let ManagerCommand::Custom(_) = version.manager_command {
-                // Skip download/unarchive for managed packages
-                return Ok((pkg_ctx, full_name, None, version.filemap, version.env, version.manager_command));
-            }
-
-            let download_dest = config.download_dir.join(&version.filename);
-            let checksum = if version.checksum.is_empty() { None } else { Some(version.checksum.as_str()) };
-
-            Downloader::download_to_file(&version.url, &download_dest, checksum)?;
-
-            let pkg_dir_name = format!("{}-{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version), repo_name);
-            let extract_dest = config.packages_dir.join(pkg_dir_name);
-
-            Unarchiver::unarchive(&download_dest, &extract_dest)?;
-
-            Ok((pkg_ctx, full_name, Some(extract_dest), version.filemap, version.env, version.manager_command))
+            
+            execute_pipeline(config, &build_cache, cave, variant, &pkg_ctx, &version)
         })
         .collect();
 
-    let mut all_filemap = Vec::new();
     let mut all_env = std::collections::HashMap::new();
-    let mut manager_commands = Vec::new();
+    let mut exports_to_apply = Vec::new();
 
     for res in results {
         match res {
-            Ok((pkg_ctx, _full_name, extract_dest, filemap, env, manager_cmd)) => {
-                if let Some(ref dest) = extract_dest {
-                    log::debug!("[{}] resolved to {}", pkg_ctx, dest.display());
-                    all_filemap.push((pkg_ctx, dest.clone(), filemap));
-                } else {
-                    log::debug!("[{}] managed pkg, skipping extraction", pkg_ctx);
-                }
-
+            Ok((_pkg_ctx, env, exports)) => {
                 for (k, v) in env {
                     all_env.insert(k, v);
                 }
-                match manager_cmd {
-                    ManagerCommand::Custom(cmd) => manager_commands.push(cmd),
-                    ManagerCommand::Auto => {}
-                }
+                exports_to_apply.extend(exports);
             }
             Err(e) => {
                 error!("build failed: {}", e);
@@ -103,59 +81,125 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     let pilocal_dir = config.pilocal_path(&cave.name, variant);
     fs::create_dir_all(&pilocal_dir).context("Failed to create .pilocal directory")?;
 
-    log::debug!("[{}] applying filemap: {}", cave.name, pilocal_dir.display());
-
-    for (pkg_ctx, pkg_dir, filemap) in all_filemap {
-        for (src_pattern, dest_rel) in filemap {
-            apply_filemap_entry(&pkg_ctx, &pkg_dir, &pilocal_dir, &src_pattern, &dest_rel)
-                .with_context(|| format!("Failed to apply filemap entry '{}' for {}", src_pattern, pkg_dir.display()))?;
+    for (pkg_ctx, source_root, exports) in exports_to_apply {
+        for export in exports {
+            match export {
+                Export::Link { src, dest } => {
+                    apply_filemap_entry(&pkg_ctx, &source_root, &pilocal_dir, &src, &dest)?;
+                }
+                Export::Path(rel_path) => {
+                    let full_path = pilocal_dir.join(&rel_path);
+                    fs::create_dir_all(full_path).ok();
+                }
+                Export::Env { key, val } => {
+                    all_env.insert(key, val);
+                }
+            }
         }
-    }
-
-    if !manager_commands.is_empty() {
-        run_manager_commands(config, cave, variant, &all_env, manager_commands)?;
     }
     
     log::info!("[{}] build success", cave.name);
     Ok(all_env)
 }
 
-fn run_manager_commands(
+fn execute_pipeline(
     config: &Config,
+    build_cache: &BuildCache,
     cave: &Cave,
     variant: Option<&str>,
-    all_env: &std::collections::HashMap<String, String>,
-    commands: Vec<String>,
-) -> Result<()> {
-    log::info!("[{}] running manager commands", cave.name);
+    pkg_ctx: &str,
+    version: &VersionEntry
+) -> Result<(String, std::collections::HashMap<String, String>, Vec<(String, PathBuf, Vec<Export>)>)> {
+    let mut current_path: Option<PathBuf> = None;
+    let mut env = std::collections::HashMap::new();
 
-    // Generate install script
-    let mut script_content = String::from("#!/bin/bash\nset -e\n");
-    for cmd in commands {
-        script_content.push_str(&cmd);
-        script_content.push('\n');
+    for (i, step) in version.pipeline.iter().enumerate() {
+        let step_hash = hash_step(step);
+        
+        if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version, i, &step_hash) {
+            log::debug!("[{}] step {} cache hit", pkg_ctx, i);
+            current_path = cached.output_path;
+            continue;
+        }
+
+        log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, step);
+        let result_path = match step {
+            InstallStep::Fetch { url, checksum, filename } => {
+                let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
+                let dest = config.download_dir.join(fname);
+                Downloader::download_to_file(url, &dest, checksum.as_deref())?;
+                dest
+            }
+            InstallStep::Extract { format: _ } => {
+                let src = current_path.as_ref().context("Extract step requires a previous Fetch step")?;
+                let pkg_dir_name = format!("{}-{}-extracted", sanitize_name(&version.pkgname), sanitize_name(&version.version));
+                let dest = config.packages_dir.join(pkg_dir_name);
+                Unarchiver::unarchive(src, &dest)?;
+                dest
+            }
+            InstallStep::Run { command, cwd } => {
+                let base_dir = match cwd {
+                    Some(c) => current_path.as_ref().context("Run with relative cwd requires previous step")?.join(c),
+                    None => current_path.clone().context("Run requires previous step to define working directory")?,
+                };
+                
+                let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
+                b.set_cwd(&base_dir);
+                b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
+                b.spawn().with_context(|| format!("Failed to execute pipeline command: {}", command))?;
+                
+                base_dir
+            }
+        };
+
+        build_cache.update_step_result(&version.pkgname, &version.version, i, StepResult {
+            step_hash,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            output_path: Some(result_path.clone()),
+            status: "Success".to_string(),
+        })?;
+        
+        current_path = Some(result_path);
     }
 
-    let script_path = cave.workspace.join(".pi_install.sh");
-    fs::write(&script_path, script_content).context("Failed to write install script")?;
+    let source_root = current_path.context("Pipeline must produce a source root")?;
+    
+    // Process static exports (Env) immediately
+    for export in &version.exports {
+        if let Export::Env { key, val } = export {
+             env.insert(key.clone(), val.clone());
+        }
+    }
 
-    let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, all_env.clone(), true)?;
-    b.set_command("/bin/bash", &[String::from(".pi_install.sh")]);
-    
-    let result = b.spawn();
-    
-    // Cleanup script
-    let _ = fs::remove_file(&script_path);
-    
-    result.context("Failed to execute manager commands in sandbox")
+    Ok((pkg_ctx.to_string(), env, vec![(pkg_ctx.to_string(), source_root, version.exports.clone())]))
+}
+
+fn hash_step(step: &InstallStep) -> String {
+    let mut hasher = DefaultHasher::new();
+    match step {
+        InstallStep::Fetch { url, checksum, filename } => {
+            "fetch".hash(&mut hasher);
+            url.hash(&mut hasher);
+            checksum.hash(&mut hasher);
+            filename.hash(&mut hasher);
+        }
+        InstallStep::Extract { format } => {
+            "extract".hash(&mut hasher);
+            format.hash(&mut hasher);
+        }
+        InstallStep::Run { command, cwd } => {
+            "run".hash(&mut hasher);
+            command.hash(&mut hasher);
+            cwd.hash(&mut hasher);
+        }
+    }
+    format!("{:x}", hasher.finish())
 }
 
 fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
     if src_pattern.contains('*') {
-        // Glob-like resolution using walkdir (simple * at end support)
         let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
         let search_path = pkg_dir.join(base_pattern);
-        
         if !search_path.exists() {
             return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
         }
@@ -164,45 +208,27 @@ fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pa
         if search_path.is_dir() {
             for entry in WalkDir::new(&search_path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
                 if entry.path() == search_path { continue; }
-                let _rel_to_pkg = entry.path().strip_prefix(pkg_dir).unwrap();
                 let file_name = entry.file_name();
-                
                 let target_dest = pilocal_dir.join(dest_rel).join(file_name);
-                log::trace!(
-                    "[{}] link {} -> {}",
-                    pkg_ctx,
-                    target_dest.strip_prefix(pilocal_dir).unwrap_or(&target_dest).display(),
-                    entry.file_name().to_string_lossy()
-                );
                 create_symlink(entry.path(), &target_dest)?;
                 matched = true;
             }
         }
-
         if !matched {
             return Err(anyhow::anyhow!("[{}] pattern '{}' no match in {}", pkg_ctx, src_pattern, pkg_dir.display()));
         }
     } else {
         let src_path = pkg_dir.join(src_pattern);
         let dest_path = pilocal_dir.join(dest_rel);
-        
         if !src_path.exists() {
             return Err(anyhow::anyhow!("[{}] source missing: {}", pkg_ctx, src_path.display()));
         }
-
         let final_dest = if dest_rel.ends_with('/') || dest_path.is_dir() {
             let file_name = src_path.file_name().ok_or_else(|| anyhow::anyhow!("Invalid source filename"))?;
             dest_path.join(file_name)
         } else {
             dest_path
         };
-
-        log::trace!(
-            "[{}] link {} -> {}",
-            pkg_ctx,
-            final_dest.strip_prefix(pilocal_dir).unwrap_or(&final_dest).display(),
-            src_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| src_path.to_string_lossy())
-        );
         create_symlink(&src_path, &final_dest)?;
     }
     Ok(())
@@ -210,33 +236,20 @@ fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pa
 
 fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
     if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).context("Failed to create parent directory for symlink")?;
+        fs::create_dir_all(parent)?;
     }
-    
     if dest.exists() || dest.is_symlink() {
-        // Remove existing symlink or file
-        let metadata = fs::symlink_metadata(dest).context("Failed to get metadata for existing destination")?;
+        let metadata = fs::symlink_metadata(dest)?;
         if metadata.is_dir() && !metadata.is_symlink() {
-            fs::remove_dir_all(dest).context("Failed to remove existing directory at symlink destination")?;
+            fs::remove_dir_all(dest)?;
         } else {
-            fs::remove_file(dest).context("Failed to remove existing file/symlink at destination")?;
+            fs::remove_file(dest)?;
         }
     }
-
     #[cfg(unix)]
     {
         use std::os::unix::fs::symlink;
-        symlink(src, dest).with_context(|| format!("Failed to create unix symlink {} -> {}", dest.display(), src.display()))?;
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::{symlink_file, symlink_dir};
-        let res = if src.is_dir() {
-            symlink_dir(src, dest)
-        } else {
-            symlink_file(src, dest)
-        };
-        res.with_context(|| format!("Failed to create windows symlink {} -> {}", dest.display(), src.display()))?;
+        symlink(src, dest)?;
     }
     Ok(())
 }

@@ -5,8 +5,6 @@ def install_android_studio(package_name):
         return
     
     doc = parse_json(content)
-    # The JSON structure has a "content" field which contains "item" list
-    # Use select/select_one on the document or root
     items = doc.root.select("$.content.item[*]")
     
     os_name = get_os()
@@ -25,8 +23,6 @@ def install_android_studio(package_name):
         
     for item in items:
         version = item.attribute("version")
-        name = item.attribute("name")
-        build = item.attribute("build")
         date = item.attribute("date")
         channel = item.attribute("channel")
         
@@ -36,22 +32,22 @@ def install_android_studio(package_name):
         elif channel == "Canary":
             release_type = "nightly"
             
-        # For nested lists in JSON, select can be used
         downloads = item.select("$.download[*]")
         for dl in downloads:
             link = dl.attribute("link")
             if link and link.endswith(suffix):
-                add_version(
+                v = create_version(
                     pkgname = "android-studio",
                     version = version,
                     release_date = date,
-                    release_type = release_type,
-                    url = link,
-                    filename = link.split("/")[-1],
-                    checksum = dl.attribute("checksum") or "",
-                    checksum_url = "",
-                    filemap = {"android-studio/bin/*": "bin"}
+                    release_type = release_type
                 )
+                filename = link.split("/")[-1]
+                v.fetch(url = link, filename = filename, checksum = dl.attribute("checksum"))
+                v.extract()
+                v.export_link("android-studio/bin/*", "bin")
+                
+                add_version(v)
                 break
 
 def discover_google_sdk(pkgname, sdk_path, filemap):
@@ -67,7 +63,6 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
         host_os = "windows"
 
     doc = parse_xml(content)
-    # select / select_one are now methods on the parsed objects
     for pkg in doc.root.select("remotePackage"):
         if pkg.attribute("path") == sdk_path:
             archives = pkg.select_one("archives")
@@ -78,46 +73,32 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
                 host_os_node = archive.select_one("host-os")
                 if host_os_node and host_os_node.text() == host_os:
                     complete = archive.select_one("complete")
-                    if not complete:
-                        continue
-
-                    url_node = complete.select_one("url")
-                    checksum_node = complete.select_one("checksum")
-                    
-                    if not url_node or not checksum_node:
-                        continue
-
-                    url = url_node.text()
-                    checksum = checksum_node.text()
-                    
-                    revision = pkg.select_one("revision")
-                    if not revision:
-                        continue
-
-                    major_node = revision.select_one("major")
-                    minor_node = revision.select_one("minor")
-                    if not major_node or not minor_node:
-                        continue
+                    if complete:
+                        url_node = complete.select_one("url")
+                        checksum_node = complete.select_one("checksum")
                         
-                    version = major_node.text() + "." + minor_node.text()
-                    micro = revision.select_one("micro")
-                    if micro:
-                        version += "." + micro.text()
-                    
-                    add_version(
-                        pkgname = pkgname,
-                        version = version,
-                        release_date = "",
-                        release_type = "stable",
-                        url = "https://dl.google.com/android/repository/" + url,
-                        filename = url,
-                        checksum = checksum,
-                        checksum_url = "",
-                        filemap = filemap
-                    )
-                    break
-            # We found the package we wanted, but there might be multiple versions?
-            # Actually Google SDK XML usually has one <remotePackage> per path.
+                        if url_node and checksum_node:
+                            url = url_node.text()
+                            checksum = checksum_node.text()
+                            
+                            revision = pkg.select_one("revision")
+                            if revision:
+                                major_node = revision.select_one("major")
+                                minor_node = revision.select_one("minor")
+                                if major_node and minor_node:
+                                    version = major_node.text() + "." + minor_node.text()
+                                    micro = revision.select_one("micro")
+                                    if micro:
+                                        version += "." + micro.text()
+                                    
+                                    v = create_version(pkgname, version)
+                                    v.fetch(url = "https://dl.google.com/android/repository/" + url, filename = url, checksum = checksum)
+                                    v.extract()
+                                    for src, dest in filemap.items():
+                                        v.export_link(src, dest)
+                                    
+                                    add_version(v)
+                                    break
 
 def install_android_sdk(package_name):
     discover_google_sdk("android-sdk", "cmdline-tools;latest", {"cmdline-tools/bin/*": "bin"})

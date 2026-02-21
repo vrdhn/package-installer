@@ -1,9 +1,9 @@
 use crate::models::config::Config;
-use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
-use crate::models::version_entry::VersionList;
-use comfy_table::{Table, Attribute, Cell, Color, presets::NOTHING};
+use crate::commands::package::resolve;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Cell, Color, Table};
 
 pub fn run(config: &Config, selector_str: &str) {
     let selector = match PackageSelector::parse(selector_str) {
@@ -15,164 +15,63 @@ pub fn run(config: &Config, selector_str: &str) {
     };
 
     let repo_config = Repositories::get_all(config);
-    let mut found = false;
+    let resolved = resolve::resolve_query(config, repo_config, &selector);
 
-    let target_version = selector.version.as_deref().unwrap_or("stable");
-
-    for repo in &repo_config.repositories {
-        if let Some(ref r_name) = selector.recipe {
-            if repo.name != *r_name {
-                continue;
-            }
+    match resolved {
+        Some((full_name, version, repo_name)) => {
+            print_package_info(&full_name, &version, &repo_name);
         }
-
-        let pkg_list = match PackageList::get_for_repo(config, repo) {
-            Some(l) => l,
-            None => continue,
-        };
-
-        // Check direct packages
-        if selector.prefix.is_none() {
-            for pkg in &pkg_list.packages {
-                if !selector.package.is_empty() && selector.package != "*" {
-                    if pkg.name != selector.package {
-                        continue;
-                    }
-                }
-
-                if let Some(v_list) = VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None) {
-                    if print_package_info(repo.name.clone(), &pkg.name, (*v_list).clone(), target_version) {
-                        found = true;
-                    }
-                }
-            }
+        None => {
+            log::error!("package not found: {}", selector_str);
         }
-
-        // Check managers
-        if let Some(ref prefix) = selector.prefix {
-            if let Some(mgr) = pkg_list.manager_map.get(prefix) {
-                let full_name = format!("{}:{}", prefix, selector.package);
-                if let Some(v_list) = VersionList::get_for_package(
-                    config,
-                    repo,
-                    &full_name,
-                    None,
-                    Some((mgr, &selector.package)),
-                ) {
-                    if print_package_info(repo.name.clone(), &full_name, (*v_list).clone(), target_version) {
-                        found = true;
-                    }
-                }
-            }
-        }
-    }
-
-    if !found {
-        log::warn!("no pkgs matching: {}", selector_str);
     }
 }
 
-fn print_package_info(repo_name: String, _pkg_name: &str, v_list: VersionList, target_version: &str) -> bool {
-    let mut filtered_versions: Vec<_> = v_list
-        .versions
-        .into_iter()
-        .filter(|v| match target_version {
-            "latest" => true,
-            "stable" | "lts" | "testing" | "unstable" => {
-                v.release_type.to_lowercase() == target_version
-            }
-            _ => {
-                if target_version.contains('*') {
-                    match_version_with_wildcard(&v.version, target_version)
-                } else {
-                    v.version == target_version
-                }
-            }
-        })
-        .collect();
+fn print_package_info(full_name: &str, v: &crate::models::version_entry::VersionEntry, repo_name: &str) {
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec![
+        Cell::new("Property").fg(Color::Yellow),
+        Cell::new("Value").fg(Color::Yellow),
+    ]);
 
-    if filtered_versions.is_empty() {
-        return false;
+    table.add_row(vec!["Package", full_name]);
+    table.add_row(vec!["Repository", repo_name]);
+    table.add_row(vec!["Version", &v.version]);
+    table.add_row(vec!["Release Date", &v.release_date]);
+    table.add_row(vec!["Release Type", &v.release_type]);
+
+    println!("{}", table);
+
+    if !v.pipeline.is_empty() {
+        println!("\nPipeline Steps:");
+        let mut pipe_table = Table::new();
+        pipe_table.load_preset(UTF8_FULL);
+        pipe_table.set_header(vec!["#", "Type", "Details"]);
+        for (i, step) in v.pipeline.iter().enumerate() {
+            let (typ, details) = match step {
+                crate::models::version_entry::InstallStep::Fetch { url, .. } => ("Fetch", url.clone()),
+                crate::models::version_entry::InstallStep::Extract { .. } => ("Extract", "-".to_string()),
+                crate::models::version_entry::InstallStep::Run { command, .. } => ("Run", command.clone()),
+            };
+            pipe_table.add_row(vec![&i.to_string(), typ, &details]);
+        }
+        println!("{}", pipe_table);
     }
 
-    // Sort by release_date descending
-    filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
-
-    for v in filtered_versions {
-        let mut table = Table::new();
-        table.load_preset(NOTHING);
-        table.set_header(vec![
-            Cell::new("Field").add_attribute(Attribute::Bold),
-            Cell::new("Value").add_attribute(Attribute::Bold),
-        ]);
-
-        table.add_row(vec!["Repository", &repo_name]);
-        table.add_row(vec!["Package", &v.pkgname]);
-        table.add_row(vec!["Version", &v.version]);
-        table.add_row(vec!["Release Date", &v.release_date]);
-        table.add_row(vec!["Release Type", &v.release_type]);
-        table.add_row(vec!["Filename", &v.filename]);
-        table.add_row(vec!["Checksum", &v.checksum]);
-        
-        let url_cell = Cell::new(&v.url).fg(Color::Cyan);
-        table.add_row(vec![Cell::new("URL"), url_cell]);
-
-        if !v.checksum_url.is_empty() {
-            table.add_row(vec!["Checksum URL", &v.checksum_url]);
+    if !v.exports.is_empty() {
+        println!("\nExports:");
+        let mut exp_table = Table::new();
+        exp_table.load_preset(UTF8_FULL);
+        exp_table.set_header(vec!["Type", "Source", "Destination/Value"]);
+        for export in &v.exports {
+            let (typ, src, dest) = match export {
+                crate::models::version_entry::Export::Link { src, dest } => ("Link", src.clone(), dest.clone()),
+                crate::models::version_entry::Export::Env { key, val } => ("Env", key.clone(), val.clone()),
+                crate::models::version_entry::Export::Path(p) => ("Path", p.clone(), "-".to_string()),
+            };
+            exp_table.add_row(vec![typ, &src, &dest]);
         }
-
-        if !v.filemap.is_empty() {
-            let mut filemap_str = String::new();
-            for (src, dest) in &v.filemap {
-                if !filemap_str.is_empty() {
-                    filemap_str.push('\n');
-                }
-                filemap_str.push_str(&format!("{} -> {}", src, dest));
-            }
-            table.add_row(vec!["Filemap", &filemap_str]);
-        }
-
-        if !v.env.is_empty() {
-            let mut env_str = String::new();
-            let mut sorted_keys: Vec<_> = v.env.keys().collect();
-            sorted_keys.sort();
-            for k in sorted_keys {
-                if !env_str.is_empty() {
-                    env_str.push('\n');
-                }
-                env_str.push_str(&format!("{}={}", k, v.env.get(k).unwrap()));
-            }
-            table.add_row(vec!["Environment", &env_str]);
-        }
-
-        match v.manager_command {
-            crate::models::version_entry::ManagerCommand::Custom(ref cmd) => {
-                table.add_row(vec!["Install Command", cmd]);
-            }
-            crate::models::version_entry::ManagerCommand::Auto => {
-                table.add_row(vec!["Install Command", "Auto"]);
-            }
-        }
-
-        println!("{table}
-");
+        println!("{}", exp_table);
     }
-
-    true
-}
-
-fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
-    let version_parts: Vec<&str> = version.split('.').collect();
-    let pattern_parts: Vec<&str> = pattern.split('.').collect();
-
-    if version_parts.len() != pattern_parts.len() {
-        return false;
-    }
-
-    for (v, p) in version_parts.iter().zip(pattern_parts.iter()) {
-        if *p != "*" && v != p {
-            return false;
-        }
-    }
-    true
 }

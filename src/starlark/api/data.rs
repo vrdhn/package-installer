@@ -117,6 +117,20 @@ impl<'v> AllocValue<'v> for DataNode {
 
 #[starlark::starlark_module]
 fn data_node_methods(builder: &mut MethodsBuilder) {
+    fn get<'v>(this: Value<'v>, key: String, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        let this = this.downcast_ref::<DataNode>().context("not a DataNode")?;
+        match &this.value {
+            serde_json::Value::Object(obj) => {
+                if let Some(val) = obj.get(&key) {
+                    Ok(serde_to_starlark(val.clone(), heap))
+                } else {
+                    Ok(Value::new_none())
+                }
+            }
+            _ => Ok(Value::new_none()),
+        }
+    }
+
     fn select<'v>(this: Value<'v>, query: String, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let this = this.downcast_ref::<DataNode>().context("not a DataNode")?;
         let path = serde_json_path::JsonPath::parse(&query).map_err(|e| anyhow::anyhow!("JSONPath parse error: {}", e))?;

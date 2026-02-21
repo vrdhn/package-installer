@@ -5,32 +5,37 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
-pub enum ManagerCommand {
-    Auto,
-    Custom(String),
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq)]
+pub enum InstallStep {
+    Fetch {
+        url: String,
+        checksum: Option<String>,
+        filename: Option<String>,
+    },
+    Extract {
+        format: Option<String>,
+    },
+    Run {
+        command: String,
+        cwd: Option<String>,
+    },
 }
 
-impl Default for ManagerCommand {
-    fn default() -> Self {
-        Self::Auto
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq)]
+pub enum Export {
+    Link { src: String, dest: String },
+    Env { key: String, val: String },
+    Path(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, Default)]
 pub struct VersionEntry {
     pub pkgname: String,
     pub version: String,
     pub release_date: String,
     pub release_type: String,
-    pub url: String,
-    pub filename: String,
-    pub checksum: String,
-    pub checksum_url: String,
-    pub filemap: std::collections::HashMap<String, String>,
-    pub env: std::collections::HashMap<String, String>,
-    #[serde(default)]
-    pub manager_command: ManagerCommand,
+    pub pipeline: Vec<InstallStep>,
+    pub exports: Vec<Export>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -52,13 +57,11 @@ impl VersionList {
         match config.state.version_lists.entry(key) {
             Entry::Occupied(occupied) => Some(occupied.get().clone()),
             Entry::Vacant(vacant) => {
-                // Try to load from disk first
                 if let Ok(list) = Self::load(config, &repo.name, package_name) {
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
                 }
 
-                // If not on disk, sync
                 if let Some(pkg) = package_entry {
                     crate::services::sync::sync_package(config, repo, pkg);
                 } else if let Some((mgr, pkg_name)) = manager_entry {
@@ -66,12 +69,11 @@ impl VersionList {
                         config,
                         repo,
                         mgr,
-                        package_name.split(':').next().unwrap_or(""), // manager name
+                        package_name.split(':').next().unwrap_or(""),
                         pkg_name,
                     );
                 }
 
-                // Try to load again after sync
                 if let Ok(list) = Self::load(config, &repo.name, package_name) {
                     let arc_list = Arc::new(list);
                     return Some(vacant.insert(arc_list).clone());
