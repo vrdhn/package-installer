@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
 pub enum InstallStep {
     Fetch {
         url: String,
@@ -21,7 +21,7 @@ pub enum InstallStep {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
 pub enum Export {
     Link { src: String, dest: String },
     Env { key: String, val: String },

@@ -3,44 +3,7 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 use std::os::unix::process::CommandExt;
 use anyhow::{Context, Result};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BindType {
-    Bind,
-    BindTry,
-    DevBind,
-    DevBindTry,
-    RoBind,
-    RoBindTry,
-    Proc,
-    Dev,
-    Tmpfs,
-    Dir,
-}
-
-impl BindType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            BindType::Bind => "--bind",
-            BindType::BindTry => "--bind-try",
-            BindType::DevBind => "--dev-bind",
-            BindType::DevBindTry => "--dev-bind-try",
-            BindType::RoBind => "--ro-bind",
-            BindType::RoBindTry => "--ro-bind-try",
-            BindType::Proc => "--proc",
-            BindType::Dev => "--dev",
-            BindType::Tmpfs => "--tmpfs",
-            BindType::Dir => "--dir",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BindPair {
-    pub cave_target: PathBuf,
-    pub host_source: Option<PathBuf>,
-    pub bind_type: BindType,
-}
+use crate::services::sandbox::types::{BindType, BindPair};
 
 pub struct Bubblewrap {
     binds: BTreeMap<PathBuf, BindPair>,
@@ -142,21 +105,8 @@ impl Bubblewrap {
             cmd.arg(flag);
         }
 
-        for (_, bind) in &self.binds {
-            cmd.arg(bind.bind_type.as_str());
-            if let Some(ref source) = bind.host_source {
-                cmd.arg(source);
-            }
-            cmd.arg(&bind.cave_target);
-        }
-
-        for (key, value) in &self.envs {
-            cmd.arg("--setenv").arg(key).arg(value);
-        }
-
-        for unset in &self.unsets {
-            cmd.arg("--unsetenv").arg(unset);
-        }
+        self.apply_binds(&mut cmd);
+        self.apply_envs(&mut cmd);
 
         if let Some(ref cwd) = self.cwd {
             cmd.arg("--chdir").arg(cwd);
@@ -170,6 +120,25 @@ impl Bubblewrap {
         }
 
         cmd
+    }
+
+    fn apply_binds(&self, cmd: &mut Command) {
+        for (_, bind) in &self.binds {
+            cmd.arg(bind.bind_type.as_str());
+            if let Some(ref source) = bind.host_source {
+                cmd.arg(source);
+            }
+            cmd.arg(&bind.cave_target);
+        }
+    }
+
+    fn apply_envs(&self, cmd: &mut Command) {
+        for (key, value) in &self.envs {
+            cmd.arg("--setenv").arg(key).arg(value);
+        }
+        for unset in &self.unsets {
+            cmd.arg("--unsetenv").arg(unset);
+        }
     }
 
     pub fn spawn(&self) -> Result<()> {

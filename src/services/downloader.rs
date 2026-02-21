@@ -5,19 +5,13 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use ureq::Agent;
 use ureq::config::IpFamily;
-use sha2::{Sha256, Sha512, Digest};
-use sha1::Sha1;
-use hex;
+use crate::utils::crypto::calculate_file_checksum;
 
 pub struct Downloader;
 
 impl Downloader {
     pub fn download(url: &str) -> Result<String> {
-        let config = Agent::config_builder()
-            .ip_family(IpFamily::Ipv4Only)
-            .build();
-        let agent = Agent::new_with_config(config);
-
+        let agent = Self::create_agent();
         let response = agent.get(url).call()?;
         let mut reader = response.into_body().into_reader();
         let mut content = Vec::new();
@@ -27,132 +21,98 @@ impl Downloader {
     }
 
     pub fn download_to_file(url: &str, dest: &Path, expected_checksum: Option<&str>) -> Result<()> {
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).context("Failed to create download directory")?;
+        Self::prepare_directory(dest)?;
+
+        if Self::is_file_ready(dest, expected_checksum) {
+            return Ok(());
         }
 
-        // If file already exists and checksum matches, skip
-        if dest.exists() && expected_checksum.is_some() {
-            let expected = expected_checksum.unwrap();
-            if let Ok(actual_checksum) = Self::calculate_checksum(dest, expected.len()) {
-                if actual_checksum == expected {
-                    log::info!("[{}] skip, matches checksum", dest.display());
-                    return Ok(());
-                }
-            }
-        }
-
-        let config = Agent::config_builder()
-            .ip_family(IpFamily::Ipv4Only)
-            .build();
-        let agent = Agent::new_with_config(config);
-
+        let agent = Self::create_agent();
         log::info!("[{}] fetching", url);
         let response = agent.get(url).call()?;
 
-        let content_length = response
-            .headers()
-            .get("content-length")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok());
-
+        let content_length = Self::get_content_length(&response);
         let filename = url.split('/').last().unwrap_or("unknown");
 
-        let mut reader = response.into_body().into_reader();
-        let mut file = File::create(dest).context("Failed to create destination file")?;
-        
-        let mut buffer = [0; 8192];
-        let mut downloaded_bytes: u64 = 0;
-        let mut last_report_time = Instant::now();
-        let start_time = Instant::now();
+        Self::stream_to_file(response.into_body().into_reader(), dest, content_length, filename)?;
 
-        loop {
-            let bytes_read = reader.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-
-            file.write_all(&buffer[..bytes_read])?;
-            downloaded_bytes += bytes_read as u64;
-
-            let now = Instant::now();
-            if now.duration_since(last_report_time) >= Duration::from_secs(5) {
-                let total_elapsed = now.duration_since(start_time).as_secs_f64();
-                let bandwidth = if total_elapsed > 0.0 {
-                    (downloaded_bytes as f64) / total_elapsed
-                } else {
-                    0.0
-                };
-
-                let expected_str = match content_length {
-                    Some(len) => len.to_string(),
-                    None => "???".to_string(),
-                };
-
-                log::debug!(
-                    "[{}] recv {}/{} ({:.2} KB/s)",
-                    filename, downloaded_bytes, expected_str, bandwidth / 1024.0
-                );
-                last_report_time = now;
-            }
-        }
-
-        if let Some(expected) = expected_checksum {
-            let actual = Self::calculate_checksum(dest, expected.len())?;
-            if actual != expected {
-                return Err(anyhow::anyhow!(
-                    "[{}] checksum mismatch: got {}, want {}",
-                    url, actual, expected
-                ));
-            }
-            log::debug!("[{}] checksum ok", filename);
-        }
+        Self::verify_checksum(url, dest, expected_checksum, filename)?;
 
         Ok(())
     }
 
-    fn calculate_checksum(path: &Path, expected_len: usize) -> Result<String> {
-        let mut file = File::open(path)?;
-        let mut buffer = [0; 8192];
+    fn create_agent() -> Agent {
+        let config = Agent::config_builder()
+            .ip_family(IpFamily::Ipv4Only)
+            .build();
+        Agent::new_with_config(config)
+    }
 
-        match expected_len {
-            40 => {
-                let mut hasher = Sha1::new();
-                loop {
-                    let n = file.read(&mut buffer)?;
-                    if n == 0 {
-                        break;
-                    }
-                    hasher.update(&buffer[..n]);
-                }
-                Ok(hex::encode(hasher.finalize()))
-            }
-            64 => {
-                let mut hasher = Sha256::new();
-                loop {
-                    let n = file.read(&mut buffer)?;
-                    if n == 0 {
-                        break;
-                    }
-                    hasher.update(&buffer[..n]);
-                }
-                Ok(hex::encode(hasher.finalize()))
-            }
-            128 => {
-                let mut hasher = Sha512::new();
-                loop {
-                    let n = file.read(&mut buffer)?;
-                    if n == 0 {
-                        break;
-                    }
-                    hasher.update(&buffer[..n]);
-                }
-                Ok(hex::encode(hasher.finalize()))
-            }
-            _ => Err(anyhow::anyhow!(
-                "Unsupported checksum length: {}. Expected 40 (SHA-1), 64 (SHA-256), or 128 (SHA-512).",
-                expected_len
-            )),
+    fn prepare_directory(dest: &Path) -> Result<()> {
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create download directory")?;
         }
+        Ok(())
+    }
+
+    fn is_file_ready(dest: &Path, expected_checksum: Option<&str>) -> bool {
+        if let (true, Some(expected)) = (dest.exists(), expected_checksum) {
+            if let Ok(actual) = calculate_file_checksum(dest, expected.len()) {
+                if actual == expected {
+                    log::info!("[{}] skip, matches checksum", dest.display());
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn get_content_length<T>(response: &ureq::http::Response<T>) -> Option<u64> {
+        response.headers()
+            .get("content-length")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s: &str| s.parse::<u64>().ok())
+    }
+
+    fn stream_to_file(mut reader: impl Read, dest: &Path, total_size: Option<u64>, filename: &str) -> Result<()> {
+        let mut file = File::create(dest).context("Failed to create destination file")?;
+        let mut buffer = [0; 8192];
+        let mut downloaded: u64 = 0;
+        let mut last_report = Instant::now();
+        let start_time = Instant::now();
+
+        loop {
+            let n = reader.read(&mut buffer)?;
+            if n == 0 { break; }
+
+            file.write_all(&buffer[..n])?;
+            downloaded += n as u64;
+
+            if last_report.elapsed() >= Duration::from_secs(5) {
+                Self::report_progress(filename, downloaded, total_size, start_time.elapsed());
+                last_report = Instant::now();
+            }
+        }
+        Ok(())
+    }
+
+    fn report_progress(filename: &str, downloaded: u64, total: Option<u64>, elapsed: Duration) {
+        let bandwidth = downloaded as f64 / elapsed.as_secs_f64();
+        let total_str = total.map(|t| t.to_string()).unwrap_or_else(|| "???".to_string());
+        log::debug!(
+            "[{}] recv {}/{} ({:.2} KB/s)",
+            filename, downloaded, total_str, bandwidth / 1024.0
+        );
+    }
+
+    fn verify_checksum(url: &str, dest: &Path, expected: Option<&str>, filename: &str) -> Result<()> {
+        if let Some(expected) = expected {
+            let actual = calculate_file_checksum(dest, expected.len())?;
+            if actual != expected {
+                return Err(anyhow::anyhow!("[{}] checksum mismatch: got {}, want {}", url, actual, expected));
+            }
+            log::debug!("[{}] checksum ok", filename);
+        }
+        Ok(())
     }
 }

@@ -8,14 +8,14 @@ use crate::services::unarchiver::Unarchiver;
 use crate::services::cache::{BuildCache, StepResult};
 use crate::models::version_entry::{InstallStep, Export, VersionEntry};
 use crate::commands::cave::fs::apply_filemap_entry;
+use crate::utils::fs::sanitize_name;
+use crate::utils::crypto::hash_to_string;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use log::error;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use chrono;
 
 pub fn run(config: &Config, variant: Option<String>) {
@@ -114,7 +114,7 @@ fn execute_pipeline(
     let mut env = std::collections::HashMap::new();
 
     for (i, step) in version.pipeline.iter().enumerate() {
-        let step_hash = hash_step(step);
+        let step_hash = hash_to_string(step);
         
         if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version, i, &step_hash) {
             log::debug!("[{}] step {} cache hit", pkg_ctx, i);
@@ -185,30 +185,4 @@ fn execute_step(
             Ok(base_dir)
         }
     }
-}
-
-fn hash_step(step: &InstallStep) -> String {
-    let mut hasher = DefaultHasher::new();
-    match step {
-        InstallStep::Fetch { url, checksum, filename } => {
-            "fetch".hash(&mut hasher);
-            url.hash(&mut hasher);
-            checksum.hash(&mut hasher);
-            filename.hash(&mut hasher);
-        }
-        InstallStep::Extract { format } => {
-            "extract".hash(&mut hasher);
-            format.hash(&mut hasher);
-        }
-        InstallStep::Run { command, cwd } => {
-            "run".hash(&mut hasher);
-            command.hash(&mut hasher);
-            cwd.hash(&mut hasher);
-        }
-    }
-    format!("{:x}", hasher.finish())
-}
-
-fn sanitize_name(name: &str) -> String {
-    name.replace(['/', '\\', ' ', ':'], "_")
 }

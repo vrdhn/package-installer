@@ -3,6 +3,7 @@ use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::{VersionEntry, VersionList};
+use crate::utils::version::match_version_with_wildcard;
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
@@ -123,20 +124,4 @@ pub fn find_best_version(v_list: VersionList, target_version: &str) -> Option<Ve
     filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
 
     filtered_versions.into_iter().next()
-}
-
-fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
-    let version_parts: Vec<&str> = version.split('.').collect();
-    let pattern_parts: Vec<&str> = pattern.split('.').collect();
-
-    if version_parts.len() != pattern_parts.len() {
-        return false;
-    }
-
-    for (v, p) in version_parts.iter().zip(pattern_parts.iter()) {
-        if *p != "*" && v != p {
-            return false;
-        }
-    }
-    true
 }

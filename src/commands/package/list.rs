@@ -3,6 +3,7 @@ use crate::models::package_entry::PackageList;
 use crate::models::repository::Repositories;
 use crate::models::selector::PackageSelector;
 use crate::models::version_entry::VersionList;
+use crate::utils::version::match_version_with_wildcard;
 use comfy_table::presets::NOTHING;
 use comfy_table::Table;
 
@@ -143,25 +144,4 @@ fn add_versions_to_table(
             v.release_type,
         ]);
     }
-}
-
-fn match_version_with_wildcard(version: &str, pattern: &str) -> bool {
-    let version_parts: Vec<&str> = version.split('.').collect();
-    let pattern_parts: Vec<&str> = pattern.split('.').collect();
-
-    for (i, p) in pattern_parts.iter().enumerate() {
-        if *p == "*" {
-            // As per user request: "the first * means match the rest"
-            // We only require that the version has at least as many segments
-            // as preceded the first wildcard.
-            return version_parts.len() >= i;
-        }
-
-        if i >= version_parts.len() || version_parts[i] != *p {
-            return false;
-        }
-    }
-
-    // If no wildcard was found, length must match exactly
-    version_parts.len() == pattern_parts.len()
 }

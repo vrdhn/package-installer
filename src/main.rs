@@ -5,6 +5,7 @@ mod logging;
 mod models;
 mod services;
 mod starlark;
+mod utils;
 
 use crate::cli::parser::{Cli, Commands, DevelCommands, CaveCommands};
 use crate::logging::init::init_logging;
