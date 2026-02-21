@@ -1,39 +1,68 @@
+def get_android_studio_suffix():
+    os_name = get_os()
+    arch = get_arch()
+    
+    if os_name == "linux":
+        return "-linux.tar.gz"
+    elif os_name == "macos":
+        if arch == "aarch64":
+            return "-mac_arm.dmg"
+        else:
+            return "-mac.dmg"
+    elif os_name == "windows":
+        return "-windows.zip"
+    return ""
+
+def format_jb_date(date_str):
+    if not date_str:
+        return ""
+    # Format: "February 13, 2026"
+    parts = date_str.replace(",", "").split(" ")
+    if len(parts) != 3:
+        return date_str
+        
+    month_map = {
+        "January": "01", "February": "02", "March": "03", "April": "04",
+        "May": "05", "June": "06", "July": "07", "August": "08",
+        "September": "09", "October": "10", "November": "11", "December": "12"
+    }
+    
+    m = month_map.get(parts[0], "00")
+    day = parts[1]
+    if len(day) == 1:
+        day = "0" + day
+    year = parts[2]
+    
+    return year + "-" + m + "-" + day
+
 def install_android_studio(package_name):
-    # Use JetBrains maintained list for easy discovery
+    # JetBrains list is the most comprehensive for URLs and versions
     content = download("https://jb.gg/android-studio-releases-list.json")
     if not content:
+        install_android_studio_official(package_name)
         return
     
     doc = parse_json(content)
     items = doc.root.select("$.content.item[*]")
-    
-    os_name = get_os()
-    arch = get_arch()
-    
-    suffix = ""
-    if os_name == "linux":
-        suffix = "-linux.tar.gz"
-    elif os_name == "macos":
-        if arch == "aarch64":
-            suffix = "-mac_arm.dmg"
-        else:
-            suffix = "-mac.dmg"
-    elif os_name == "windows":
-        suffix = "-windows.zip"
+    suffix = get_android_studio_suffix()
         
-    for item in items:
+    for i in range(len(items)):
+        item = items[i]
         version = item.attribute("version")
-        date = item.attribute("date")
+        date = format_jb_date(item.attribute("date"))
         channel = item.attribute("channel")
         
         release_type = "stable"
-        if channel == "Beta":
+        if channel == "Beta" or channel == "RC":
             release_type = "testing"
-        elif channel == "Canary":
+        elif channel == "Canary" or channel == "Dev":
             release_type = "nightly"
+        elif channel == "Release" or channel == "Patch":
+            release_type = "stable"
             
         downloads = item.select("$.download[*]")
-        for dl in downloads:
+        for j in range(len(downloads)):
+            dl = downloads[j]
             link = dl.attribute("link")
             if link and link.endswith(suffix):
                 v = create_version(
@@ -50,6 +79,33 @@ def install_android_studio(package_name):
                 add_version(v)
                 break
 
+def install_android_studio_official(package_name):
+    content = download("https://developer.android.com/studio")
+    if not content:
+        return
+        
+    doc = parse_html(content)
+    suffix = get_android_studio_suffix()
+    
+    all_links = doc.root.select("a")
+    for i in range(len(all_links)):
+        l = all_links[i]
+        href = l.attribute("href")
+        if href and href.endswith(suffix) and "/android/studio/" in href:
+            filename = href.split("/")[-1]
+            parts = href.split("/")
+            version = "unknown"
+            for p in parts:
+                if p and p[0].isdigit() and "." in p:
+                    version = p
+                    break
+            
+            v = create_version("android-studio", version)
+            v.fetch(url = href, filename = filename)
+            v.extract()
+            v.export_link("android-studio/bin/*", "bin")
+            add_version(v)
+
 def discover_google_sdk(pkgname, sdk_path, filemap):
     content = download("https://dl.google.com/android/repository/repository2-1.xml")
     if not content:
@@ -63,13 +119,17 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
         host_os = "windows"
 
     doc = parse_xml(content)
-    for pkg in doc.root.select("remotePackage"):
+    packages = doc.root.select("remotePackage")
+    for i in range(len(packages)):
+        pkg = packages[i]
         if pkg.attribute("path") == sdk_path:
-            archives = pkg.select_one("archives")
-            if not archives:
+            archives_node = pkg.select_one("archives")
+            if not archives_node:
                 continue
                 
-            for archive in archives.select("archive"):
+            archives = archives_node.select("archive")
+            for j in range(len(archives)):
+                archive = archives[j]
                 host_os_node = archive.select_one("host-os")
                 if host_os_node and host_os_node.text() == host_os:
                     complete = archive.select_one("complete")
@@ -94,7 +154,8 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
                                     v = create_version(pkgname, version)
                                     v.fetch(url = "https://dl.google.com/android/repository/" + url, filename = url, checksum = checksum)
                                     v.extract()
-                                    for src, dest in filemap.items():
+                                    for src in filemap:
+                                        dest = filemap[src]
                                         v.export_link(src, dest)
                                     
                                     add_version(v)
