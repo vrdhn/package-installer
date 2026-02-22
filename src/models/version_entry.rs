@@ -38,6 +38,12 @@ pub struct BuildFlag {
     pub default_value: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
+pub struct Dependency {
+    pub name: String,
+    pub optional: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative, Default)]
 pub struct VersionEntry {
     pub pkgname: String,
@@ -52,6 +58,8 @@ pub struct VersionEntry {
     pub exports: Vec<Export>,
     #[serde(default, skip_serializing)]
     pub flags: Vec<BuildFlag>,
+    #[serde(default, skip_serializing)]
+    pub build_dependencies: Vec<Dependency>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

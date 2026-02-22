@@ -73,4 +73,48 @@ def install_erlang(package_name):
         
         v.register()
 
+def erlang_discovery(manager, package):
+    if package != "rebar3":
+        return
+
+    content = download("https://api.github.com/repos/erlang/rebar3/releases")
+    if not content:
+        return
+    releases_doc = parse_json(content)
+    releases = releases_doc.root
+
+    for i in range(len(releases)):
+        release = releases[i]
+        tag = release["tag_name"]
+        version = tag
+        
+        # Source tarball
+        url = "https://github.com/erlang/rebar3/archive/refs/tags/" + tag + ".tar.gz"
+        filename = "rebar3-" + version + ".tar.gz"
+
+        v = create_version(
+            pkgname = "erlang:rebar3",
+            version = version,
+            release_date = release["published_at"]
+        )
+        
+        # rebar3 requires erlang to build
+        v.require("erlang")
+        
+        v.fetch(url = url, filename = filename, name = "Download Source")
+        v.extract(name = "Extract Source")
+        
+        src_dir = "rebar3-" + version
+        
+        v.run(
+            name = "Bootstrap",
+            command = "./bootstrap",
+            cwd = src_dir
+        )
+        
+        v.export_link(src_dir + "/rebar3", "bin/rebar3")
+        
+        v.register()
+
 add_package("erlang", install_erlang)
+add_manager("erlang", erlang_discovery)

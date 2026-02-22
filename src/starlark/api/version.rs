@@ -1,4 +1,4 @@
-use crate::models::version_entry::{VersionEntry, InstallStep, Export, BuildFlag};
+use crate::models::version_entry::{VersionEntry, InstallStep, Export, BuildFlag, Dependency};
 use anyhow::Context as _;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
@@ -28,6 +28,7 @@ pub struct VersionBuilder {
     pub pipeline: Vec<InstallStep>,
     pub exports: Vec<Export>,
     pub flags: Vec<BuildFlag>,
+    pub build_dependencies: Vec<Dependency>,
 }
 
 #[derive(Debug, ProvidesStaticType, Clone, Serialize)]
@@ -158,6 +159,18 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
         Ok(NoneType)
     }
 
+    fn require(this: Value, name: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().build_dependencies.push(Dependency { name, optional: false });
+        Ok(NoneType)
+    }
+
+    fn optional(this: Value, name: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().build_dependencies.push(Dependency { name, optional: true });
+        Ok(NoneType)
+    }
+
     fn register(this: Value, eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<NoneType> {
         let context = get_context(eval)?;
         let svb = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
@@ -172,6 +185,7 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
             pipeline: b.pipeline.clone(),
             exports: b.exports.clone(),
             flags: b.flags.clone(),
+            build_dependencies: b.build_dependencies.clone(),
         });
         Ok(NoneType)
     }
@@ -195,6 +209,7 @@ pub fn register_version_globals(builder: &mut GlobalsBuilder) {
                 pipeline: Vec::new(),
                 exports: Vec::new(),
                 flags: Vec::new(),
+                build_dependencies: Vec::new(),
             }))
         })
     }

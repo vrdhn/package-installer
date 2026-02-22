@@ -2,7 +2,7 @@ use crate::models::config::Config;
 use crate::models::cave::Cave;
 use crate::services::sandbox::{Bubblewrap, BindType};
 use std::env;
-use std::path::{Path};
+use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 
@@ -19,6 +19,7 @@ pub fn prepare_sandbox(
     variant: Option<&str>,
     package_envs: HashMap<String, String>,
     writable_pilocal: bool,
+    dependency_dirs: Vec<PathBuf>,
 ) -> Result<Bubblewrap> {
     let settings = cave.get_effective_settings(variant).context("failed to get cave settings")?;
     let mut b = Bubblewrap::new();
@@ -31,6 +32,18 @@ pub fn prepare_sandbox(
     bind_pilocal_and_caches(&mut b, config, cave, variant, writable_pilocal, &internal_pilocal)?;
     setup_xdg_runtime(&mut b);
     
+    // Bind dependencies
+    for dir in dependency_dirs.iter() {
+        if dir.exists() {
+            b.add_bind(BindType::RoBind, dir);
+            // Also add bin to PATH if it exists
+            let bin_dir = dir.join("bin");
+            if bin_dir.exists() {
+                b.add_env_first("PATH", bin_dir.to_str().unwrap());
+            }
+        }
+    }
+
     setup_environment(&mut b, config, cave, &host_home, &internal_pilocal);
     apply_custom_envs(&mut b, package_envs, &settings.set, &host_home, &internal_pilocal);
 
@@ -164,7 +177,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
 
     let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant.as_deref())?;
 
-    let mut b = prepare_sandbox(config, &cave, variant.as_deref(), package_envs, false)?;
+    let mut b = prepare_sandbox(config, &cave, variant.as_deref(), package_envs, false, Vec::new())?;
     
     log::info!("entering cave");
     if log::log_enabled!(log::Level::Info) {

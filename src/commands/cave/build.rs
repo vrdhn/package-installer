@@ -59,7 +59,7 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
 
             let pkg_ctx = format!("{}:{}={}", repo_name, dynamic_version.pkgname, dynamic_version.version);
             
-            execute_pipeline(config, &build_cache, cave, variant, &pkg_ctx, &dynamic_version)
+            execute_pipeline(config, &build_cache, cave, variant, &pkg_ctx, &dynamic_version, &repo_name)
         })
         .collect();
 
@@ -154,9 +154,55 @@ fn execute_pipeline(
     variant: Option<&str>,
     pkg_ctx: &str,
     version: &VersionEntry,
+    _repo_name: &str,
 ) -> Result<(String, std::collections::HashMap<String, String>, Vec<(String, PathBuf, Vec<Export>)>)> {
     let mut current_path: Option<PathBuf> = None;
     let mut env = std::collections::HashMap::new();
+    let repo_config = Repositories::get_all(config);
+
+    // 1. Resolve build-time dependencies
+    let mut dependency_dirs = Vec::new();
+    for dep in &version.build_dependencies {
+        // Resolve dependency by name (no version for now as requested)
+        let selector = PackageSelector {
+            recipe: None,
+            prefix: None,
+            package: dep.name.clone(),
+            version: None,
+        };
+
+        if let Some((_, dep_version, dep_repo)) = resolve::resolve_query(config, repo_config, &selector) {
+            // We need to re-evaluate the dependency to get its context-aware installation path
+            let settings = cave.get_effective_settings(variant)?;
+            let dynamic_dep = re_evaluate_version(config, repo_config, &dep_repo, &dep_version, &settings.options)?;
+            
+            // For now, we assume dependencies are already built or we just find their potential path.
+            // In a more robust system, we would trigger their build first (topological sort).
+            // Let's at least try to find the install dir if it exists.
+            let _dep_pkg_ctx = format!("{}:{}={}", dep_repo, dynamic_dep.pkgname, dynamic_dep.version);
+            
+            // Heuristic: dependencies usually install to @PACKAGES_DIR/{pkg}-{version}-{flags_hash}
+            // But we can extract it from their 'Run' command or 'Export::Link' if we had a more structured model.
+            // For Erlang specifically, we know how it's calculated.
+            // Let's use a simpler approach for now: find any Export::Link that is absolute.
+            for export in &dynamic_dep.exports {
+                if let Export::Link { src, .. } = export {
+                    let resolved_src = src.replace("@PACKAGES_DIR", config.packages_dir.to_str().unwrap());
+                    let p = Path::new(&resolved_src);
+                    if p.is_absolute() {
+                        // Get the directory containing bin/ or lib/
+                        if let Some(parent) = p.parent() {
+                            if !dependency_dirs.contains(&parent.to_path_buf()) {
+                                dependency_dirs.push(parent.to_path_buf());
+                            }
+                        }
+                    }
+                }
+            }
+        } else if !dep.optional {
+            anyhow::bail!("[{}] missing required build dependency: {}", pkg_ctx, dep.name);
+        }
+    }
 
     for (i, step) in version.pipeline.iter().enumerate() {
         // Resolve @PACKAGES_DIR placeholder in Run commands before hashing
@@ -174,7 +220,7 @@ fn execute_pipeline(
         }
 
         log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, resolved_step);
-        let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version)?;
+        let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version, dependency_dirs.clone())?;
 
         let step_name = match resolved_step {
             InstallStep::Fetch { name, .. } => name.clone(),
@@ -214,6 +260,7 @@ fn execute_step(
     env: &std::collections::HashMap<String, String>,
     pkgname: &str,
     version: &str,
+    dependency_dirs: Vec<PathBuf>,
 ) -> Result<PathBuf> {
     match step {
         InstallStep::Fetch { url, checksum, filename, .. } => {
@@ -235,7 +282,7 @@ fn execute_step(
                 None => current_path.clone().context("Run requires previous step to define working directory")?,
             };
             
-            let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
+            let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true, dependency_dirs)?;
             b.set_cwd(&base_dir);
             b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
             b.spawn().with_context(|| format!("Failed to execute pipeline command: {}", command))?;
