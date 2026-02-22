@@ -35,7 +35,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
             if selector.is_none() {
                 for pkg in &pkg_list.packages {
                     if let Ok(v_list) = VersionList::load(config, &repo.name, &pkg.name) {
-                        add_versions_to_table(&mut table, repo.name.clone(), v_list, "latest", 1);
+                        add_versions_to_table(&mut table, repo.name.clone(), v_list, "latest");
                     } else {
                         table.add_row(vec![
                                                     repo.name.clone(),
@@ -66,7 +66,6 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                             repo.name.clone(),
                             (*v_list).clone(),
                             &target_version,
-                            5,
                         );
                     }
                 }
@@ -95,7 +94,6 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
                                 repo.name.clone(),
                                 (*v_list).clone(),
                                 &target_version,
-                                5,
                             );
                         }
                     }
@@ -112,7 +110,6 @@ fn add_versions_to_table(
     repo_name: String,
     v_list: VersionList,
     target_version: &str,
-    limit: usize,
 ) {
     let mut filtered_versions: Vec<_> = v_list
         .versions
@@ -134,7 +131,7 @@ fn add_versions_to_table(
 
     filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date).then_with(|| b.version.cmp(&a.version)));
 
-    for v in filtered_versions.into_iter().take(limit) {
+    for v in filtered_versions {
         table.add_row(vec![
             repo_name.clone(),
             v.pkgname,

@@ -15,8 +15,10 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
 
 pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
     let repo_config = Repositories::get_all(config);
+    log::debug!("syncing {} repositories", repo_config.repositories.len());
 
     repo_config.repositories.par_iter().for_each(|repo| {
+        log::debug!("processing repository: {}", repo.name);
         // If recipe is specified, it must match repo name exactly
         if let Some(ref s) = selector {
             if let Some(ref r_name) = s.recipe {

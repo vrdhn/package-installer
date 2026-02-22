@@ -1,16 +1,23 @@
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, src_pattern: &str, dest_rel: &str) -> Result<()> {
-    if src_pattern.contains('*') {
-        let base_pattern = src_pattern.strip_suffix("*").unwrap_or(src_pattern);
-        let search_path = pkg_dir.join(base_pattern);
-        if !search_path.exists() {
-            return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
-        }
+    let is_glob = src_pattern.contains('*');
+    let base_pattern = if is_glob {
+        src_pattern.strip_suffix("*").unwrap_or(src_pattern)
+    } else {
+        src_pattern
+    };
 
+    let search_path = resolve_src_path(pkg_dir, base_pattern);
+    
+    if !search_path.exists() {
+        return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
+    }
+
+    if is_glob {
         let mut matched = false;
         if search_path.is_dir() {
             for entry in WalkDir::new(&search_path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
@@ -25,20 +32,25 @@ pub fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, sr
             return Err(anyhow::anyhow!("[{}] pattern '{}' no match in {}", pkg_ctx, src_pattern, pkg_dir.display()));
         }
     } else {
-        let src_path = pkg_dir.join(src_pattern);
         let dest_path = pilocal_dir.join(dest_rel);
-        if !src_path.exists() {
-            return Err(anyhow::anyhow!("[{}] source missing: {}", pkg_ctx, src_path.display()));
-        }
         let final_dest = if dest_rel.ends_with('/') || dest_path.is_dir() {
-            let file_name = src_path.file_name().ok_or_else(|| anyhow::anyhow!("Invalid source filename"))?;
+            let file_name = search_path.file_name().ok_or_else(|| anyhow::anyhow!("Invalid source filename"))?;
             dest_path.join(file_name)
         } else {
             dest_path
         };
-        create_symlink(&src_path, &final_dest)?;
+        create_symlink(&search_path, &final_dest)?;
     }
     Ok(())
+}
+
+fn resolve_src_path(pkg_dir: &Path, pattern: &str) -> PathBuf {
+    let p = Path::new(pattern);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        pkg_dir.join(pattern)
+    }
 }
 
 fn create_symlink(src: &Path, dest: &Path) -> Result<()> {

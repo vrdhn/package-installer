@@ -80,6 +80,10 @@ impl Config {
         whoami::username()
     }
 
+    pub fn get_hostname(&self) -> String {
+        whoami::fallible::hostname().unwrap_or_else(|_| "pi-cave".to_string())
+    }
+
     pub fn get_host_home(&self) -> PathBuf {
         dirs_next::home_dir().expect("Failed to get home directory")
     }

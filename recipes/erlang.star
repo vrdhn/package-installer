@@ -53,11 +53,24 @@ def install_erlang(package_name):
             release_date = release["published_at"],
             release_type = "stable"
         )
-        v.fetch(url = url, filename = filename)
-        v.extract()
-        v.run("if [ -f otp_build ]; then ./otp_build autoconf; fi && ./configure --prefix=$(pwd)/_inst --without-termcap && make -j$(nproc) && make install")
-        v.export_link("_inst/bin/*", "bin")
-        v.export_link("_inst/lib/erlang/*", "lib/erlang")
+        v.fetch(url = url, filename = filename, name = "Download Source")
+        v.extract(name = "Extract Source")
+        
+        # Determine the source directory name inside the archive
+        src_dir = filename
+        if src_dir.endswith(".tar.gz"):
+            src_dir = src_dir[:-7]
+        
+        inst_dir = "@PACKAGES_DIR/erlang-" + version + "-install"
+        
+        v.run(
+            name = "Compile and Install",
+            command = "if [ -f otp_build ]; then ./otp_build autoconf; fi && ./configure --prefix=" + inst_dir + " --without-termcap && make -j$(nproc) && make install",
+            cwd = src_dir
+        )
+        # Use the absolute path for linking since it's now in the global packages dir
+        v.export_link(inst_dir + "/bin/*", "bin")
+        v.export_link(inst_dir + "/lib/erlang/*", "lib/erlang")
         
         v.register()
 

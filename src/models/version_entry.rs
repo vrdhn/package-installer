@@ -8,14 +8,17 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
 pub enum InstallStep {
     Fetch {
+        name: Option<String>,
         url: String,
         checksum: Option<String>,
         filename: Option<String>,
     },
     Extract {
+        name: Option<String>,
         format: Option<String>,
     },
     Run {
+        name: Option<String>,
         command: String,
         cwd: Option<String>,
     },

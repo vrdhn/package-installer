@@ -50,14 +50,14 @@ fn print_package_info(full_name: &str, v: &crate::models::version_entry::Version
         println!("\nPipeline Steps:");
         let mut pipe_table = Table::new();
         pipe_table.load_preset(UTF8_FULL);
-        pipe_table.set_header(vec!["#", "Type", "Details"]);
+        pipe_table.set_header(vec!["#", "Name", "Type", "Details"]);
         for (i, step) in v.pipeline.iter().enumerate() {
-            let (typ, details) = match step {
-                crate::models::version_entry::InstallStep::Fetch { url, .. } => ("Fetch", url.clone()),
-                crate::models::version_entry::InstallStep::Extract { .. } => ("Extract", "-".to_string()),
-                crate::models::version_entry::InstallStep::Run { command, .. } => ("Run", command.clone()),
+            let (typ, details, name) = match step {
+                crate::models::version_entry::InstallStep::Fetch { url, name, .. } => ("Fetch", url.clone(), name.as_deref().unwrap_or("-")),
+                crate::models::version_entry::InstallStep::Extract { name, .. } => ("Extract", "-".to_string(), name.as_deref().unwrap_or("-")),
+                crate::models::version_entry::InstallStep::Run { command, name, .. } => ("Run", command.clone(), name.as_deref().unwrap_or("-")),
             };
-            pipe_table.add_row(vec![&i.to_string(), typ, &details]);
+            pipe_table.add_row(vec![&i.to_string(), name, typ, &details]);
         }
         println!("{}", pipe_table);
     }

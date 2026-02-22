@@ -15,6 +15,11 @@ def install_elixir(package_name):
         for j in range(len(assets)):
             asset = assets[j]
             name = asset["name"]
+            
+            release_type = "stable"
+            if "-rc." in version or "-rc." in name:
+                release_type = "testing"
+
             if name.startswith("elixir-otp-") and name.endswith(".zip"):
                 otp_ver = name[11:-4]
                 full_version = version + "-otp-" + otp_ver
@@ -23,7 +28,7 @@ def install_elixir(package_name):
                     pkgname = "elixir",
                     version = full_version,
                     release_date = release["published_at"],
-                    release_type = "stable"
+                    release_type = release_type
                 )
                 v.fetch(url = asset["browser_download_url"], filename = name)
                 v.extract()
@@ -37,7 +42,7 @@ def install_elixir(package_name):
                     pkgname = "elixir",
                     version = version,
                     release_date = release["published_at"],
-                    release_type = "stable"
+                    release_type = release_type
                 )
                 v.fetch(url = asset["browser_download_url"], filename = "elixir-" + version + ".zip")
                 v.extract()

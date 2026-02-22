@@ -70,21 +70,36 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
         Ok(NoneType)
     }
 
-    fn fetch(this: Value, url: String, checksum: Option<String>, filename: Option<String>) -> anyhow::Result<NoneType> {
+    fn fetch(
+        this: Value, 
+        url: String, 
+        checksum: Option<String>, 
+        filename: Option<String>, 
+        name: Option<String>
+    ) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
-        this.builder.write().pipeline.push(InstallStep::Fetch { url, checksum, filename });
+        this.builder.write().pipeline.push(InstallStep::Fetch { url, checksum, filename, name });
         Ok(NoneType)
     }
 
-    fn extract(this: Value, format: Option<String>) -> anyhow::Result<NoneType> {
+    fn extract(
+        this: Value, 
+        format: Option<String>, 
+        name: Option<String>
+    ) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
-        this.builder.write().pipeline.push(InstallStep::Extract { format });
+        this.builder.write().pipeline.push(InstallStep::Extract { format, name });
         Ok(NoneType)
     }
 
-    fn run(this: Value, command: String, cwd: Option<String>) -> anyhow::Result<NoneType> {
+    fn run(
+        this: Value, 
+        command: String, 
+        cwd: Option<String>, 
+        name: Option<String>
+    ) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
-        this.builder.write().pipeline.push(InstallStep::Run { command, cwd });
+        this.builder.write().pipeline.push(InstallStep::Run { command, cwd, name });
         Ok(NoneType)
     }
 

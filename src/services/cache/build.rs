@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StepResult {
+    pub name: Option<String>,
     pub step_hash: String,
     pub timestamp: String,
     pub output_path: Option<PathBuf>,
@@ -75,6 +76,7 @@ impl BuildCache {
         } else {
             while steps.len() < step_index {
                 steps.push(StepResult {
+                    name: None,
                     step_hash: "unknown".to_string(),
                     timestamp: "".to_string(),
                     output_path: None,

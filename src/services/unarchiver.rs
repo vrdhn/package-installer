@@ -10,11 +10,6 @@ pub struct Unarchiver;
 
 impl Unarchiver {
     pub fn unarchive(src: &Path, dest: &Path) -> Result<()> {
-        let marker_file = dest.join(".unarchived");
-        if marker_file.exists() {
-            return Ok(());
-        }
-
         fs::create_dir_all(dest).context("Failed to create destination directory")?;
 
         let filename = src.file_name()
@@ -39,7 +34,6 @@ impl Unarchiver {
             return Err(anyhow::anyhow!("Unsupported archive format: {}", filename));
         }
 
-        fs::write(&marker_file, "").context("Failed to create unarchive marker file")?;
         log::debug!("[{}] unarchived to {}", filename, dest.display());
         Ok(())
     }

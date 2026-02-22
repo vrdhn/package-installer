@@ -10,6 +10,7 @@ pub struct Bubblewrap {
     envs: BTreeMap<String, String>,
     unsets: Vec<String>,
     flags: Vec<String>,
+    hostname: Option<String>,
     cwd: Option<PathBuf>,
     executable: Option<String>,
     args: Vec<String>,
@@ -27,6 +28,7 @@ impl Bubblewrap {
             envs,
             unsets: Vec::new(),
             flags: Vec::new(),
+            hostname: None,
             cwd: None,
             executable: None,
             args: Vec::new(),
@@ -93,6 +95,10 @@ impl Bubblewrap {
         self.cwd = Some(path.as_ref().to_path_buf());
     }
 
+    pub fn set_hostname(&mut self, hostname: &str) {
+        self.hostname = Some(hostname.to_string());
+    }
+
     pub fn set_command(&mut self, executable: &str, args: &[String]) {
         self.executable = Some(executable.to_string());
         self.args = args.to_vec();
@@ -107,6 +113,11 @@ impl Bubblewrap {
 
         self.apply_binds(&mut cmd);
         self.apply_envs(&mut cmd);
+
+        if let Some(ref hostname) = self.hostname {
+            cmd.arg("--unshare-uts");
+            cmd.arg("--hostname").arg(hostname);
+        }
 
         if let Some(ref cwd) = self.cwd {
             cmd.arg("--chdir").arg(cwd);

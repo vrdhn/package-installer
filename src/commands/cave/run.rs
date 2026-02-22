@@ -34,11 +34,26 @@ pub fn prepare_sandbox(
     setup_environment(&mut b, config, cave, &host_home, &internal_pilocal);
     apply_custom_envs(&mut b, package_envs, &settings.set, &host_home, &internal_pilocal);
 
+    let host_hostname = config.get_hostname();
+    let (prefix, suffix) = match host_hostname.find('.') {
+        Some(idx) => (&host_hostname[..idx], &host_hostname[idx..]),
+        None => (host_hostname.as_str(), ""),
+    };
+
+    let cave_hostname = if let Some(v) = variant {
+        let v = v.strip_prefix(':').unwrap_or(v);
+        format!("{}-{}.{}{}", prefix, cave.name, v, suffix)
+    } else {
+        format!("{}-{}{}", prefix, cave.name, suffix)
+    };
+    b.set_hostname(&cave_hostname);
+
     Ok(b)
 }
 
 fn bind_system_paths(b: &mut Bubblewrap) {
     b.add_flag("--unshare-pid");
+    b.add_flag("--unshare-uts");
     b.add_flag("--die-with-parent");
     b.add_bind(BindType::RoBind, "/usr");
     b.add_bind(BindType::RoBind, "/lib");

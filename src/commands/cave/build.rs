@@ -85,6 +85,7 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
         for export in exports {
             match export {
                 Export::Link { src, dest } => {
+                    let src = src.replace("@PACKAGES_DIR", config.packages_dir.to_str().unwrap());
                     apply_filemap_entry(&pkg_ctx, &source_root, &pilocal_dir, &src, &dest)?;
                 }
                 Export::Path(rel_path) => {
@@ -125,7 +126,14 @@ fn execute_pipeline(
         log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, step);
         let result_path = execute_step(config, cave, variant, step, &current_path, &env, &version.pkgname, &version.version)?;
 
+        let step_name = match step {
+            InstallStep::Fetch { name, .. } => name.clone(),
+            InstallStep::Extract { name, .. } => name.clone(),
+            InstallStep::Run { name, .. } => name.clone(),
+        };
+
         build_cache.update_step_result(&version.pkgname, &version.version, i, StepResult {
+            name: step_name,
             step_hash,
             timestamp: chrono::Utc::now().to_rfc3339(),
             output_path: Some(result_path.clone()),
@@ -158,25 +166,27 @@ fn execute_step(
     version: &str,
 ) -> Result<PathBuf> {
     match step {
-        InstallStep::Fetch { url, checksum, filename } => {
+        InstallStep::Fetch { url, checksum, filename, .. } => {
             let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
             let dest = config.download_dir.join(fname);
             Downloader::download_to_file(url, &dest, checksum.as_deref())?;
             Ok(dest)
         }
-        InstallStep::Extract { format: _ } => {
+        InstallStep::Extract { .. } => {
             let src = current_path.as_ref().context("Extract step requires a previous Fetch step")?;
             let pkg_dir_name = format!("{}-{}-extracted", sanitize_name(pkgname), sanitize_name(version));
             let dest = config.packages_dir.join(pkg_dir_name);
             Unarchiver::unarchive(src, &dest)?;
             Ok(dest)
         }
-        InstallStep::Run { command, cwd } => {
+        InstallStep::Run { command, cwd, .. } => {
             let base_dir = match cwd {
                 Some(c) => current_path.as_ref().context("Run with relative cwd requires previous step")?.join(c),
                 None => current_path.clone().context("Run requires previous step to define working directory")?,
             };
             
+            let command = command.replace("@PACKAGES_DIR", config.packages_dir.to_str().unwrap());
+
             let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
             b.set_cwd(&base_dir);
             b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
