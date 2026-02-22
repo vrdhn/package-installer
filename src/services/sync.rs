@@ -69,6 +69,7 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) {
         &pkg.function_name,
         &pkg.name,
         config.state.clone(),
+        None,
     ) {
         Ok(versions) => {
             if versions.is_empty() {
@@ -109,6 +110,7 @@ pub fn sync_manager_package(
         manager_name,
         package_name,
         config.state.clone(),
+        None,
     ) {
         Ok(versions) => {
             if versions.is_empty() {

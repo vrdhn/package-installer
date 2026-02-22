@@ -31,6 +31,7 @@ pub fn evaluate_file(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        None,
     );
 
     let mut eval = Evaluator::new(&module);
@@ -48,6 +49,7 @@ pub fn execute_manager_function(
     manager_name: &str,
     package_name: &str,
     state: Arc<State>,
+    options: Option<std::collections::HashMap<String, String>>,
 ) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = path.to_string_lossy().into_owned();
     let content = fs::read_to_string(path)
@@ -64,6 +66,7 @@ pub fn execute_manager_function(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        options,
     );
 
     let mut eval = Evaluator::new(&module);
@@ -88,6 +91,7 @@ pub fn execute_function(
     function_name: &str,
     argument: &str,
     state: Arc<State>,
+    options: Option<std::collections::HashMap<String, String>>,
 ) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = path.to_string_lossy().into_owned();
     let content = fs::read_to_string(path)
@@ -104,6 +108,7 @@ pub fn execute_function(
         state.download_dir.clone(),
         state.packages_dir.clone(),
         state.clone(),
+        options,
     );
 
     let mut eval = Evaluator::new(&module);
@@ -140,8 +145,12 @@ fn setup_context(
     download_dir: PathBuf,
     packages_dir: PathBuf,
     state: Arc<State>,
+    options: Option<std::collections::HashMap<String, String>>,
 ) {
-    let context = Context::new(filename, meta_dir, download_dir, packages_dir, state);
+    let mut context = Context::new(filename, meta_dir, download_dir, packages_dir, state);
+    if let Some(opts) = options {
+        context = context.with_options(opts);
+    }
     let context_value = module.heap().alloc_simple(context);
     module.set_extra_value(context_value);
 }
@@ -206,6 +215,7 @@ mod tests {
             &packages[0].function_name,
             "vlc-player",
             state,
+            None,
         )
         .unwrap();
         assert_eq!(versions.len(), 0);

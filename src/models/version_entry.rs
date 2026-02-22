@@ -31,6 +31,13 @@ pub enum Export {
     Path(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
+pub struct BuildFlag {
+    pub name: String,
+    pub help: String,
+    pub default_value: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative, Default)]
 pub struct VersionEntry {
     pub pkgname: String,
@@ -39,8 +46,12 @@ pub struct VersionEntry {
     pub release_type: String,
     #[serde(default)]
     pub stream: String,
+    #[serde(default, skip_serializing)]
     pub pipeline: Vec<InstallStep>,
+    #[serde(default, skip_serializing)]
     pub exports: Vec<Export>,
+    #[serde(default, skip_serializing)]
+    pub flags: Vec<BuildFlag>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

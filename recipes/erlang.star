@@ -3,7 +3,6 @@ def get_platform():
 
 def install_erlang(package_name):
     # Erlang/OTP releases from GitHub
-    # We'll fetch the latest releases
     content = download("https://api.github.com/repos/erlang/otp/releases")
     if not content:
         return
@@ -17,7 +16,6 @@ def install_erlang(package_name):
             continue
         
         version = tag[4:]
-        # Filter out R versions (very old)
         if version.startswith("R"):
             continue
 
@@ -34,18 +32,8 @@ def install_erlang(package_name):
                 break
         
         if not url:
-            # Fallback to source code tarball from GitHub if no asset
             url = "https://github.com/erlang/otp/archive/refs/tags/" + tag + ".tar.gz"
             filename = "otp-" + version + ".tar.gz"
-
-        # Build from source
-        # We use a local prefix to avoid polluting the sandbox home during build
-        # and then use filemap to link it into .pilocal
-        build_cmd = "./otp_build autoconf && ./configure --prefix=$(pwd)/_inst --without-termcap && make -j$(nproc) && make install"
-        
-        # Note: some versions might not have otp_build autoconf if they are already configured
-        # but GitHub source tarballs usually need it.
-        # Pre-packaged release assets usually don't need autoconf.
 
         v = create_version(
             pkgname = "erlang",
@@ -53,22 +41,33 @@ def install_erlang(package_name):
             release_date = release["published_at"],
             release_type = "stable"
         )
+        v.add_flag(name="javac", help="Include Java support", default=False)
+        v.add_flag(name="termcap", help="Include termcap support", default=False)
+
+        # Resolve flags to strings for path/cmd construction
+        javac_val = v.flag_value("javac")
+        termcap_val = v.flag_value("termcap")
+        
+        javac_flag = "--with-javac" if javac_val == "true" else "--without-javac"
+        termcap_flag = "--with-termcap" if termcap_val == "true" else "--without-termcap"
+        
+        # Suffix includes flags state
+        suffix = "javac-" + javac_val + "-termcap-" + termcap_val
+        inst_dir = "@PACKAGES_DIR/erlang-" + version + "-" + suffix
+
         v.fetch(url = url, filename = filename, name = "Download Source")
         v.extract(name = "Extract Source")
         
-        # Determine the source directory name inside the archive
         src_dir = filename
         if src_dir.endswith(".tar.gz"):
             src_dir = src_dir[:-7]
         
-        inst_dir = "@PACKAGES_DIR/erlang-" + version + "-install"
-        
         v.run(
             name = "Compile and Install",
-            command = "if [ -f otp_build ]; then ./otp_build autoconf; fi && ./configure --prefix=" + inst_dir + " --without-termcap && make -j$(nproc) && make install",
+            command = "if [ -f otp_build ]; then ./otp_build autoconf; fi && ./configure --prefix=" + inst_dir + " " + javac_flag + " " + termcap_flag + " && make -j$(nproc) && make install",
             cwd = src_dir
         )
-        # Use the absolute path for linking since it's now in the global packages dir
+        
         v.export_link(inst_dir + "/bin/*", "bin")
         v.export_link(inst_dir + "/lib/erlang/*", "lib/erlang")
         

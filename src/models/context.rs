@@ -10,6 +10,7 @@ use std::env;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::collections::HashMap;
 
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
@@ -22,6 +23,7 @@ pub struct Context {
     pub packages: RwLock<Vec<PackageEntry>>,
     pub managers: RwLock<Vec<ManagerEntry>>,
     pub versions: RwLock<Vec<VersionEntry>>,
+    pub options: HashMap<String, String>,
     #[serde(skip)]
     pub state: Arc<State>,
 }
@@ -38,8 +40,14 @@ impl Context {
             packages: RwLock::new(Vec::new()),
             managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
+            options: HashMap::new(),
             state,
         }
+    }
+
+    pub fn with_options(mut self, options: HashMap<String, String>) -> Self {
+        self.options = options;
+        self
     }
 
     pub fn display_name(&self) -> String {

@@ -6,26 +6,26 @@ src/
   config: Config { cache_dir, config_dir, state_dir, meta_dir, download_dir, packages_dir, pilocals_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir, pilocals_dir }, is_inside_cave()
   repository: Repository { path, name }, Repositories { repositories, get_all(config), load, save }
   package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo) }
-  version_entry: VersionEntry { pkgname, version, release_date, release_type, pipeline: Vec<InstallStep>, exports: Vec<Export> }, InstallStep { Fetch, Extract, Run }, Export { Link, Env, Path }
+  version_entry: VersionEntry { pkgname, version, release_date, release_type, pipeline: Vec<InstallStep>, exports: Vec<Export>, flags: Vec<BuildFlag> }, InstallStep { Fetch, Extract, Run }, Export { Link, Env, Path }, BuildFlag { name, help, default }
   selector: PackageSelector { recipe, prefix, package, version }
-  context: Context { os, arch, filename, meta_dir, download_dir, packages_dir, state }, display_name()
-  cave: Cave { name, workspace, homedir, settings, variants }, CaveSettings { packages, set, unset }
+  context: Context { os, arch, filename, meta_dir, download_dir, packages_dir, options, state }, display_name()
+  cave: Cave { name, workspace, homedir, settings, variants }, CaveSettings { packages, set, unset, options }
  starlark/
   api: register_api (get_os, get_arch, add_package, add_manager, download, parse_json, parse_toml, parse_xml, parse_html, json_dump, create_version -> VersionBuilder)
-  version: VersionBuilder (set_stream, fetch, extract, run, export_link, export_env, export_path, register)
+  version: VersionBuilder (set_stream, fetch, extract, run, export_link, export_env, export_path, add_flag, flag_value, register)
   data: DataDocument, DataNode (support for select, get, and iteration)
-  runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State>)
+  runtime: evaluate_file, execute_function, execute_manager_function (all use Arc<State> and support passing build options)
  services/
   downloader: download (String, returns empty on error), download_to_file (Path, checksum check, progress). Supports SHA-1, SHA-256, SHA-512.
-  unarchiver: unarchive (tar.gz, tar.xz, zip) to destination directory. Creates `.unarchived` marker file.
-  sandbox: Bubblewrap wrapper for `bwrap` (binds, envs, unsets, command execution, cwd support).
+  unarchiver: unarchive (tar.gz, tar.xz, zip) to destination directory.
+  sandbox: Bubblewrap wrapper for `bwrap` (binds, envs, unsets, command execution, cwd, hostname support).
   cache: 
     - Cache: URL-based content cache.
     - BuildCache: Hashes pipeline steps (Fetch/Extract/Run) to cache successful outputs and resume builds.
   sync: core logic for syncing repo/package/manager data. Only caches non-empty version lists.
  cli/parser: Cli { quiet, verbose, debug }, Repo, Package, Cave { Init, Info, Add { args }, Rem { args }, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
  commands/cave:
-  - build: Resolves cave packages. Executes the **Installation Pipeline** (Fetch -> Extract -> Run) for each package, checking `BuildCache` at each step. Applies `Exports` (Link, Env, Path) to the `.pilocal` directory.
+  - build: Resolves cave packages. Re-evaluates recipes with current Cave `options`. Executes the **Installation Pipeline** (Fetch -> Extract -> Run), checking `BuildCache` at each step. Applies `Exports` (Link, Env, Path) to the `.pilocal` directory.
   - run: Executes command inside a bubblewrap sandbox. Automatically runs build first. Maps cave homedir to host `$HOME`, cave workspace to same path, and binds system paths RO. Mounts `.pilocal` cache to `~/.pilocal`. Sets PI_CAVE and prepends `~/.pilocal/bin` to PATH.
   - info: Displays cave info.
  commands/package:
@@ -36,8 +36,10 @@ src/
 
 logic:
 - **Unified Pipeline**: All packages (binary, source, managed) follow the same `Fetch -> Extract -> Run -> Export` model.
-- **Stateful Caching**: `BuildCache` stores the hash of every successful pipeline step. Re-running a build skips already completed steps (e.g., skips `Fetch` and `Extract` if only `Run` failed previously).
-- **Starlark API**: Fluent `VersionBuilder` API (`v.fetch()`, `v.run()`, etc.) replaces monolithic `add_version`. `DataNode` supports `.get()` and iteration for robust parsing.
-- **Sandboxed Builds**: All `Run` steps (compilation, `npm install`, etc.) occur inside the bubblewrap sandbox with a writable current working directory and `.pilocal`.
-- **Zero-Trust**: No implicit trust. Downloads are checksummed (when provided), and all execution is sandboxed.
-- **Lazy Discovery**: Listing packages is fast and doesn't trigger network calls unless necessary. `hex:` queries correctly identify managers without syncing the world.
+- **Stateful Caching**: `BuildCache` stores the hash of every successful pipeline step. Re-running a build skips already completed steps.
+- **Starlark API**: Fluent `VersionBuilder` API. `DataNode` supports `.get()` and iteration for robust parsing.
+- **Build Options**: Recipes declare flags via `v.add_flag()`. Users toggle them in `pi.cave.json`'s `options` block. Recipes query values via `v.flag_value()`.
+- **Dynamic Rebuilds**: The build engine re-runs recipes with user options to generate a customized pipeline. Changing an option changes the step hashes, triggering a fresh build into a unique directory (flag state is hashed into the path).
+- **Sandboxed Builds**: All `Run` steps occur inside the bubblewrap sandbox with a writable current working directory and `.pilocal`.
+- **Zero-Trust**: No implicit trust. Downloads are checksummed, and all execution is sandboxed.
+- **Lazy Discovery**: Listing packages is fast and doesn't trigger network calls unless necessary.

@@ -12,7 +12,7 @@ use crate::utils::fs::sanitize_name;
 use crate::utils::crypto::hash_to_string;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use log::error;
@@ -51,12 +51,15 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
             let selector = PackageSelector::parse(query)
                 .ok_or_else(|| anyhow::anyhow!("Invalid selector: {}", query))?;
 
-            let (full_name, version, repo_name) = resolve::resolve_query(config, repo_config, &selector)
+            let (_full_qualified_name, version, repo_name) = resolve::resolve_query(config, repo_config, &selector)
                 .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
-            let pkg_ctx = format!("{}:{}={}", repo_name, full_name, version.version);
+            // Re-run Starlark with Cave options to get the context-aware pipeline and exports
+            let dynamic_version = re_evaluate_version(config, repo_config, &repo_name, &version, &settings.options)?;
+
+            let pkg_ctx = format!("{}:{}={}", repo_name, dynamic_version.pkgname, dynamic_version.version);
             
-            execute_pipeline(config, &build_cache, cave, variant, &pkg_ctx, &version)
+            execute_pipeline(config, &build_cache, cave, variant, &pkg_ctx, &dynamic_version)
         })
         .collect();
 
@@ -103,19 +106,66 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
     Ok(all_env)
 }
 
+fn re_evaluate_version(
+    config: &Config,
+    repo_config: &Repositories,
+    repo_name: &str,
+    version: &VersionEntry,
+    all_options: &std::collections::HashMap<String, std::collections::HashMap<String, serde_json::Value>>
+) -> Result<VersionEntry> {
+    let repo = repo_config.repositories.iter().find(|r| r.name == repo_name)
+        .context("Repository not found during re-evaluation")?;
+    
+    let pkg_list = crate::models::package_entry::PackageList::get_for_repo(config, repo)
+        .context("Package list not found")?;
+    
+    let pkg_entry = pkg_list.packages.iter().find(|p| p.name == version.pkgname)
+        .context("Package entry not found during re-evaluation")?;
+
+    let star_path = Path::new(&repo.path).join(&pkg_entry.filename);
+    
+    let mut options = std::collections::HashMap::new();
+    if let Some(pkg_opts) = all_options.get(&version.pkgname) {
+        for (k, v) in pkg_opts {
+            options.insert(k.clone(), match v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                _ => v.to_string(),
+            });
+        }
+    }
+
+    let dynamic_versions = crate::starlark::runtime::execute_function(
+        &star_path,
+        &pkg_entry.function_name,
+        &pkg_entry.name,
+        config.state.clone(),
+        Some(options),
+    )?;
+
+    dynamic_versions.into_iter().find(|v| v.version == version.version)
+        .context(format!("Version {} not found after re-evaluation of {}", version.version, version.pkgname))
+}
+
 fn execute_pipeline(
     config: &Config,
     build_cache: &BuildCache,
     cave: &Cave,
     variant: Option<&str>,
     pkg_ctx: &str,
-    version: &VersionEntry
+    version: &VersionEntry,
 ) -> Result<(String, std::collections::HashMap<String, String>, Vec<(String, PathBuf, Vec<Export>)>)> {
     let mut current_path: Option<PathBuf> = None;
     let mut env = std::collections::HashMap::new();
 
     for (i, step) in version.pipeline.iter().enumerate() {
-        let step_hash = hash_to_string(step);
+        // Resolve @PACKAGES_DIR placeholder in Run commands before hashing
+        let mut resolved_step = step.clone();
+        if let InstallStep::Run { ref mut command, .. } = resolved_step {
+            *command = command.replace("@PACKAGES_DIR", config.packages_dir.to_str().unwrap());
+        }
+
+        let step_hash = hash_to_string(&resolved_step);
         
         if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version, i, &step_hash) {
             log::debug!("[{}] step {} cache hit", pkg_ctx, i);
@@ -123,10 +173,10 @@ fn execute_pipeline(
             continue;
         }
 
-        log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, step);
-        let result_path = execute_step(config, cave, variant, step, &current_path, &env, &version.pkgname, &version.version)?;
+        log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, resolved_step);
+        let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version)?;
 
-        let step_name = match step {
+        let step_name = match resolved_step {
             InstallStep::Fetch { name, .. } => name.clone(),
             InstallStep::Extract { name, .. } => name.clone(),
             InstallStep::Run { name, .. } => name.clone(),
@@ -185,8 +235,6 @@ fn execute_step(
                 None => current_path.clone().context("Run requires previous step to define working directory")?,
             };
             
-            let command = command.replace("@PACKAGES_DIR", config.packages_dir.to_str().unwrap());
-
             let mut b = crate::commands::cave::run::prepare_sandbox(config, cave, variant, env.clone(), true)?;
             b.set_cwd(&base_dir);
             b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);

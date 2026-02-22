@@ -34,6 +34,7 @@ fn run_package_function(config: &Config, package_name: &str, entry: &crate::mode
         &entry.function_name,
         package_name,
         config.state.clone(),
+        None,
     ) {
         Ok(mut versions) => {
             info!("found {} versions", versions.len());

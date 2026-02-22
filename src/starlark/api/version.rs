@@ -1,4 +1,4 @@
-use crate::models::version_entry::{VersionEntry, InstallStep, Export};
+use crate::models::version_entry::{VersionEntry, InstallStep, Export, BuildFlag};
 use anyhow::Context as _;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
@@ -27,6 +27,7 @@ pub struct VersionBuilder {
     pub stream: String,
     pub pipeline: Vec<InstallStep>,
     pub exports: Vec<Export>,
+    pub flags: Vec<BuildFlag>,
 }
 
 #[derive(Debug, ProvidesStaticType, Clone, Serialize)]
@@ -68,6 +69,42 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
         this.builder.write().stream = name;
         Ok(NoneType)
+    }
+
+    fn add_flag(
+        this: Value,
+        name: String,
+        help: String,
+        default: Value,
+    ) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let default_value = match default.unpack_bool() {
+            Some(b) => b.to_string(),
+            None => default.to_value().to_str(),
+        };
+        this.builder.write().flags.push(BuildFlag {
+            name,
+            help,
+            default_value,
+        });
+        Ok(NoneType)
+    }
+
+    fn flag_value<'v>(this: Value<'v>, name: String, eval: &mut Evaluator<'v, '_, '_>) -> anyhow::Result<Value<'v>> {
+        let builder_val = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let context = get_context(eval)?;
+        
+        // Find flag definition to get default
+        let b = builder_val.builder.read();
+        let flag_def = b.flags.iter().find(|f| f.name == name);
+        
+        let val = context.options.get(&name).cloned()
+            .or_else(|| flag_def.map(|f| f.default_value.clone()));
+
+        match val {
+            Some(v) => Ok(eval.heap().alloc(v)),
+            None => Ok(Value::new_none()),
+        }
     }
 
     fn fetch(
@@ -134,6 +171,7 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
             stream: b.stream.clone(),
             pipeline: b.pipeline.clone(),
             exports: b.exports.clone(),
+            flags: b.flags.clone(),
         });
         Ok(NoneType)
     }
@@ -156,6 +194,7 @@ pub fn register_version_globals(builder: &mut GlobalsBuilder) {
                 stream: String::new(),
                 pipeline: Vec::new(),
                 exports: Vec::new(),
+                flags: Vec::new(),
             }))
         })
     }

@@ -12,6 +12,8 @@ pub struct CaveSettings {
     pub set: HashMap<String, String>,
     #[serde(default)]
     pub unset: Vec<String>,
+    #[serde(default)]
+    pub options: HashMap<String, HashMap<String, serde_json::Value>>,
 }
 
 impl CaveSettings {
@@ -26,6 +28,12 @@ impl CaveSettings {
             self.set.remove(u);
         }
         self.unset.dedup();
+        for (pkg, opts) in &other.options {
+            let target_opts = self.options.entry(pkg.clone()).or_default();
+            for (k, v) in opts {
+                target_opts.insert(k.clone(), v.clone());
+            }
+        }
     }
 }
 

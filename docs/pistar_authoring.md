@@ -73,12 +73,18 @@ Pi uses a pipeline-based model for installation. Instead of passing a large dict
 #### Metadata
 *   `v.set_stream(name)`: Sets a human-readable stream name (e.g., "Panda", "Iron").
 
+#### Build Options (Flags)
+Recipes can declare flags that users can configure in their `pi.cave.json`.
+
+*   `v.add_flag(name, help, default)`: Declares a supported build flag.
+*   `v.flag_value(name)`: Returns the resolved value of a flag (from cave config or default) as a string (e.g., `"true"`, `"false"`, or a custom string).
+
 #### Pipeline Steps
 Steps are executed in order. Each step's output (path) becomes the context for the next step.
 
-*   `v.fetch(url, checksum=None, filename=None)`: Downloads a file.
-*   `v.extract(format=None)`: Extracts the result of the previous `fetch` step.
-*   `v.run(command, cwd=None)`: Runs a command in the sandbox. If `cwd` is provided, it is relative to the previous step's output.
+*   `v.fetch(url, checksum=None, filename=None, name=None)`: Downloads a file.
+*   `v.extract(format=None, name=None)`: Extracts the result of the previous `fetch` step.
+*   `v.run(command, cwd=None, name=None)`: Runs a command in the sandbox. If `cwd` is provided, it is relative to the previous step's output.
 
 #### Exports
 Exports define how the results of the pipeline are exposed to the Cave environment.
@@ -94,22 +100,30 @@ Exports define how the results of the pipeline are exposed to the Cave environme
 
 ## Examples
 
-### Unified Pipeline Example (Erlang Source Build)
+### Dynamic Pipeline Example (Erlang with Build Flags)
 
 ```python
 def install_erlang(pkg):
-    # ... version discovery logic ...
-    v = create_version("erlang", "26.0", release_type="stable")
+    # ... discovery ...
+    v = create_version("erlang", "26.0")
     
-    # Define Pipeline
-    v.fetch(url="https://.../otp_src_26.0.tar.gz")
-    v.extract()
-    v.run("./configure --prefix=$(pwd)/_inst && make -j$(nproc) && make install")
+    # Declare flags
+    v.add_flag("javac", "Include Java support", False)
     
-    # Define Exports
-    v.export_link("_inst/bin/*", "bin")
-    v.export_link("_inst/lib/erlang/*", "lib/erlang")
+    # Query flags to construct unique paths and commands
+    use_javac = v.flag_value("javac")
+    javac_arg = "--with-javac" if use_javac == "true" else "--without-javac"
     
+    # Use flags in the install path suffix
+    inst_dir = "@PACKAGES_DIR/erlang-26.0-javac-" + use_javac
+    
+    v.fetch(url="https://...", name="Download")
+    v.extract(name="Extract")
+    v.run(
+        name="Build",
+        command="./configure --prefix=" + inst_dir + " " + javac_arg + " && make install"
+    )
+    v.export_link(inst_dir + "/bin/*", "bin")
     v.register()
 ```
 
@@ -121,16 +135,5 @@ def install_node(pkg):
     v.fetch("https://nodejs.org/dist/v20.5.0/node-v20.5.0-linux-x64.tar.gz")
     v.extract()
     v.export_link("node-v20.5.0-linux-x64/bin/*", "bin")
-    v.register()
-```
-
-### Manager Example (npm)
-
-```python
-def npm_discovery(manager, package):
-    # ... find version ...
-    v = create_version(package, version)
-    # Managers often just need a single 'run' step
-    v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
     v.register()
 ```
