@@ -33,6 +33,14 @@ A recipe file (e.g., `mypackage.star`) defines how to discover versions of a pac
 
 *   `download(url)`: Downloads content from `url` and returns it as a string. Caches results automatically.
 
+### String Manipulation
+
+*   `extract(pattern, text)`: Performs a regular expression match.
+    *   Returns a list where the first element is a boolean (success).
+    *   If successful, subsequent elements are the strings captured by the regex groups.
+    *   If unsuccessful, subsequent elements are empty strings, ensuring safe unpacking.
+    *   Example: `ok, name, version = extract(r"([a-z]+)-([0-9.]+)", "python-3.9")`
+
 ### Parsing & Querying
 
 Pi supports parsing JSON, TOML, XML, and HTML content. It provides a structured way to query them using `Document` and `Node` objects.

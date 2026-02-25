@@ -12,10 +12,10 @@ def install_erlang(package_name):
     for i in range(len(releases)):
         release = releases[i]
         tag = release["tag_name"]
-        if not tag.startswith("OTP-"):
+        ok, version = extract(r"OTP-([0-9.]+.*)", tag)
+        if not ok:
             continue
         
-        version = tag[4:]
         if version.startswith("R"):
             continue
 
@@ -58,9 +58,9 @@ def install_erlang(package_name):
         v.fetch(url = url, filename = filename, name = "Download Source")
         v.extract(name = "Extract Source")
         
-        src_dir = filename
-        if src_dir.endswith(".tar.gz"):
-            src_dir = src_dir[:-7]
+        ok_ext, src_dir = extract(r"(.*)\.tar\.gz", filename)
+        if not ok_ext:
+            src_dir = filename
         
         v.run(
             name = "Compile and Install",
@@ -104,7 +104,9 @@ def erlang_discovery(manager, package):
         v.fetch(url = url, filename = filename, name = "Download Source")
         v.extract(name = "Extract Source")
         
-        src_dir = "rebar3-" + version
+        ok_ext, src_dir = extract(r"(.*)\.tar\.gz", filename)
+        if not ok_ext:
+            src_dir = filename
         
         v.run(
             name = "Bootstrap",

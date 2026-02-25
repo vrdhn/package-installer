@@ -17,18 +17,24 @@ def get_rust_target():
     return triple_arch + "-" + triple_os
 
 def parse_rust_filename(package_name, target, filename):
-    v_tmp = filename
-    for ext in [".tar.gz", ".tar.xz", ".zip", ".tar.bz2"]:
-        if v_tmp.endswith(ext):
-            v_tmp = v_tmp[:-len(ext)]
-            break
-
+    # Remove extensions like .tar.gz, .zip etc.
+    ok_base, v_tmp = extract(r"(.*)\.(?:tar\.gz|tar\.xz|zip|tar\.bz2)", filename)
+    if not ok_base:
+        v_tmp = filename
+    
     top_dir = v_tmp
 
-    if package_name == "rust-src":
-        if target != "*" and top_dir.endswith("-" + target):
-            top_dir = top_dir[:-(len(target) + 1)]
+    # Pattern: package_name(-preview)?-(version)(-(target))?
+    # We use escaping for package_name if it contains special chars, though rust-src is fine.
+    pattern = package_name + "(?:-preview)?-([0-9.]+)(?:-(.*))?"
+    ok, version, matched_target = extract(pattern, v_tmp)
+    
+    if ok:
+        # If it's rust-src, it might not have a target in the filename
+        # If it has a target, it's at the end.
+        return top_dir, version
 
+    # Fallback to manual if regex fails for some reason
     v_parse = v_tmp
     if target != "*" and v_parse.endswith("-" + target):
         v_parse = v_parse[:-(len(target) + 1)]
@@ -102,7 +108,10 @@ def discover_rust_component(package_name):
         if not dl_url:
             continue
 
-        filename = dl_url.split('/')[-1]
+        ok_file, filename = extract(r".*/([^/]+)$", dl_url)
+        if not ok_file:
+            filename = dl_url.split('/')[-1]
+
         top_dir, version = parse_rust_filename(package_name, target, filename)
         
         v = create_version(package_name, version, release_date = date, release_type = channel)

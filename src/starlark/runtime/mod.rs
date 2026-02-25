@@ -220,4 +220,32 @@ mod tests {
         .unwrap();
         assert_eq!(versions.len(), 0);
     }
+
+    #[test]
+    fn test_extract() {
+        let meta_dir = PathBuf::from("/tmp/pi-test-meta-re");
+        let download_dir = PathBuf::from("/tmp/pi-test-downloads-re");
+        let packages_dir = PathBuf::from("/tmp/pi-test-packages-re");
+        let state = Arc::new(State {
+            meta_dir,
+            download_dir,
+            packages_dir,
+            ..Default::default()
+        });
+
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "def test(arg):").unwrap();
+        writeln!(file, "    ok, name, version = extract(r'([a-z]+)-([0-9.]+)', 'python-3.9')").unwrap();
+        writeln!(file, "    if not ok or name != 'python' or version != '3.9':").unwrap();
+        writeln!(file, "        fail('Match failed: ' + str(ok) + ' ' + name + ' ' + version)").unwrap();
+        writeln!(file, "    ok2, g1 = extract(r'(abc)', 'def')").unwrap();
+        writeln!(file, "    if ok2:").unwrap();
+        writeln!(file, "        fail('Should not match')").unwrap();
+        writeln!(file, "    if g1 != '':").unwrap();
+        writeln!(file, "        fail('Group should be empty')").unwrap();
+        writeln!(file, "add_package('test', test)").unwrap();
+
+        let (packages, _) = evaluate_file(file.path(), state.clone()).unwrap();
+        execute_function(file.path(), &packages[0].function_name, "", state, None).unwrap();
+    }
 }

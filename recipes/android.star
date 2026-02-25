@@ -17,8 +17,8 @@ def format_jb_date(date_str):
     if not date_str:
         return ""
     # Format: "February 13, 2026"
-    parts = date_str.replace(",", "").split(" ")
-    if len(parts) != 3:
+    ok, month_name, day, year = extract(r"([A-Za-z]+)\s+([0-9]+),\s+([0-9]+)", date_str)
+    if not ok:
         return date_str
         
     month_map = {
@@ -27,11 +27,9 @@ def format_jb_date(date_str):
         "September": "09", "October": "10", "November": "11", "December": "12"
     }
     
-    m = month_map.get(parts[0], "00")
-    day = parts[1]
+    m = month_map.get(month_name, "00")
     if len(day) == 1:
         day = "0" + day
-    year = parts[2]
     
     return year + "-" + m + "-" + day
 
@@ -54,7 +52,9 @@ def install_android_studio(package_name):
         name = item.attribute("name") or ""
         
         # Extract stream from name: "Android Studio Panda 1 | ..." -> "Panda 1"
-        stream = name.split("|")[0].replace("Android Studio", "").replace("Feature Drop", "").strip()
+        ok_stream, stream = extract(r"Android Studio\s+(.*?)(?:\s*Feature Drop)?\s*\|", name)
+        if not ok_stream:
+            stream = name.split("|")[0].replace("Android Studio", "").strip()
         
         release_type = "stable"
         if channel == "Beta" or channel == "RC":
@@ -76,7 +76,9 @@ def install_android_studio(package_name):
                     release_type = release_type
                 )
                 v.set_stream(stream)
-                filename = link.split("/")[-1]
+                ok_file, filename = extract(r".*/([^/]+)$", link)
+                if not ok_file:
+                    filename = link.split("/")[-1]
                 v.fetch(url = link, filename = filename, checksum = dl.attribute("checksum"))
                 v.extract()
                 v.export_link("android-studio/bin/*", "bin")
@@ -97,13 +99,13 @@ def install_android_studio_official(package_name):
         l = all_links[i]
         href = l.attribute("href")
         if href and href.endswith(suffix) and "/android/studio/" in href:
-            filename = href.split("/")[-1]
-            parts = href.split("/")
-            version = "unknown"
-            for p in parts:
-                if p and p[0].isdigit() and "." in p:
-                    version = p
-                    break
+            ok_file, filename = extract(r".*/([^/]+)$", href)
+            if not ok_file:
+                filename = href.split("/")[-1]
+
+            ok_ver, version = extract(r".*/([0-9]+\.[0-9.]+)/.*", href)
+            if not ok_ver:
+                version = "unknown"
             
             v = create_version("android-studio", version)
             v.fetch(url = href, filename = filename)

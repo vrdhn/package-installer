@@ -78,8 +78,9 @@ def npm_discovery(manager, package):
     for version in versions:
         v_data = versions[version]
         
+        ok_test, _ = extract(r".*-(rc|beta|alpha|canary|next).*", version)
         release_type = "stable"
-        if "-" in version:
+        if ok_test:
             release_type = "testing"
         
         if version == dist_tags.get("latest"):

@@ -1733,6 +1733,7 @@ dependencies = [
  "log",
  "parking_lot",
  "rayon",
+ "regex",
  "scraper",
  "serde",
  "serde_json",

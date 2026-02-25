@@ -1,50 +1,46 @@
-Filename                        Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-commands/cave/add.rs                 80                80     0.00%           1                 1     0.00%          37                37     0.00%           0                 0         -
-commands/cave/build.rs              291               291     0.00%          10                10     0.00%         128               128     0.00%           0                 0         -
-commands/cave/fs.rs                 118               118     0.00%           5                 5     0.00%          47                47     0.00%           0                 0         -
-commands/cave/info.rs                35                35     0.00%           1                 1     0.00%          23                23     0.00%           0                 0         -
-commands/cave/init.rs                37                37     0.00%           3                 3     0.00%          17                17     0.00%           0                 0         -
-commands/cave/rem.rs                 68                68     0.00%           2                 2     0.00%          32                32     0.00%           0                 0         -
-commands/cave/resolve.rs             77                77     0.00%           2                 2     0.00%          33                33     0.00%           0                 0         -
-commands/cave/run.rs                295               295     0.00%          11                11     0.00%         136               136     0.00%           0                 0         -
-commands/devel/test.rs              103               103     0.00%           6                 6     0.00%          63                63     0.00%           0                 0         -
-commands/disk/clean.rs               10                10     0.00%           1                 1     0.00%           7                 7     0.00%           0                 0         -
-commands/disk/info.rs                74                74     0.00%           8                 8     0.00%          40                40     0.00%           0                 0         -
-commands/disk/uninstall.rs           23                23     0.00%           1                 1     0.00%          18                18     0.00%           0                 0         -
-commands/package/info.rs            138               138     0.00%           2                 2     0.00%          55                55     0.00%           0                 0         -
-commands/package/list.rs            191               191     0.00%           7                 7     0.00%         116               116     0.00%           0                 0         -
-commands/package/resolve.rs         159               159     0.00%           6                 6     0.00%          91                91     0.00%           0                 0         -
-commands/package/sync.rs             72                72     0.00%           4                 4     0.00%          48                48     0.00%           0                 0         -
-commands/repo/add.rs                 67                67     0.00%           3                 3     0.00%          35                35     0.00%           0                 0         -
-commands/repo/list.rs                53                53     0.00%           1                 1     0.00%          31                31     0.00%           0                 0         -
-commands/repo/sync.rs                29                29     0.00%           3                 3     0.00%          18                18     0.00%           0                 0         -
-logging/init.rs                      14                14     0.00%           1                 1     0.00%          14                14     0.00%           0                 0         -
-main.rs                              91                91     0.00%           1                 1     0.00%          63                63     0.00%           0                 0         -
-models/cave.rs                      108               108     0.00%          11                11     0.00%          65                65     0.00%           0                 0         -
-models/config.rs                     73                73     0.00%           8                 8     0.00%          56                56     0.00%           0                 0         -
-models/context.rs                    72                56    22.22%           7                 6    14.29%          48                34    29.17%           0                 0         -
-models/package_entry.rs              93                93     0.00%           7                 7     0.00%          46                46     0.00%           0                 0         -
-models/repository.rs                 53                53     0.00%           9                 9     0.00%          37                37     0.00%           0                 0         -
-models/selector.rs                   43                43     0.00%           1                 1     0.00%          30                30     0.00%           0                 0         -
-models/version_entry.rs              92                92     0.00%           6                 6     0.00%          52                52     0.00%           0                 0         -
-services/cache/build.rs             101               101     0.00%           6                 6     0.00%          56                56     0.00%           0                 0         -
-services/cache/content.rs            60                60     0.00%           4                 4     0.00%          34                34     0.00%           0                 0         -
-services/downloader.rs              185               185     0.00%          13                13     0.00%          87                87     0.00%           0                 0         -
-services/sandbox/builder.rs         207               207     0.00%          18                18     0.00%         119               119     0.00%           0                 0         -
-services/sandbox/types.rs            13                13     0.00%           1                 1     0.00%          13                13     0.00%           0                 0         -
-services/sync.rs                    139               139     0.00%           6                 6     0.00%          98                98     0.00%           0                 0         -
-services/unarchiver.rs               81                81     0.00%           2                 2     0.00%          29                29     0.00%           0                 0         -
-starlark/api/data.rs                176               176     0.00%          18                18     0.00%          96                96     0.00%           0                 0         -
-starlark/api/html.rs                 80                80     0.00%          14                14     0.00%          52                52     0.00%           0                 0         -
-starlark/api/mod.rs                   6                 0   100.00%           1                 0   100.00%           4                 0   100.00%           0                 0         -
-starlark/api/stdlib.rs               14                14     0.00%           6                 6     0.00%           6                 6     0.00%           0                 0         -
-starlark/api/utils.rs                29                 6    79.31%           3                 0   100.00%          18                 1    94.44%           0                 0         -
-starlark/api/version.rs              26                26     0.00%           7                 7     0.00%          16                16     0.00%           0                 0         -
-starlark/api/xml.rs                  58                58     0.00%          13                13     0.00%          41                41     0.00%           0                 0         -
-starlark/runtime/mod.rs             296                95    67.91%          19                10    47.37%         162                41    74.69%           0                 0         -
-utils/crypto.rs                      65                65     0.00%           2                 2     0.00%          35                35     0.00%           0                 0         -
-utils/fs.rs                           6                 6     0.00%           1                 1     0.00%           3                 3     0.00%           0                 0         -
-utils/version.rs                     28                28     0.00%           1                 1     0.00%          12                12     0.00%           0                 0         -
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-TOTAL                              4129              3883     5.96%         263               249     5.32%        2267              2111     6.88%           0                 0         -
+commands/cave/add.rs | 0.00 | fa9ac105ad1d31321153c3d96afe0b8b009e060b027f5601ca990bfaeeeb6646
+commands/cave/build.rs | 0.00 | 91b5a7e3679aaf2958a400ffaae3ebc767106250b8cd08107a86123433990715
+commands/cave/fs.rs | 0.00 | eb634e3243f2f516b895682c88a23afbf7995ac29a1022aeb2d38081b8aa680d
+commands/cave/info.rs | 0.00 | 36f477833c33a69fcfc6d93100e9d126b3204a7a139b28a653e6bd0a3827aa04
+commands/cave/init.rs | 0.00 | 08d6b1283e3177b48442dae38ff073be050e47e1b1e51881bfb86aaacb75014c
+commands/cave/rem.rs | 0.00 | cf4e929b66a6258529ce3ec30854f6b17ba4ed7b59000c1903db2bfbb94a1476
+commands/cave/resolve.rs | 0.00 | d27ff9889ecce946eef3809aa43f13317de0e3d3e844499033e2fda25944fa72
+commands/cave/run.rs | 0.00 | 0e2d7f31f3c005dd5fb45c1a0d6fb8dfa0a0b2033502ef2fec2b4d212ad63f56
+commands/devel/test.rs | 0.00 | 1c611500353fdeb4c8bab5bccf7caeedabef7b0e9c77b8b7649951eb5391ee88
+commands/disk/clean.rs | 0.00 | b7c5fd9b515ae1cd3526f8bf5e12cac2ea1034b528cb1d9e4f8bd689f4a6976b
+commands/disk/info.rs | 0.00 | cfe14a2b6747f3c048b39f7c7301b4ce19461b93edb3b6e36bc79566115401ee
+commands/disk/uninstall.rs | 0.00 | e8ff21596b4cb5ae4f33d5bd025109af910bbdb3e16c63bc050c8ba1bcf57638
+commands/package/info.rs | 0.00 | 27aea7d49a18d225bc4f0aec59ed05b9323a90405d1b7c7f5395afeb32e643c6
+commands/package/list.rs | 0.00 | 5e1544db858e70ff0a16e3352af5b5ded80358dc872ebf700b172a5d8604eea2
+commands/package/resolve.rs | 0.00 | de006c7c367f031f570470c0c1c2ca20a0dd0b0cee9c273682b8ae14e5f3d61c
+commands/package/sync.rs | 0.00 | 81d6da82d729b752a9a4a6fbeb43798c2d30856f4df00cb7f136558b52c8d6a9
+commands/repo/add.rs | 0.00 | ecdfc320b50c668185e9375827cbc7e8bfd1af4d31ccb8922c7d35f79d75ced6
+commands/repo/list.rs | 0.00 | 841465e0fb07753266d75fbc4734e8bbc6700698d42194574c649f647df7e63b
+commands/repo/sync.rs | 0.00 | 6bbd73e88001d847c32ec0267401c7b8f08e5d97e43a3fa51e1a0ffa15ebd790
+logging/init.rs | 0.00 | 46fa6b4c2532ea84461d0da20eea246bbed95ea433f7b6eba1c9540ee06dcef6
+main.rs | 0.00 | c884efa726527ec4a249ec3b5c1cd016ed8c6c5155df1858eeaf683fb8ab3e3f
+models/cave.rs | 0.00 | 7ce1f14fbb848a8da13fd304b186e770aef3dd6ee2f93168cc21c26de136cb04
+models/config.rs | 0.00 | 70af591da0a33a528a7886e3ae6a3bacfd40a0dfbd469246e185a7dd98f0702b
+models/context.rs | 28.30 | 090557a8a3485052939931c21bf114da1917f2d4b56f054e06a9336a25238df1
+models/package_entry.rs | 0.00 | 89b663c089e936e8b3e286ffa86d78163d643b3e7d303b31ee22efd03da8566d
+models/repository.rs | 0.00 | ea0d83b8414f1f66d6af2bf623a1786ff5b5caf0cb2dc56a9e4f6b4232912df9
+models/selector.rs | 0.00 | e10b9d5d87fe4b8ec7f3d31d1e024bbd80ef301933167fc2f27b408d5af456eb
+models/version_entry.rs | 0.00 | bba1ee531bb83f21df2fbc4158fbaa646e8ac87180f8733b3a87c09d2f9781a3
+services/cache/build.rs | 0.00 | 887278112f25734add647809fc3470d40119675e22e633e4fb9da4543b7e2566
+services/cache/content.rs | 0.00 | 633f70418b39e252ce76a38e28b1a344835cea379845b883a234ca687bf4f7eb
+services/downloader.rs | 0.00 | 4f4aabdc26d90fe592a69e013dcaf46c47aaa1661ac34aa9b241eea839c97704
+services/sandbox/builder.rs | 0.00 | 4e3e23f87d6b4d104bdf36821bb006f8624ee47e26efbe218df37e97d2eb11a1
+services/sandbox/types.rs | 0.00 | f5e2e1c529185239f1e1b74792309b1d497e3911e7adc1c22b40843ce71bc999
+services/sync.rs | 0.00 | 17745414a7ed3cbb714ce63b8f53fcaa3d1a8b53beeea99dd9f9f0a49a77da63
+services/unarchiver.rs | 0.00 | dd847c851f64cbe5cf2a429d3c1e9a4f9a07cbcf253ff13b0b8b95f3b8a9781f
+starlark/api/data.rs | 0.00 | 8c746b46e3b9590c048d34525d7cb2d2de14c0d7180c84e695db228a643779aa
+starlark/api/html.rs | 0.00 | 9eda2826d82c64d9fc0d444da410b4d9ff05444e5be2bd447ae4ff7c6dcfaa90
+starlark/api/mod.rs | 100.00 | 3142d46a50d176469b3228660fb0d731d157bc85a6af80dc9004ecfb024fbfc3
+starlark/api/stdlib.rs | 76.67 | 470f76100856918056059362f2eea49b3c9152d276217496fd06e56254e8cfc0
+starlark/api/utils.rs | 94.44 | 2cd5bb3744fbc1a9f9f7f98f7d017d8c587e02d0021ea162d9b571e3562f85b0
+starlark/api/version.rs | 0.00 | ea29671a8a23f21e27a2e0a029f81639ea9fdd1ac1ccadc734ce513939af2a63
+starlark/api/xml.rs | 0.00 | 7705911d8f5c60e8b5fc28bc26aed3a7ccefc3c58986acb8f5190d7763d662cf
+starlark/runtime/mod.rs | 77.55 | 8b53c753614b277c35351eb41d4861a3b5ff61a371b11c70a18a5f6d3ad596d9
+utils/crypto.rs | 0.00 | 98b90d88babbfa8855a4cbab6b563c840f6885542346a873b3e3bdc3fbe12ea3
+utils/fs.rs | 0.00 | f047ed3f5fcaef437a083e6989555af352ec401527add086a3d4aa54f477acc1
+utils/version.rs | 0.00 | e66696470ed68fec1732f9df2ef4f2d18f548ba19a3b4669eed04d8a522aa8fa

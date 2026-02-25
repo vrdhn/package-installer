@@ -11,8 +11,52 @@ use crate::starlark::api::utils::{get_context, extract_function_name};
 use starlark::environment::GlobalsBuilder;
 use starlark::starlark_module;
 
-#[starlark_module]
 pub fn register_stdlib(builder: &mut GlobalsBuilder) {
+    register_stdlib_internal(builder);
+}
+
+fn match_re_logic<'v>(
+    pattern: &str,
+    text: &str,
+    eval: &mut Evaluator<'v, '_, '_>,
+) -> anyhow::Result<Value<'v>> {
+    let re = regex::Regex::new(pattern).map_err(|e| anyhow::anyhow!("Regex error: {}", e))?;
+
+    if let Some(caps) = re.captures(text) {
+        let mut res = Vec::with_capacity(caps.len());
+        res.push(eval.heap().alloc(true));
+        for i in 1..caps.len() {
+            res.push(eval.heap().alloc(caps.get(i).map(|m| m.as_str()).unwrap_or("")));
+        }
+        Ok(eval.heap().alloc(res))
+    } else {
+        let mut res = Vec::with_capacity(re.captures_len());
+        res.push(eval.heap().alloc(false));
+        for _ in 1..re.captures_len() {
+            res.push(eval.heap().alloc(""));
+        }
+        Ok(eval.heap().alloc(res))
+    }
+}
+
+#[starlark_module]
+fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
+    fn extract<'v>(
+        pattern: String,
+        text: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        match_re_logic(&pattern, &text, eval)
+    }
+
+    fn re_match<'v>(
+        pattern: String,
+        text: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        match_re_logic(&pattern, &text, eval)
+    }
+
     fn get_os(eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
         let context = get_context(eval)?;
         Ok(context.os.clone())

@@ -9,7 +9,9 @@ def install_elixir(package_name):
     for i in range(len(releases)):
         release = releases[i]
         tag = release["tag_name"]
-        version = tag[1:] if tag.startswith("v") else tag
+        ok, version = extract(r"v?([0-9.]+.*)", tag)
+        if not ok:
+            version = tag
         
         assets = release["assets"]
         for j in range(len(assets)):
@@ -20,8 +22,8 @@ def install_elixir(package_name):
             if "-rc." in version or "-rc." in name:
                 release_type = "testing"
 
-            if name.startswith("elixir-otp-") and name.endswith(".zip"):
-                otp_ver = name[11:-4]
+            ok_otp, otp_ver = extract(r"elixir-otp-([^.]+)\.zip", name)
+            if ok_otp:
                 full_version = version + "-otp-" + otp_ver
                 
                 v = create_version(

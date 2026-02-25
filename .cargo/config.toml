@@ -1,2 +1,3 @@
 [alias]
-cov = "llvm-cov --summary-only --color never --output-path COVERAGE.txt"
+covupd = "run --manifest-path build-tools/Cargo.toml -- covupd"
+covdiff = "run --manifest-path build-tools/Cargo.toml -- covdiff"

@@ -48,16 +48,15 @@ def install_go(package_name):
 add_package("go", install_go)
 
 def go_discovery(manager, package):
-    parts = package.split("/")
     base_url = "https://proxy.golang.org/" + package.lower()
     
-    if package.startswith("golang.org/x/"):
-        if len(parts) >= 3:
-            package_base = "/".join(parts[:3])
-            base_url = "https://proxy.golang.org/" + package_base.lower()
-    elif len(parts) >= 3 and (parts[0] == "github.com" or parts[0] == "bitbucket.org"):
-        package_base = "/".join(parts[:3])
-        base_url = "https://proxy.golang.org/" + package_base.lower()
+    ok_x, x_base = extract(r"(golang\.org/x/[^/]+)", package)
+    ok_gh, gh_base = extract(r"((?:github\.com|bitbucket\.org)/[^/]+/[^/]+)", package)
+
+    if ok_x:
+        base_url = "https://proxy.golang.org/" + x_base.lower()
+    elif ok_gh:
+        base_url = "https://proxy.golang.org/" + gh_base.lower()
 
     content = download(base_url + "/@v/list")
     if not content:
