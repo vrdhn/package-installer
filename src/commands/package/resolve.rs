@@ -120,8 +120,11 @@ pub fn find_best_version(v_list: VersionList, target_version: &str) -> Option<Ve
         })
         .collect();
 
-    // Sort by release_date descending
-    filtered_versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+    // Sort by version descending, then by release_date descending
+    filtered_versions.sort_by(|a, b| {
+        b.version.cmp(&a.version)
+            .then_with(|| b.release_date.cmp(&a.release_date))
+    });
 
     filtered_versions.into_iter().next()
 }

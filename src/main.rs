@@ -14,7 +14,7 @@ use clap::Parser;
 
 fn main() {
     let cli = Cli::parse();
-    let config = Config::new();
+    let config = Config::new(cli.force);
 
     init_logging(cli.quiet, cli.verbose, cli.debug);
 

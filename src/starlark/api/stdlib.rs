@@ -105,9 +105,11 @@ fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
         let context = get_context(eval)?;
         let cache = Cache::new(context.meta_dir.clone(), Duration::from_secs(3600)); // 1 hour TTL
 
-        if let Some(cached) = cache.read(&url)? {
-            log::debug!("[{}] cache hit: {}", context.display_name(), url);
-            return Ok(cached);
+        if !context.state.force {
+            if let Some(cached) = cache.read(&url)? {
+                log::debug!("[{}] cache hit: {}", context.display_name(), url);
+                return Ok(cached);
+            }
         }
 
         let lock = context
@@ -119,9 +121,11 @@ fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
 
         let _guard = lock.lock();
 
-        if let Some(cached) = cache.read(&url)? {
-            log::debug!("[{}] cache hit: {}", context.display_name(), url);
-            return Ok(cached);
+        if !context.state.force {
+            if let Some(cached) = cache.read(&url)? {
+                log::debug!("[{}] cache hit: {}", context.display_name(), url);
+                return Ok(cached);
+            }
         }
 
         log::info!("[{}] fetching: {}", context.display_name(), url);

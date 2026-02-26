@@ -14,6 +14,7 @@ pub struct Config {
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
     pub pilocals_dir: PathBuf,
+    pub force: bool,
     pub state: Arc<State>,
 }
 
@@ -27,10 +28,11 @@ pub struct State {
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
     pub pilocals_dir: PathBuf,
+    pub force: bool,
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub fn new(force: bool) -> Self {
         let cache_dir = dirs_next::cache_dir()
             .expect("Failed to get cache directory")
             .join("pi");
@@ -54,11 +56,13 @@ impl Config {
             download_dir: download_dir.clone(),
             packages_dir: packages_dir.clone(),
             pilocals_dir: pilocals_dir.clone(),
+            force,
             state: Arc::new(State {
                 meta_dir,
                 download_dir,
                 packages_dir,
                 pilocals_dir,
+                force,
                 ..Default::default()
             }),
         }

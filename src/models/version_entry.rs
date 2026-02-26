@@ -41,10 +41,28 @@ impl FromStr for ReleaseType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash, Default, Eq)]
 pub struct StructuredVersion {
     pub components: Vec<u32>,
     pub raw: String,
+}
+
+impl PartialOrd for StructuredVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for StructuredVersion {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        for (a, b) in self.components.iter().zip(other.components.iter()) {
+            if a != b {
+                return a.cmp(b);
+            }
+        }
+        self.components.len().cmp(&other.components.len())
+            .then_with(|| self.raw.cmp(&other.raw))
+    }
 }
 
 impl Display for StructuredVersion {
@@ -100,13 +118,13 @@ pub struct VersionEntry {
     pub release_type: ReleaseType,
     #[serde(default)]
     pub stream: String,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub pipeline: Vec<InstallStep>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub exports: Vec<Export>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub flags: Vec<BuildFlag>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub build_dependencies: Vec<Dependency>,
 }
 
@@ -126,33 +144,38 @@ impl VersionList {
         let key = format!("{}:{}", repo.name, package_name);
         use dashmap::mapref::entry::Entry;
 
-        match config.state.version_lists.entry(key) {
-            Entry::Occupied(occupied) => Some(occupied.get().clone()),
-            Entry::Vacant(vacant) => {
-                if let Ok(list) = Self::load(config, &repo.name, package_name) {
-                    let arc_list = Arc::new(list);
-                    return Some(vacant.insert(arc_list).clone());
-                }
-
-                if let Some(pkg) = package_entry {
-                    crate::services::sync::sync_package(config, repo, pkg);
-                } else if let Some((mgr, pkg_name)) = manager_entry {
-                    crate::services::sync::sync_manager_package(
-                        config,
-                        repo,
-                        mgr,
-                        package_name.split(':').next().unwrap_or(""),
-                        pkg_name,
-                    );
-                }
-
-                if let Ok(list) = Self::load(config, &repo.name, package_name) {
-                    let arc_list = Arc::new(list);
-                    return Some(vacant.insert(arc_list).clone());
-                }
-                None
+        if !config.force {
+            if let Entry::Occupied(occupied) = config.state.version_lists.entry(key.clone()) {
+                return Some(occupied.get().clone());
             }
         }
+
+        // Try to load from disk first if not forcing
+        if !config.force {
+            if let Ok(list) = Self::load(config, &repo.name, package_name) {
+                let arc_list = Arc::new(list);
+                return Some(config.state.version_lists.entry(key).or_insert(arc_list).clone());
+            }
+        }
+
+        // Force sync if enabled or if not found on disk
+        if let Some(pkg) = package_entry {
+            crate::services::sync::sync_package(config, repo, pkg);
+        } else if let Some((mgr, pkg_name)) = manager_entry {
+            crate::services::sync::sync_manager_package(
+                config,
+                repo,
+                mgr,
+                package_name.split(':').next().unwrap_or(""),
+                pkg_name,
+            );
+        }
+
+        if let Ok(list) = Self::load(config, &repo.name, package_name) {
+            let arc_list = Arc::new(list);
+            return Some(config.state.version_lists.entry(key).or_insert(arc_list).clone());
+        }
+        None
     }
 
     pub fn load(config: &Config, repo_name: &str, package_name: &str) -> anyhow::Result<Self> {

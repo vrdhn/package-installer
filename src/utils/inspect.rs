@@ -17,11 +17,10 @@ pub fn inspect_version(s: &str) -> InspectedVersion {
 
     let mut release_type = ReleaseType::Stable;
     let mut components = Vec::new();
-    let mut raw = String::new();
+    let raw = s.to_string();
 
     if let Some(caps) = version_re.captures(s) {
         if let Some(v_str) = caps.get(1) {
-            raw = v_str.as_str().to_string();
             components = v_str.as_str()
                 .split('.')
                 .filter_map(|p| p.parse::<u32>().ok())
@@ -35,16 +34,7 @@ pub fn inspect_version(s: &str) -> InspectedVersion {
                 "nightly" | "canary" => ReleaseType::Unstable,
                 _ => ReleaseType::Stable,
             };
-            
-            // Append suffix to raw if present
-            if let Some(v) = caps.get(0) {
-                 raw = v.as_str().to_string();
-            }
         }
-    }
-
-    if raw.is_empty() {
-        raw = s.to_string();
     }
 
     InspectedVersion {

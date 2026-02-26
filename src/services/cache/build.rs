@@ -58,6 +58,13 @@ impl BuildCache {
         if let Some(steps) = cache.versions.get(version) {
             if let Some(result) = steps.get(step_index) {
                 if result.step_hash == step_hash && result.status == "Success" {
+                    // Check if the output path still exists
+                    if let Some(ref path) = result.output_path {
+                        if !path.exists() {
+                            log::debug!("cached output path for {} (step {}) does not exist: {:?}", pkgname, step_index, path);
+                            return None;
+                        }
+                    }
                     return Some(result.clone());
                 }
             }
@@ -70,7 +77,10 @@ impl BuildCache {
         let steps = cache.versions.entry(version.to_string()).or_default();
         
         if step_index < steps.len() {
-            steps[step_index] = result;
+            // If we are updating an existing step, truncate all subsequent steps
+            // as they depend on this one.
+            steps.truncate(step_index);
+            steps.push(result);
         } else if step_index == steps.len() {
             steps.push(result);
         } else {

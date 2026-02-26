@@ -35,29 +35,30 @@ impl PackageList {
     pub fn get_for_repo(config: &Config, repo: &crate::models::repository::Repository) -> Option<Arc<Self>> {
         use dashmap::mapref::entry::Entry;
 
-        match config.state.package_lists.entry(repo.name.clone()) {
-            Entry::Occupied(occupied) => Some(occupied.get().clone()),
-            Entry::Vacant(vacant) => {
-                // Try to load from disk first
-                if let Ok(mut list) = Self::load(config, &repo.name) {
-                    list.initialize_maps();
-                    let arc_list = Arc::new(list);
-                    return Some(vacant.insert(arc_list).clone());
-                }
+        if !config.force {
+            if let Entry::Occupied(occupied) = config.state.package_lists.entry(repo.name.clone()) {
+                return Some(occupied.get().clone());
+            }
 
-                // If not on disk, sync
-                log::info!("[{}] cache missing, syncing", repo.name);
-                crate::services::sync::sync_repo(config, repo);
-
-                // Try to load again after sync
-                if let Ok(mut list) = Self::load(config, &repo.name) {
-                    list.initialize_maps();
-                    let arc_list = Arc::new(list);
-                    return Some(vacant.insert(arc_list).clone());
-                }
-                None
+            // Try to load from disk if not forcing
+            if let Ok(mut list) = Self::load(config, &repo.name) {
+                list.initialize_maps();
+                let arc_list = Arc::new(list);
+                return Some(config.state.package_lists.entry(repo.name.clone()).or_insert(arc_list).clone());
             }
         }
+
+        // If force is true, or if not found on disk, sync
+        log::info!("[{}] {}syncing", repo.name, if config.force { "force " } else { "" });
+        crate::services::sync::sync_repo(config, repo);
+
+        // Try to load again after sync
+        if let Ok(mut list) = Self::load(config, &repo.name) {
+            list.initialize_maps();
+            let arc_list = Arc::new(list);
+            return Some(config.state.package_lists.entry(repo.name.clone()).or_insert(arc_list).clone());
+        }
+        None
     }
 
     pub fn initialize_maps(&mut self) {

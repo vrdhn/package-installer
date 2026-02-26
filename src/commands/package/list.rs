@@ -154,10 +154,10 @@ fn add_versions_to_table(
         })
         .collect();
 
+    // Sort by version descending, then by release_date descending
     filtered_versions.sort_by(|a, b| {
-        b.release_date
-            .cmp(&a.release_date)
-            .then_with(|| b.version.raw.cmp(&a.version.raw))
+        b.version.cmp(&a.version)
+            .then_with(|| b.release_date.cmp(&a.release_date))
     });
 
     if truncate && !filtered_versions.is_empty() {

@@ -114,16 +114,48 @@ fn re_evaluate_version(
     all_options: &std::collections::HashMap<String, std::collections::HashMap<String, serde_json::Value>>
 ) -> Result<VersionEntry> {
     let repo = repo_config.repositories.iter().find(|r| r.name == repo_name)
-        .context("Repository not found during re-evaluation")?;
+        .context(format!("Repository '{}' not found during re-evaluation", repo_name))?;
     
     let pkg_list = crate::models::package_entry::PackageList::get_for_repo(config, repo)
-        .context("Package list not found")?;
+        .context(format!("Package list for repository '{}' not found", repo_name))?;
     
-    let pkg_entry = pkg_list.packages.iter().find(|p| p.name == version.pkgname)
-        .context("Package entry not found during re-evaluation")?;
+    // Look for direct package
+    let pkg_entry = pkg_list.packages.iter().find(|p| p.name == version.pkgname);
+    
+    log::debug!("re-evaluating {} (version {})", version.pkgname, version.version);
 
-    let star_path = Path::new(&repo.path).join(&pkg_entry.filename);
-    
+    // If not found, check if it's a manager package (it might have a : in the name or be registered with just the pkg part)
+    let is_manager = version.pkgname.contains(':');
+    let manager_entry = if pkg_entry.is_none() {
+        if is_manager {
+            let prefix = version.pkgname.split(':').next().unwrap();
+            pkg_list.managers.iter().find(|m| m.name == prefix)
+        } else {
+            // It might be a manager package registered without the prefix in v.pkgname
+            // (e.g. v.pkgname = "hex" but it's "hex:hex")
+            // This happens if the recipe doesn't use the full name in create_version.
+            // We can try to find ANY manager that matches this pkgname in a discovery function.
+            // But usually we can just check if any manager name matches.
+            pkg_list.managers.iter().find(|m| m.name == version.pkgname)
+        }
+    } else {
+        None
+    };
+
+    let star_path = if let Some(pkg) = pkg_entry {
+        Path::new(&repo.path).join(&pkg.filename)
+    } else if let Some(mgr) = manager_entry {
+        Path::new(&repo.path).join(&mgr.filename)
+    } else {
+        anyhow::bail!("Package entry '{}' not found in repository '{}' during re-evaluation", version.pkgname, repo_name);
+    };
+
+    let function_name = if let Some(pkg) = pkg_entry {
+        &pkg.function_name
+    } else {
+        &manager_entry.unwrap().function_name
+    };
+
     let mut options = std::collections::HashMap::new();
     if let Some(pkg_opts) = all_options.get(&version.pkgname) {
         for (k, v) in pkg_opts {
@@ -135,16 +167,31 @@ fn re_evaluate_version(
         }
     }
 
-    let dynamic_versions = crate::starlark::runtime::execute_function(
-        &star_path,
-        &pkg_entry.function_name,
-        &pkg_entry.name,
-        config.state.clone(),
-        Some(options),
-    )?;
+    let dynamic_versions = if is_manager {
+        let parts: Vec<&str> = version.pkgname.split(':').collect();
+        let manager_name = parts[0];
+        let package_name = parts.get(1).cloned().unwrap_or(manager_name);
+
+        crate::starlark::runtime::execute_manager_function(
+            &star_path,
+            function_name,
+            manager_name,
+            package_name,
+            config.state.clone(),
+            Some(options),
+        )?
+    } else {
+        crate::starlark::runtime::execute_function(
+            &star_path,
+            function_name,
+            &version.pkgname,
+            config.state.clone(),
+            Some(options),
+        )?
+    };
 
     dynamic_versions.into_iter().find(|v| v.version == version.version)
-        .context(format!("Version {} not found after re-evaluation of {}", version.version, version.pkgname))
+        .context(format!("Version {} not found after re-evaluation of {} in {}", version.version, version.pkgname, repo_name))
 }
 
 fn execute_pipeline(
@@ -163,12 +210,15 @@ fn execute_pipeline(
     // 1. Resolve build-time dependencies
     let mut dependency_dirs = Vec::new();
     for dep in &version.build_dependencies {
-        // Resolve dependency by name (no version for now as requested)
-        let selector = PackageSelector {
-            recipe: None,
-            prefix: None,
-            package: dep.name.clone(),
-            version: None,
+        // Resolve dependency using its selector string
+        let selector = match PackageSelector::parse(&dep.name) {
+            Some(s) => s,
+            None => {
+                if !dep.optional {
+                    anyhow::bail!("[{}] invalid dependency selector: {}", pkg_ctx, dep.name);
+                }
+                continue;
+            }
         };
 
         if let Some((_, dep_version, dep_repo)) = resolve::resolve_query(config, repo_config, &selector) {
@@ -205,6 +255,7 @@ fn execute_pipeline(
         }
     }
 
+    let mut recomputed = false;
     for (i, step) in version.pipeline.iter().enumerate() {
         // Resolve @PACKAGES_DIR placeholder in Run commands before hashing
         let mut resolved_step = step.clone();
@@ -214,12 +265,15 @@ fn execute_pipeline(
 
         let step_hash = hash_to_string(&resolved_step);
         
-        if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version.to_string(), i, &step_hash) {
-            log::debug!("[{}] step {} cache hit", pkg_ctx, i);
-            current_path = cached.output_path;
-            continue;
+        if !config.force && !recomputed {
+            if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version.to_string(), i, &step_hash) {
+                log::debug!("[{}] step {} cache hit", pkg_ctx, i);
+                current_path = cached.output_path;
+                continue;
+            }
         }
 
+        recomputed = true;
         log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, resolved_step);
         let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version.to_string(), dependency_dirs.clone())?;
 

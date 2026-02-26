@@ -17,6 +17,10 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub quiet: bool,
 
+    /// Force update metadata and bypass cache
+    #[arg(short, long, global = true)]
+    pub force: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
