@@ -55,8 +55,8 @@ fn main() {
             cli::parser::PackageCommands::Sync { selector } => {
                 commands::package::sync::run(&config, selector.as_deref());
             }
-            cli::parser::PackageCommands::List { selector } => {
-                commands::package::list::run(&config, selector.as_deref());
+            cli::parser::PackageCommands::List { selector, all } => {
+                commands::package::list::run(&config, selector.as_deref(), all);
             }
             cli::parser::PackageCommands::Info { selector } => {
                 commands::package::info::run(&config, &selector);

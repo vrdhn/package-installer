@@ -69,13 +69,14 @@ def install_android_studio(package_name):
             dl = downloads[j]
             link = dl.attribute("link")
             if link and link.endswith(suffix):
-                v = create_version(
-                    pkgname = "android-studio",
-                    version = version,
-                    release_date = date,
-                    release_type = release_type
-                )
+                v = create_version("android-studio")
+                v.inspect(version)
+                v.set_release_date(date)
                 v.set_stream(stream)
+                
+                if release_type != "stable":
+                     v.set_release_type(release_type)
+
                 ok_file, filename = extract(r".*/([^/]+)$", link)
                 if not ok_file:
                     filename = link.split("/")[-1]
@@ -107,7 +108,8 @@ def install_android_studio_official(package_name):
             if not ok_ver:
                 version = "unknown"
             
-            v = create_version("android-studio", version)
+            v = create_version("android-studio")
+            v.inspect(version)
             v.fetch(url = href, filename = filename)
             v.extract()
             v.export_link("android-studio/bin/*", "bin")
@@ -158,7 +160,8 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
                                     if micro:
                                         version += "." + micro.text()
                                     
-                                    v = create_version(pkgname, version)
+                                    v = create_version(pkgname)
+                                    v.inspect(version)
                                     v.fetch(url = "https://dl.google.com/android/repository/" + url, filename = url, checksum = checksum)
                                     v.extract()
                                     for src in filemap:

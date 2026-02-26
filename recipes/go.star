@@ -34,11 +34,11 @@ def install_go(package_name):
         for j in range(len(files)):
             f = files[j]
             if f["os"] == go_os and f["arch"] == go_arch and f["kind"] == "archive":
-                release_type = "stable"
+                v = create_version("go")
+                v.inspect(version)
                 if entry["stable"] == False:
-                    release_type = "testing"
+                    v.set_release_type("testing")
                 
-                v = create_version("go", version, release_type = release_type)
                 v.fetch("https://go.dev/dl/" + f["filename"], checksum = f["sha256"], filename = f["filename"])
                 v.extract()
                 v.export_link("go/bin/*", "bin")
@@ -67,11 +67,11 @@ def go_discovery(manager, package):
         if not version:
             continue
             
-        release_type = "stable"
+        v = create_version(package)
+        v.inspect(version)
         if "-" in version:
-            release_type = "testing"
+            v.set_release_type("testing")
         
-        v = create_version(package, version, release_type = release_type)
         # We don't necessarily need to fetch/extract if we just run 'go install'
         # but the manager logic might expect a pipeline.
         # For 'go install', we can just use a run step.

@@ -43,16 +43,15 @@ def install_node(package_name):
             filename = base_name + "." + ext
             url = "https://nodejs.org/dist/" + version + "/" + filename
 
-            release_type = "stable"
-            stream = ""
+            v = create_version("node")
+            v.inspect(version)
+            v.set_release_date(entry["date"])
+            
             if entry["lts"]:
-                release_type = "lts"
+                v.set_release_type("lts")
                 if entry["lts"] != "true" and entry["lts"] != True:
-                    stream = entry["lts"]
-
-            v = create_version("node", version, release_date = entry["date"], release_type = release_type)
-            if stream:
-                v.set_stream(stream)
+                    v.set_stream(entry["lts"])
+            
             v.fetch(url, filename = filename)
             v.extract()
             v.export_link(base_name + "/bin/*", "bin")
@@ -76,17 +75,13 @@ def npm_discovery(manager, package):
     dist_tags = data.get("dist-tags") or {}
     
     for version in versions:
-        v_data = versions[version]
-        
-        ok_test, _ = extract(r".*-(rc|beta|alpha|canary|next).*", version)
-        release_type = "stable"
-        if ok_test:
-            release_type = "testing"
+        v = create_version(package)
+        v.inspect(version)
+        v.set_release_date(time.get(version, ""))
         
         if version == dist_tags.get("latest"):
-            release_type = "stable"
+            v.set_release_type("stable")
         
-        v = create_version(package, version, release_date = time.get(version, ""), release_type = release_type)
         v.run("npm install --prefix ~/.pilocal " + package + "@" + version)
         
         v.register()

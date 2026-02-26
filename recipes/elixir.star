@@ -18,20 +18,14 @@ def install_elixir(package_name):
             asset = assets[j]
             name = asset["name"]
             
-            release_type = "stable"
-            if "-rc." in version or "-rc." in name:
-                release_type = "testing"
-
             ok_otp, otp_ver = extract(r"elixir-otp-([^.]+)\.zip", name)
             if ok_otp:
-                full_version = version + "-otp-" + otp_ver
+                v = create_version("elixir")
+                v.inspect(version + "-otp-" + otp_ver)
+                v.set_release_date(release["published_at"])
                 
-                v = create_version(
-                    pkgname = "elixir",
-                    version = full_version,
-                    release_date = release["published_at"],
-                    release_type = release_type
-                )
+                v.require("erlang=" + otp_ver + ".*")
+                
                 v.fetch(url = asset["browser_download_url"], filename = name)
                 v.extract()
                 v.export_link("bin/*", "bin")
@@ -40,12 +34,9 @@ def install_elixir(package_name):
                 v.register()
             elif name == "Precompiled.zip":
                 # Some releases use this name
-                v = create_version(
-                    pkgname = "elixir",
-                    version = version,
-                    release_date = release["published_at"],
-                    release_type = release_type
-                )
+                v = create_version("elixir")
+                v.inspect(version)
+                v.set_release_date(release["published_at"])
                 v.fetch(url = asset["browser_download_url"], filename = "elixir-" + version + ".zip")
                 v.extract()
                 v.export_link("bin/*", "bin")

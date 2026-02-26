@@ -44,7 +44,7 @@ pub fn run(config: &Config, args: Vec<String>) {
         
         log::info!("[{}] resolving", query);
         if let Some((full_name, version, repo_name)) = resolve::resolve_query(config, repo_config, &selector) {
-            log::info!("[{}/{}] resolved: {} ({})", repo_name, full_name, version.version, version.release_type);
+            log::info!("[{}/{}] resolved: {} ({})", repo_name, full_name, version.version.to_string(), version.release_type.to_string());
         } else {
             log::warn!("[{}] could not resolve, adding anyway", query);
         }

@@ -120,6 +120,9 @@ pub enum PackageCommands {
     List {
         /// Package selector
         selector: Option<String>,
+        /// List all versions and release types
+        #[arg(short, long)]
+        all: bool,
     },
     /// Display detailed information for matching packages
     Info {

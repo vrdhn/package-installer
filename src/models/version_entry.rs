@@ -3,7 +3,55 @@ use allocative::Allocative;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::fmt::{self, Display};
+use std::str::FromStr;
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ReleaseType {
+    #[default]
+    Stable,
+    Unstable,
+    Testing,
+    LTS,
+}
+
+impl Display for ReleaseType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stable => write!(f, "stable"),
+            Self::Unstable => write!(f, "unstable"),
+            Self::Testing => write!(f, "testing"),
+            Self::LTS => write!(f, "lts"),
+        }
+    }
+}
+
+impl FromStr for ReleaseType {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "stable" => Ok(Self::Stable),
+            "unstable" => Ok(Self::Unstable),
+            "testing" => Ok(Self::Testing),
+            "lts" => Ok(Self::LTS),
+            _ => Ok(Self::Stable),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash, Default)]
+pub struct StructuredVersion {
+    pub components: Vec<u32>,
+    pub raw: String,
+}
+
+impl Display for StructuredVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.raw)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative, PartialEq, Hash)]
 pub enum InstallStep {
@@ -47,9 +95,9 @@ pub struct Dependency {
 #[derive(Debug, Clone, Serialize, Deserialize, Allocative, Default)]
 pub struct VersionEntry {
     pub pkgname: String,
-    pub version: String,
+    pub version: StructuredVersion,
     pub release_date: String,
-    pub release_type: String,
+    pub release_type: ReleaseType,
     #[serde(default)]
     pub stream: String,
     #[serde(default, skip_serializing)]

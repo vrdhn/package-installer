@@ -114,7 +114,12 @@ def discover_rust_component(package_name):
 
         top_dir, version = parse_rust_filename(package_name, target, filename)
         
-        v = create_version(package_name, version, release_date = date, release_type = channel)
+        v = create_version(package_name)
+        v.inspect(version)
+        v.set_release_date(date)
+        if channel != "stable":
+            v.set_release_type("testing" if channel == "beta" else "unstable")
+            
         v.fetch(dl_url, checksum = target_data.get("hash"), filename = filename)
         v.extract()
         add_rust_component(v, package_name, target, top_dir)
@@ -138,7 +143,10 @@ def cargo_discovery(manager, package):
             continue
         version = v_data["num"]
         
-        v = create_version(package, version, release_date = v_data["created_at"])
+        v = create_version(package)
+        v.inspect(version)
+        v.set_release_date(v_data["created_at"])
+        
         v.run("cargo install --root ~/.pilocal " + package + " --version " + version)
         # Note: cargo install handles exports by putting them in ~/.pilocal/bin
         # which is already in PATH in our cave setup.

@@ -1,12 +1,12 @@
 use crate::models::config::State;
 use crate::models::package_entry::{ManagerEntry, PackageEntry};
 use crate::models::version_entry::VersionEntry;
+use crate::models::types::{OS, Arch};
 use allocative::{Allocative, Key, Visitor};
 use parking_lot::RwLock;
 use serde::Serialize;
 use starlark::any::ProvidesStaticType;
 use starlark::values::{AllocValue, Heap, StarlarkValue, Value, starlark_value};
-use std::env;
 use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,8 +14,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
-    pub os: String,
-    pub arch: String,
+    pub os: OS,
+    pub arch: Arch,
     pub filename: String,
     pub meta_dir: PathBuf,
     pub download_dir: PathBuf,
@@ -31,8 +31,8 @@ pub struct Context {
 impl Context {
     pub fn new(filename: String, meta_dir: PathBuf, download_dir: PathBuf, packages_dir: PathBuf, state: Arc<State>) -> Self {
         Self {
-            os: env::consts::OS.to_string(),
-            arch: env::consts::ARCH.to_string(),
+            os: OS::default(),
+            arch: Arch::default(),
             filename,
             meta_dir,
             download_dir,
@@ -62,8 +62,8 @@ impl Context {
 impl Allocative for Context {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         let mut visitor = visitor.enter_self_sized::<Self>();
-        visitor.visit_field::<String>(Key::new("os"), &self.os);
-        visitor.visit_field::<String>(Key::new("arch"), &self.arch);
+        visitor.visit_field::<String>(Key::new("os"), &self.os.to_string());
+        visitor.visit_field::<String>(Key::new("arch"), &self.arch.to_string());
         visitor.visit_field::<String>(Key::new("filename"), &self.filename);
         visitor.visit_field::<String>(
             Key::new("meta_dir"),

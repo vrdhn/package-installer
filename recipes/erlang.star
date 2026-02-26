@@ -35,12 +35,10 @@ def install_erlang(package_name):
             url = "https://github.com/erlang/otp/archive/refs/tags/" + tag + ".tar.gz"
             filename = "otp-" + version + ".tar.gz"
 
-        v = create_version(
-            pkgname = "erlang",
-            version = version,
-            release_date = release["published_at"],
-            release_type = "stable"
-        )
+        v = create_version("erlang")
+        v.inspect(version)
+        v.set_release_date(release["published_at"])
+        
         v.add_flag(name="javac", help="Include Java support", default=False)
         v.add_flag(name="termcap", help="Include termcap support", default=False)
 
@@ -92,11 +90,9 @@ def erlang_discovery(manager, package):
         url = "https://github.com/erlang/rebar3/archive/refs/tags/" + tag + ".tar.gz"
         filename = "rebar3-" + version + ".tar.gz"
 
-        v = create_version(
-            pkgname = "erlang:rebar3",
-            version = version,
-            release_date = release["published_at"]
-        )
+        v = create_version("erlang:rebar3")
+        v.inspect(version)
+        v.set_release_date(release["published_at"])
         
         # rebar3 requires erlang to build
         v.require("erlang")

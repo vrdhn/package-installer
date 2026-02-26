@@ -192,8 +192,9 @@ fn execute_pipeline(
                     if p.is_absolute() {
                         // Get the directory containing bin/ or lib/
                         if let Some(parent) = p.parent() {
-                            if !dependency_dirs.contains(&parent.to_path_buf()) {
-                                dependency_dirs.push(parent.to_path_buf());
+                            let parent_buf = parent.to_path_buf();
+                            if !dependency_dirs.contains(&parent_buf) {
+                                dependency_dirs.push(parent_buf);
                             }
                         }
                     }
@@ -213,14 +214,14 @@ fn execute_pipeline(
 
         let step_hash = hash_to_string(&resolved_step);
         
-        if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version, i, &step_hash) {
+        if let Some(cached) = build_cache.get_step_result(&version.pkgname, &version.version.to_string(), i, &step_hash) {
             log::debug!("[{}] step {} cache hit", pkg_ctx, i);
             current_path = cached.output_path;
             continue;
         }
 
         log::info!("[{}] executing step {}: {:?}", pkg_ctx, i, resolved_step);
-        let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version, dependency_dirs.clone())?;
+        let result_path = execute_step(config, cave, variant, &resolved_step, &current_path, &env, &version.pkgname, &version.version.to_string(), dependency_dirs.clone())?;
 
         let step_name = match resolved_step {
             InstallStep::Fetch { name, .. } => name.clone(),
@@ -228,7 +229,7 @@ fn execute_pipeline(
             InstallStep::Run { name, .. } => name.clone(),
         };
 
-        build_cache.update_step_result(&version.pkgname, &version.version, i, StepResult {
+        build_cache.update_step_result(&version.pkgname, &version.version.to_string(), i, StepResult {
             name: step_name,
             step_hash,
             timestamp: chrono::Utc::now().to_rfc3339(),

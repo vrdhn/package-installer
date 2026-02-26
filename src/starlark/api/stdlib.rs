@@ -59,12 +59,12 @@ fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
 
     fn get_os(eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
         let context = get_context(eval)?;
-        Ok(context.os.clone())
+        Ok(context.os.to_string())
     }
 
     fn get_arch(eval: &mut Evaluator<'_, '_, '_>) -> anyhow::Result<String> {
         let context = get_context(eval)?;
-        Ok(context.arch.clone())
+        Ok(context.arch.to_string())
     }
 
     fn add_package<'v>(

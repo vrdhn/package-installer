@@ -1,4 +1,5 @@
-use crate::models::version_entry::{VersionEntry, InstallStep, Export, BuildFlag, Dependency};
+use crate::models::version_entry::{VersionEntry, InstallStep, Export, BuildFlag, Dependency, ReleaseType, StructuredVersion};
+use crate::utils::inspect::inspect_version;
 use anyhow::Context as _;
 use starlark::eval::Evaluator;
 use starlark::starlark_module;
@@ -14,6 +15,7 @@ use allocative::Allocative;
 use serde::Serialize;
 use std::fmt::{self, Debug, Display};
 use std::sync::Arc;
+use std::str::FromStr;
 use parking_lot::RwLock;
 use crate::starlark::api::utils::get_context;
 use starlark::environment::GlobalsBuilder;
@@ -21,9 +23,9 @@ use starlark::environment::GlobalsBuilder;
 #[derive(Debug, ProvidesStaticType, Clone, Allocative, Serialize)]
 pub struct VersionBuilder {
     pub pkgname: String,
-    pub version: String,
+    pub version: StructuredVersion,
     pub release_date: String,
-    pub release_type: String,
+    pub release_type: ReleaseType,
     pub stream: String,
     pub pipeline: Vec<InstallStep>,
     pub exports: Vec<Export>,
@@ -66,9 +68,42 @@ impl<'v> AllocValue<'v> for StarlarkVersionBuilder {
 
 #[starlark_module]
 fn version_builder_methods(builder: &mut MethodsBuilder) {
+    fn inspect(this: Value, s: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let inspected = inspect_version(&s);
+        let mut b = this.builder.write();
+        b.version = inspected.version;
+        b.release_type = inspected.release_type;
+        Ok(NoneType)
+    }
+
     fn set_stream(this: Value, name: String) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
         this.builder.write().stream = name;
+        Ok(NoneType)
+    }
+
+    fn set_release_type(this: Value, name: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let rt = ReleaseType::from_str(&name).unwrap_or(ReleaseType::Stable);
+        this.builder.write().release_type = rt;
+        Ok(NoneType)
+    }
+
+    fn set_release_date(this: Value, date: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        this.builder.write().release_date = date;
+        Ok(NoneType)
+    }
+
+    fn set_version(this: Value, version: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let mut b = this.builder.write();
+        b.version.raw = version.clone();
+        b.version.components = version
+            .split('.')
+            .filter_map(|p| p.parse::<u32>().ok())
+            .collect();
         Ok(NoneType)
     }
 
@@ -195,16 +230,21 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
 pub fn register_version_globals(builder: &mut GlobalsBuilder) {
     fn create_version(
         pkgname: String,
-        version: String,
+        version: Option<String>,
         release_date: Option<String>,
         release_type: Option<String>,
     ) -> anyhow::Result<StarlarkVersionBuilder> {
+        let v = version.unwrap_or_default();
+        let rt = release_type
+            .and_then(|s| ReleaseType::from_str(&s).ok())
+            .unwrap_or_default();
+
         Ok(StarlarkVersionBuilder {
             builder: Arc::new(RwLock::new(VersionBuilder {
                 pkgname,
-                version,
+                version: StructuredVersion { components: Vec::new(), raw: v },
                 release_date: release_date.unwrap_or_default(),
-                release_type: release_type.unwrap_or_else(|| "stable".to_string()),
+                release_type: rt,
                 stream: String::new(),
                 pipeline: Vec::new(),
                 exports: Vec::new(),

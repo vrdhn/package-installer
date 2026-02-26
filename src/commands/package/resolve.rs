@@ -108,13 +108,13 @@ pub fn find_best_version(v_list: VersionList, target_version: &str) -> Option<Ve
         .filter(|v| match target_version {
             "latest" => true,
             "stable" | "lts" | "testing" | "unstable" => {
-                v.release_type.to_lowercase() == target_version
+                v.release_type.to_string().to_lowercase() == target_version
             }
             _ => {
                 if target_version.contains('*') {
-                    match_version_with_wildcard(&v.version, target_version)
+                    match_version_with_wildcard(&v.version.to_string(), target_version)
                 } else {
-                    v.version == target_version
+                    v.version.to_string() == target_version
                 }
             }
         })

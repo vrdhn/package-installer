@@ -9,7 +9,7 @@ pub fn run(config: &Config, selector_str: Option<&str>) {
     let selector = selector_str.and_then(PackageSelector::parse);
     sync_all(config, selector);
     if log::log_enabled!(log::Level::Info) {
-        list::run(config, selector_str);
+        list::run(config, selector_str, false);
     }
 }
 

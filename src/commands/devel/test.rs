@@ -55,13 +55,13 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
             versions.sort_by(|a, b| {
                 b.release_date
                     .cmp(&a.release_date)
-                    .then_with(|| b.version.cmp(&a.version))
+                    .then_with(|| b.version.raw.cmp(&a.version.raw))
             });
 
             print_versions_table(&versions);
 
             if let Some(v) = versions.first() {
-                info!("testing pipeline for version {}", v.version);
+                info!("testing pipeline for version {}", v.version.to_string());
             }
         }
         Err(e) => error!("mgr function failed: {}", e),
@@ -87,13 +87,13 @@ fn run_package_function(config: &Config, package_name: &str, entry: &crate::mode
             versions.sort_by(|a, b| {
                 b.release_date
                     .cmp(&a.release_date)
-                    .then_with(|| b.version.cmp(&a.version))
+                    .then_with(|| b.version.raw.cmp(&a.version.raw))
             });
 
             print_versions_table(&versions);
 
             if let Some(v) = versions.first() {
-                info!("testing pipeline for version {}", v.version);
+                info!("testing pipeline for version {}", v.version.to_string());
             }
         }
         Err(e) => error!("function failed: {}", e),
@@ -118,12 +118,14 @@ fn print_versions_table(versions: &[VersionEntry]) {
 
     for v in versions.iter().take(5) {
         let stream = if v.stream.is_empty() { "-" } else { &v.stream };
+        let v_str = v.version.to_string();
+        let rt_str = v.release_type.to_string();
         table.add_row(vec![
             &v.pkgname,
-            &v.version,
+            &v_str,
             stream,
             &v.release_date,
-            &v.release_type,
+            &rt_str,
             &v.pipeline.len().to_string(),
         ]);
     }

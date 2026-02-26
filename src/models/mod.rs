@@ -5,3 +5,4 @@ pub mod repository;
 pub mod selector;
 pub mod version_entry;
 pub mod cave;
+pub mod types;
