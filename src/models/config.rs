@@ -24,43 +24,65 @@ pub struct State {
     pub package_lists: DashMap<String, Arc<PackageList>>,
     pub version_lists: DashMap<String, Arc<VersionList>>,
     pub download_locks: DashMap<String, Arc<parking_lot::Mutex<()>>>,
-    pub meta_dir: PathBuf,
-    pub download_dir: PathBuf,
-    pub packages_dir: PathBuf,
-    pub pilocals_dir: PathBuf,
-    pub force: bool,
 }
 
 impl Config {
     pub fn new(force: bool) -> Self {
         let xdg = xdg::BaseDirectories::with_prefix("pi");
-        
+
         let cache_dir = xdg.get_cache_home().expect("Failed to get cache home");
         let config_dir = xdg.get_config_home().expect("Failed to get config home");
         let state_dir = xdg.get_state_home().expect("Failed to get state home");
 
-        let meta_dir = xdg.create_cache_directory("meta").expect("Failed to create meta directory");
-        let download_dir = xdg.create_cache_directory("downloads").expect("Failed to create downloads directory");
-        let packages_dir = xdg.create_cache_directory("packages").expect("Failed to create packages directory");
-        let pilocals_dir = xdg.create_cache_directory("pilocals").expect("Failed to create pilocals directory");
+        let meta_dir = xdg.create_cache_directory("meta")
+	    .expect("Failed to create meta directory");
+        let download_dir = xdg.create_cache_directory("downloads")
+	    .expect("Failed to create downloads directory");
+        let packages_dir = xdg.create_cache_directory("packages")
+	    .expect("Failed to create packages directory");
+        let pilocals_dir = xdg.create_cache_directory("pilocals")
+	    .expect("Failed to create pilocals directory");
 
         Self {
             cache_dir,
             config_dir,
             state_dir,
-            meta_dir: meta_dir.clone(),
-            download_dir: download_dir.clone(),
-            packages_dir: packages_dir.clone(),
-            pilocals_dir: pilocals_dir.clone(),
+            meta_dir,
+            download_dir,
+            packages_dir,
+            pilocals_dir,
             force,
-            state: Arc::new(State {
-                meta_dir,
-                download_dir,
-                packages_dir,
-                pilocals_dir,
-                force,
-                ..Default::default()
-            }),
+            state: Arc::new(State::default()),
+        }
+    }
+
+    pub fn new_test(base_dir: PathBuf) -> Self {
+        let cache_dir = base_dir.join("cache");
+        let config_dir = base_dir.join("config");
+        let state_dir = base_dir.join("state");
+        let meta_dir = cache_dir.join("meta");
+        let download_dir = cache_dir.join("downloads");
+        let packages_dir = cache_dir.join("packages");
+        let pilocals_dir = cache_dir.join("pilocals");
+
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::create_dir_all(&meta_dir).unwrap();
+        std::fs::create_dir_all(&download_dir).unwrap();
+        std::fs::create_dir_all(&packages_dir).unwrap();
+        std::fs::create_dir_all(&pilocals_dir).unwrap();
+
+        Self {
+            cache_dir,
+            config_dir,
+            state_dir,
+            meta_dir,
+            download_dir,
+            packages_dir,
+            pilocals_dir,
+            force: false,
+            state: Arc::new(State::default()),
         }
     }
 

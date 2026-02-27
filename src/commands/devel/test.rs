@@ -7,7 +7,7 @@ pub fn run(config: &Config, filename: &str, pkg: Option<&str>) {
     info!("testing file: {}", filename);
 
     let path = Path::new(filename);
-    match crate::starlark::runtime::evaluate_file(path, config.state.clone()) {
+    match crate::starlark::runtime::evaluate_file(path, config) {
         Ok((packages, managers)) => {
             info!("registered {} pkgs, {} mgrs", packages.len(), managers.len());
             if let Some(package_name) = pkg {
@@ -43,12 +43,14 @@ fn run_manager_function(config: &Config, manager_name: &str, package_name: &str,
 
     let star_path = Path::new(&entry.filename);
     match crate::starlark::runtime::execute_manager_function(
-        &star_path,
-        &entry.function_name,
+        crate::starlark::runtime::ExecutionOptions {
+            path: &star_path,
+            function_name: &entry.function_name,
+            config,
+            options: None,
+        },
         manager_name,
         package_name,
-        config.state.clone(),
-        None,
     ) {
         Ok(mut versions) => {
             info!("found {} versions", versions.len());
@@ -76,11 +78,13 @@ fn run_package_function(config: &Config, package_name: &str, entry: &crate::mode
 
     let star_path = Path::new(&entry.filename);
     match crate::starlark::runtime::execute_function(
-        &star_path,
-        &entry.function_name,
+        crate::starlark::runtime::ExecutionOptions {
+            path: &star_path,
+            function_name: &entry.function_name,
+            config,
+            options: None,
+        },
         package_name,
-        config.state.clone(),
-        None,
     ) {
         Ok(mut versions) => {
             info!("found {} versions", versions.len());

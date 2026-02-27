@@ -13,40 +13,54 @@ pub fn run(config: &Config, variant: Option<String>, command: Vec<String>) {
     }
 }
 
-pub fn prepare_sandbox(
-    config: &Config,
-    cave: &Cave,
-    variant: Option<&str>,
-    package_envs: HashMap<String, String>,
-    writable_pilocal: bool,
-    dependency_dirs: Vec<PathBuf>,
-) -> Result<Bubblewrap> {
-    let settings = cave.get_effective_settings(variant).context("failed to get cave settings")?;
+/// Options for preparing the sandbox environment.
+pub struct SandboxOptions<'a> {
+    pub config: &'a Config,
+    pub cave: &'a Cave,
+    pub variant: Option<&'a str>,
+    pub package_envs: HashMap<String, String>,
+    pub writable_pilocal: bool,
+    pub dependency_dirs: Vec<PathBuf>,
+}
+
+/// Prepares the Bubblewrap sandbox with necessary binds and environment variables.
+/// Example host_pilocal: "/home/user/.cache/pi/pilocals/my-cave"
+/// Example internal_pilocal: "/home/user/.pilocal"
+pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
+    let settings = opts.cave.get_effective_settings(opts.variant).context("failed to get cave settings")?;
     let mut b = Bubblewrap::new();
-    let host_home = config.get_host_home();
+    let host_home = opts.config.get_host_home();
     let internal_pilocal = host_home.join(".pilocal");
 
     bind_system_paths(&mut b);
     bind_virtual_fs(&mut b);
-    bind_workspace_and_home(&mut b, cave, &host_home)?;
-    bind_pilocal_and_caches(&mut b, config, cave, variant, writable_pilocal, &internal_pilocal)?;
+    bind_workspace_and_home(&mut b, opts.cave, &host_home)?;
+    bind_pilocal_and_caches(&mut b, opts.config, opts.cave, opts.variant, opts.writable_pilocal, &internal_pilocal)?;
     setup_xdg_runtime(&mut b);
     
-    // Bind dependencies
-    for dir in dependency_dirs.iter() {
+    bind_dependencies(&mut b, &opts.dependency_dirs);
+
+    setup_environment(&mut b, opts.config, opts.cave, &host_home, &internal_pilocal);
+    apply_custom_envs(&mut b, opts.package_envs, &settings.set, &host_home, &internal_pilocal);
+
+    set_sandbox_hostname(&mut b, opts.config, opts.cave, opts.variant);
+
+    Ok(b)
+}
+
+fn bind_dependencies(b: &mut Bubblewrap, dependency_dirs: &[PathBuf]) {
+    for dir in dependency_dirs {
         if dir.exists() {
             b.add_bind(BindType::RoBind, dir);
-            // Also add bin to PATH if it exists
             let bin_dir = dir.join("bin");
             if bin_dir.exists() {
                 b.add_env_first("PATH", bin_dir.to_str().unwrap());
             }
         }
     }
+}
 
-    setup_environment(&mut b, config, cave, &host_home, &internal_pilocal);
-    apply_custom_envs(&mut b, package_envs, &settings.set, &host_home, &internal_pilocal);
-
+fn set_sandbox_hostname(b: &mut Bubblewrap, config: &Config, cave: &Cave, variant: Option<&str>) {
     let host_hostname = config.get_hostname();
     let (prefix, suffix) = match host_hostname.find('.') {
         Some(idx) => (&host_hostname[..idx], &host_hostname[idx..]),
@@ -60,8 +74,6 @@ pub fn prepare_sandbox(
         format!("{}-{}{}", prefix, cave.name, suffix)
     };
     b.set_hostname(&cave_hostname);
-
-    Ok(b)
 }
 
 fn bind_system_paths(b: &mut Bubblewrap) {
@@ -177,7 +189,14 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
 
     let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant.as_deref())?;
 
-    let mut b = prepare_sandbox(config, &cave, variant.as_deref(), package_envs, false, Vec::new())?;
+    let mut b = prepare_sandbox(SandboxOptions {
+        config,
+        cave: &cave,
+        variant: variant.as_deref(),
+        package_envs,
+        writable_pilocal: false,
+        dependency_dirs: Vec::new(),
+    })?;
     
     log::info!("entering cave");
     if log::log_enabled!(log::Level::Info) {

@@ -7,6 +7,7 @@ use anyhow::Context;
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CaveSettings {
     #[serde(default)]
+
     pub packages: Vec<String>,
     #[serde(default)]
     pub set: HashMap<String, String>,
@@ -56,7 +57,7 @@ impl Cave {
         let name = path.file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "default".to_string());
-        
+
         Self {
             name,
             workspace: path,

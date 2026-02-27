@@ -12,6 +12,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::collections::HashMap;
 
+/// The Context struct serves as the bridge between the Rust host and the Starlark guest environment.
+///
+/// It is used for:
+/// 1. Starlark Script Isolation: Each Starlark file (recipe) needs to know its own context,
+///    such as its filename and the options passed to it, without polluting a global state.
+/// 2. API Access: Starlark API functions (like add_package, download, or get_os) use the
+///    Context to know where to save results and where the filesystem boundaries are.
+/// 3. State Accumulation: During evaluation, Starlark scripts populate the packages and
+///    managers fields. Rust then extracts these to know what the script defined.
+/// 4. Type Safety & Serialization: It can be safely embedded into the Starlark Heap and
+///    serialized for debugging or caching.
 #[derive(Debug, ProvidesStaticType, Serialize)]
 pub struct Context {
     pub os: OS,
@@ -20,6 +31,7 @@ pub struct Context {
     pub meta_dir: PathBuf,
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
+    pub force: bool,
     pub packages: RwLock<Vec<PackageEntry>>,
     pub managers: RwLock<Vec<ManagerEntry>>,
     pub versions: RwLock<Vec<VersionEntry>>,
@@ -29,7 +41,7 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(filename: String, meta_dir: PathBuf, download_dir: PathBuf, packages_dir: PathBuf, state: Arc<State>) -> Self {
+    pub fn new(filename: String, meta_dir: PathBuf, download_dir: PathBuf, packages_dir: PathBuf, force: bool, state: Arc<State>) -> Self {
         Self {
             os: OS::default(),
             arch: Arch::default(),
@@ -37,6 +49,7 @@ impl Context {
             meta_dir,
             download_dir,
             packages_dir,
+            force,
             packages: RwLock::new(Vec::new()),
             managers: RwLock::new(Vec::new()),
             versions: RwLock::new(Vec::new()),
@@ -77,6 +90,7 @@ impl Allocative for Context {
             Key::new("packages_dir"),
             &self.packages_dir.to_string_lossy().to_string(),
         );
+        visitor.visit_field::<bool>(Key::new("force"), &self.force);
         visitor.exit();
     }
 }

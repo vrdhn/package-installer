@@ -29,7 +29,8 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
         }
 
         if let Some(pkg_list) = PackageList::get_for_repo(config, repo, false) {
-            pkg_list.packages.par_iter().for_each(|pkg| {
+            let packages: Vec<_> = pkg_list.packages.values().collect();
+            packages.par_iter().for_each(|pkg| {
                 // Match package name exactly
                 if let Some(ref s) = selector {
                     if !s.package.is_empty() && s.package != "*" {
@@ -39,20 +40,24 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
                     }
                 }
 
-                crate::services::sync::sync_package(config, repo, pkg);
+                if let Err(e) = crate::services::sync::sync_package(config, repo, pkg) {
+                    log::error!("[{}/{}] sync failed: {}", repo.name, pkg.name, e);
+                }
             });
 
             if let Some(ref s) = selector {
                 if let Some(ref prefix) = s.prefix {
-                    if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+                    if let Some(mgr) = pkg_list.managers.get(prefix) {
                         if !s.package.is_empty() && s.package != "*" {
-                            crate::services::sync::sync_manager_package(
+                            if let Err(e) = crate::services::sync::sync_manager_package(
                                 config,
                                 repo,
                                 mgr,
                                 prefix,
                                 &s.package,
-                            );
+                            ) {
+                                log::error!("[{}/{}:{}] sync failed: {}", repo.name, prefix, s.package, e);
+                            }
                         }
                     }
                 }

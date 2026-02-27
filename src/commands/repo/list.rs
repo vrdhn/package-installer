@@ -19,7 +19,7 @@ pub fn run(config: &Config, name: Option<&str>) {
         }
 
         if let Some(package_list) = PackageList::get_for_repo(config, repo, false) {
-            for pkg in &package_list.packages {
+            for pkg in package_list.packages.values() {
                 table.add_row(vec![
                     repo.name.clone(),
                     "Package".to_string(),
@@ -28,7 +28,7 @@ pub fn run(config: &Config, name: Option<&str>) {
                 ]);
             }
 
-            for mgr in &package_list.managers {
+            for mgr in package_list.managers.values() {
                 table.add_row(vec![
                     repo.name.clone(),
                     "Manager".to_string(),

@@ -20,6 +20,8 @@ pub fn sync_all(config: &Config, name: Option<&str>) {
             }
         }
 
-        crate::services::sync::sync_repo(config, repo);
+        if let Err(e) = crate::services::sync::sync_repo(config, repo) {
+            log::error!("[{}] sync failed: {}", repo.name, e);
+        }
     });
 }
