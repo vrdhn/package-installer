@@ -154,6 +154,7 @@ impl Bubblewrap {
 
     pub fn spawn(&self) -> Result<()> {
         let mut cmd = self.build_command();
+        log::debug!("Spawning sandbox: {:?}", cmd);
         let status = cmd.status().context("Failed to spawn bubblewrap process")?;
         if !status.success() {
             return Err(anyhow::anyhow!("Bubblewrap process failed with status: {}", status));
@@ -163,6 +164,7 @@ impl Bubblewrap {
 
     pub fn exec(&self) -> Result<()> {
         let mut cmd = self.build_command();
+        log::debug!("Exec sandbox: {:?}", cmd);
         let err = cmd.exec();
         // If exec returns, it's always an error
         Err(anyhow::Error::from(err).context("Failed to exec into bubblewrap"))

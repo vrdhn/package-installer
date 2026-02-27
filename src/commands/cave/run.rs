@@ -29,6 +29,7 @@ pub struct SandboxOptions<'a> {
 /// Example internal_pilocal: "/home/user/.pilocal"
 pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
     let settings = opts.cave.get_effective_settings(opts.variant).context("failed to get cave settings")?;
+    
     let mut b = Bubblewrap::new();
     let host_home = opts.config.get_host_home();
     let internal_pilocal = host_home.join(".pilocal");
@@ -42,6 +43,7 @@ pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
     bind_dependencies(&mut b, &opts.dependency_dirs);
 
     setup_environment(&mut b, opts.config, opts.cave, &host_home, &internal_pilocal);
+    
     apply_custom_envs(&mut b, opts.package_envs, &settings.set, &host_home, &internal_pilocal);
 
     set_sandbox_hostname(&mut b, opts.config, opts.cave, opts.variant);
@@ -107,12 +109,19 @@ fn bind_workspace_and_home(b: &mut Bubblewrap, _config: &Config, cave: &Cave, ho
     }
 
     if readonly_home {
+        // Create mount points on host so they exist when we mount homedir RO
+        std::fs::create_dir_all(cave.homedir.join(".pilocal")).ok();
+        std::fs::create_dir_all(cave.homedir.join(".cache")).ok();
+        std::fs::create_dir_all(cave.homedir.join(".config")).ok();
+        
+        let cache_pi = cave.homedir.join(".cache").join("pi");
+        std::fs::create_dir_all(cache_pi).ok();
+        
+        let config_pi = cave.homedir.join(".config").join("pi");
+        std::fs::create_dir_all(config_pi).ok();
+
         // Mount homedir RO (for managers)
         b.add_map_bind(BindType::RoBind, &cave.homedir, host_home);
-        // Ensure mount points for pilocal and cache exist in the sandbox home
-        b.add_virtual(BindType::Dir, host_home.join(".pilocal"));
-        b.add_virtual(BindType::Dir, host_home.join(".cache"));
-        b.add_virtual(BindType::Dir, host_home.join(".cache").join("pi"));
     } else {
         // Normal cave home usage
         b.add_map_bind(BindType::Bind, &cave.homedir, host_home);
