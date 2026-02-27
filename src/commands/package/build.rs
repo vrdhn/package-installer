@@ -30,6 +30,7 @@ pub struct StepContext<'a> {
     pub dependency_dirs: Vec<PathBuf>,
     pub pkgname: &'a str,
     pub version: &'a str,
+    pub pilocal_dir: &'a Path,
 }
 
 pub fn build_packages(
@@ -303,6 +304,7 @@ fn execute_pipeline(
             dependency_dirs: dependency_dirs.clone(),
             pkgname: &version.pkgname,
             version: &version.version.to_string(),
+            pilocal_dir: ctx.pilocal_dir,
         };
 
         let result_path = execute_step(&step_ctx, &resolved_step, &current_path)?;
@@ -375,6 +377,7 @@ fn prepare_build_sandbox(
     pkgname: &str,
     version: &str,
     homedir: &Path,
+    pilocal_dir: &Path,
     env_vars: &HashMap<String, String>,
     dependency_dirs: &[PathBuf],
 ) -> Result<crate::services::sandbox::Bubblewrap> {
@@ -403,12 +406,17 @@ fn prepare_build_sandbox(
     b.add_virtual(crate::services::sandbox::BindType::Tmpfs, "/run");
 
     // Home and caches
-    std::fs::create_dir_all(homedir.join(".pilocal")).ok();
     std::fs::create_dir_all(homedir.join(".cache")).ok();
     std::fs::create_dir_all(homedir.join(".config")).ok();
     std::fs::create_dir_all(homedir.join(".cache").join("pi")).ok();
     std::fs::create_dir_all(homedir.join(".config").join("pi")).ok();
     b.add_map_bind(crate::services::sandbox::BindType::Bind, homedir, &host_home);
+
+    // Mount the cave's pilocal to ~/.pilocal
+    if !pilocal_dir.exists() {
+        std::fs::create_dir_all(pilocal_dir).ok();
+    }
+    b.add_map_bind(crate::services::sandbox::BindType::Bind, pilocal_dir, &internal_pilocal);
 
     if config.cache_dir.exists() {
         b.add_bind(crate::services::sandbox::BindType::Bind, &config.cache_dir);
@@ -505,6 +513,7 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
                 ctx.pkgname,
                 ctx.version,
                 tmp_home.path(),
+                ctx.pilocal_dir,
                 ctx.env,
                 &ctx.dependency_dirs,
             )?;
