@@ -14,7 +14,7 @@ use clap::Parser;
 
 fn main() {
     let cli = Cli::parse();
-    let config = Config::new(cli.force);
+    let config = Config::new(cli.force, cli.rebuild);
 
     init_logging(cli.quiet, cli.verbose, cli.debug);
 
@@ -90,8 +90,9 @@ fn handle_cave_command(command: CaveCommands, config: &Config) {
 fn handle_disk_command(command: DiskCommands, config: &Config) {
     match command {
         DiskCommands::Info => commands::disk::info::run(config),
-        DiskCommands::Clean => commands::disk::clean::run(config),
-        DiskCommands::Uninstall { confirm } => commands::disk::uninstall::run(config, confirm),
+        DiskCommands::Clean { meta, pilocals, packages, downloads, config: config_flag, state, confirm } => {
+            commands::disk::clean::run(config, meta, pilocals, packages, downloads, config_flag, state, confirm);
+        }
     }
 }
 

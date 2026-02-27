@@ -16,6 +16,7 @@ pub struct Config {
     pub cache_packages_dir: PathBuf,
     pub cache_pilocals_dir: PathBuf,
     pub force: bool,
+    pub rebuild: bool,
     pub state: Arc<State>,
 }
 
@@ -36,7 +37,7 @@ pub struct State {
 }
 
 impl Config {
-    pub fn new(force: bool) -> Self {
+    pub fn new(force: bool, rebuild: bool) -> Self {
         let xdg = xdg::BaseDirectories::with_prefix("pi");
 
         let cache_dir = xdg.get_cache_home().expect("Failed to get cache home");
@@ -65,6 +66,7 @@ impl Config {
             cache_packages_dir,
             cache_pilocals_dir,
             force,
+            rebuild,
             state: Arc::new(State::default()),
         }
     }
@@ -98,6 +100,7 @@ impl Config {
             cache_packages_dir: packages_dir,
             cache_pilocals_dir: pilocals_dir,
             force: false,
+            rebuild: false,
             state: Arc::new(State::default()),
         }
     }

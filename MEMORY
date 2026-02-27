@@ -3,7 +3,7 @@ deps: clap, log, env_logger, starlark(0.13.0), anyhow, allocative, serde, serde_
 
 src/
  models/
-  config: Config { cache_dir, config_dir, state_dir, state_home_dir, cache_meta_dir, download_dir, packages_dir, pilocals_dir, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir, pilocals_dir }, is_inside_cave()
+  config: Config { cache_dir, config_dir, state_dir, state_home_dir, cache_meta_dir, download_dir, packages_dir, pilocals_dir, force, rebuild, state: Arc<State> }, State { repositories, package_lists, version_lists, meta_dir, download_dir, packages_dir, pilocals_dir }, is_inside_cave()
   repository: Repository { path, name }, Repositories { repositories, get_all(config), load, save }
   package_entry: PackageEntry { name, fn, file }, ManagerEntry { name, fn, file }, PackageList { packages, managers, get_for_repo(config, repo) }
   version_entry: VersionEntry { pkgname, version, release_date, release_type, pipeline: Vec<InstallStep>, exports: Vec<Export>, flags: Vec<BuildFlag> }, InstallStep { Fetch, Extract, Run }, Export { Link, Env, Path }, BuildFlag { name, help, default }
@@ -23,12 +23,15 @@ src/
     - Cache: URL-based content cache.
     - BuildCache: Hashes pipeline steps (Fetch/Extract/Run) to cache successful outputs and resume builds.
   sync: core logic for syncing repo/package/manager data. Only caches non-empty version lists.
- cli/parser: Cli { quiet, verbose, debug }, Repo, Package, Cave { Init, Info, Add { args }, Rem { args }, Resolve, Build, Run }, Disk, Devel { Test { filename, pkg } }
+ cli/parser: Cli { quiet, verbose, debug, force, rebuild }, Repo, Package, Cave { Init, Info, Add { args }, Rem { args }, Resolve, Build, Run }, Disk { Info, Clean { meta, pilocals, packages, downloads, config, state, confirm } }, Devel { Test { filename, pkg } }
  commands/cave:
   - build: Resolves cave packages. Re-evaluates recipes with current Cave `options`. Executes the **Installation Pipeline** (Fetch -> Extract -> Run), checking `BuildCache` at each step. Applies `Exports` (Link, Env, Path) to the `.pilocal` directory. Manager execution (`Run` step) uses a temporary RO `homedir` (cloned from Cave).
   - run: Executes command inside a bubblewrap sandbox. Automatically runs build first. Maps persistent `cave.homedir` (from `pi.cave.json`) to host `$HOME` (writable). Cave workspace maps to same path. Binds system paths RO. Mounts `.pilocal` cache to `~/.pilocal`. Sets PI_CAVE and prepends `~/.pilocal/bin` to PATH.
   - init: Creates `pi.cave.json` with `homedir` set by default to a subdirectory in `config.state_home_dir`.
   - info: Displays cave info.
+ commands/disk:
+  - info: Shows disk usage for config, cache, and state.
+  - clean: Removes temporary and cached data. Requires explicit flags: `--meta`, `--pilocals`, `--packages`, `--downloads`, `--config`, `--state`. `--confirm` flag required for destructive operations (`--config` or `--state`).
  commands/package:
   - list: Lazy listing. Shows cached versions if available, otherwise just names. Only syncs if explicitly requested or if cache is missing during build.
   - sync: Syncs package metadata. Only triggers manager discovery if a specific package is named.

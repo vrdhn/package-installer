@@ -11,8 +11,11 @@ pub fn run(config: &Config) {
     table.set_header(vec!["Directory", "Path", "Size"]);
 
     add_row(&mut table, "Config", &config.config_dir);
-    add_row(&mut table, "Cache", &config.cache_dir);
     add_row(&mut table, "State", &config.state_dir);
+    add_row(&mut table, "Cache (Meta)", &config.cache_meta_dir);
+    add_row(&mut table, "Cache (Pilocals)", &config.cache_pilocals_dir);
+    add_row(&mut table, "Cache (Packages)", &config.cache_packages_dir);
+    add_row(&mut table, "Cache (Downloads)", &config.cache_download_dir);
 
     println!("{table}");
 }

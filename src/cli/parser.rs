@@ -21,6 +21,10 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub force: bool,
 
+    /// Force rebuild of packages (bypass build cache)
+    #[arg(short, long, global = true)]
+    pub rebuild: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -145,11 +149,27 @@ pub enum PackageCommands {
 pub enum DiskCommands {
     /// Show disk usage of pi directories
     Info,
-    /// Clean the cache directory
-    Clean,
-    /// Uninstall pi (deletes config, state, and cache)
-    Uninstall {
-        /// Confirmation flag to proceed with uninstallation
+    /// Clean the cache and state directories (requires flags)
+    Clean {
+        /// Delete package list cache
+        #[arg(long)]
+        meta: bool,
+        /// Delete pilocal cave environments
+        #[arg(long)]
+        pilocals: bool,
+        /// Delete downloaded packages
+        #[arg(long)]
+        packages: bool,
+        /// Delete original downloads
+        #[arg(long)]
+        downloads: bool,
+        /// Delete config directory
+        #[arg(long)]
+        config: bool,
+        /// Delete state directory (CAUTION: deletes all cave homes)
+        #[arg(long)]
+        state: bool,
+        /// Confirmation flag for destructive operations (--config, --state)
         #[arg(long)]
         confirm: bool,
     },

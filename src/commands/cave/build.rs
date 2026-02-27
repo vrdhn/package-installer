@@ -312,7 +312,12 @@ fn execute_pipeline(
         }
 
         let step_hash = hash_to_string(&resolved_step);
-        if !ctx.config.force && !recomputed {
+        let skip_cache = match step {
+            InstallStep::Fetch { .. } => false, // Fetch handles its own "exists" check
+            _ => ctx.config.rebuild,
+        };
+
+        if !ctx.config.force && !recomputed && !skip_cache {
             if let Some(cached) = ctx.build_cache.get_step_result(&version.pkgname, &version.version.to_string(), i, &step_hash) {
                 current_path = cached.output_path;
                 continue;
@@ -400,6 +405,17 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
         InstallStep::Fetch { url, checksum, filename, .. } => {
             let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
             let dest = ctx.config.cache_download_dir.join(fname);
+            
+            if dest.exists() {
+                if let Some(cs) = checksum {
+                    // TODO: verify checksum. For now just skip if exists.
+                    log::debug!("skipping download, file exists: {}", dest.display());
+                    return Ok(dest);
+                } else {
+                    log::debug!("skipping download, file exists: {}", dest.display());
+                    return Ok(dest);
+                }
+            }
             Downloader::download_to_file(url, &dest, checksum.as_deref())?;
             Ok(dest)
         }
@@ -407,6 +423,15 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
             let src = current_path.as_ref().context("Extract requires a Fetch step")?;
             let pkg_dir = format!("{}-extracted", sanitize_name(&format!("{}-{}", ctx.pkgname, ctx.version)));
             let dest = ctx.config.cache_packages_dir.join(pkg_dir);
+
+            if dest.exists() && !ctx.config.rebuild && !ctx.config.force {
+                log::debug!("skipping extraction, directory exists: {}", dest.display());
+                return Ok(dest);
+            }
+
+            if dest.exists() {
+                let _ = fs::remove_dir_all(&dest);
+            }
             Unarchiver::unarchive(src, &dest)?;
             Ok(dest)
         }
