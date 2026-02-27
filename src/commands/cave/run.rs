@@ -20,6 +20,7 @@ pub struct SandboxOptions<'a> {
     pub variant: Option<&'a str>,
     pub package_envs: HashMap<String, String>,
     pub writable_pilocal: bool,
+    pub readonly_home: bool,
     pub dependency_dirs: Vec<PathBuf>,
 }
 
@@ -34,7 +35,7 @@ pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
 
     bind_system_paths(&mut b);
     bind_virtual_fs(&mut b);
-    bind_workspace_and_home(&mut b, opts.cave, &host_home)?;
+    bind_workspace_and_home(&mut b, opts.config, opts.cave, &host_home, opts.readonly_home)?;
     bind_pilocal_and_caches(&mut b, opts.config, opts.cave, opts.variant, opts.writable_pilocal, &internal_pilocal)?;
     setup_xdg_runtime(&mut b);
     
@@ -98,12 +99,24 @@ fn bind_virtual_fs(b: &mut Bubblewrap) {
     b.add_virtual(BindType::Tmpfs, "/run");
 }
 
-fn bind_workspace_and_home(b: &mut Bubblewrap, cave: &Cave, host_home: &Path) -> Result<()> {
+fn bind_workspace_and_home(b: &mut Bubblewrap, _config: &Config, cave: &Cave, host_home: &Path, readonly_home: bool) -> Result<()> {
     b.add_bind(BindType::Bind, &cave.workspace);
+    
     if !cave.homedir.exists() {
         std::fs::create_dir_all(&cave.homedir).context("Failed to create cave home directory")?;
     }
-    b.add_map_bind(BindType::Bind, &cave.homedir, host_home);
+
+    if readonly_home {
+        // Mount homedir RO (for managers)
+        b.add_map_bind(BindType::RoBind, &cave.homedir, host_home);
+        // Ensure mount points for pilocal and cache exist in the sandbox home
+        b.add_virtual(BindType::Dir, host_home.join(".pilocal"));
+        b.add_virtual(BindType::Dir, host_home.join(".cache"));
+        b.add_virtual(BindType::Dir, host_home.join(".cache").join("pi"));
+    } else {
+        // Normal cave home usage
+        b.add_map_bind(BindType::Bind, &cave.homedir, host_home);
+    }
     Ok(())
 }
 
@@ -195,6 +208,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
         variant: variant.as_deref(),
         package_envs,
         writable_pilocal: false,
+        readonly_home: false,
         dependency_dirs: Vec::new(),
     })?;
     

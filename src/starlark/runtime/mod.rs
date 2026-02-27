@@ -191,6 +191,7 @@ mod tests {
             cache_dir: PathBuf::new(),
             config_dir: PathBuf::new(),
             state_dir: PathBuf::new(),
+            state_home_dir: PathBuf::new(),
             cache_meta_dir: meta_dir,
             cache_download_dir: download_dir,
             cache_packages_dir: packages_dir,

@@ -415,12 +415,18 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
             let base_dir = cwd.as_ref().map(|c| current_path.as_ref().unwrap_or(&default_base).join(c)).unwrap_or_else(|| current_path.clone().unwrap_or(default_base));
             fs::create_dir_all(&base_dir).ok();
 
+            // Create a temporary home directory for manager execution
+            let tmp_home = tempfile::tempdir().context("Failed to create temporary home directory")?;
+            let mut temp_cave = ctx.cave.clone();
+            temp_cave.homedir = tmp_home.path().to_path_buf();
+
             let mut b = crate::commands::cave::run::prepare_sandbox(crate::commands::cave::run::SandboxOptions {
                 config: ctx.config,
-                cave: ctx.cave,
+                cave: &temp_cave,
                 variant: ctx.variant,
                 package_envs: ctx.env.clone(),
                 writable_pilocal: true,
+                readonly_home: true,
                 dependency_dirs: ctx.dependency_dirs.clone(),
             })?;
             b.set_cwd(&base_dir);

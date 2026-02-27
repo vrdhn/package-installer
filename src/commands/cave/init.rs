@@ -15,7 +15,7 @@ pub fn run(config: &Config) {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "default".to_string());
     
-    let homedir = config.state_dir.join(&name);
+    let homedir = config.state_home_dir.join(&name);
     let cave = Cave::new(current_dir.clone(), homedir);
     cave.save(&cave_file).expect("Failed to save cave file");
     log::info!("init cave in {}", current_dir.display());

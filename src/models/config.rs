@@ -10,6 +10,7 @@ pub struct Config {
     pub cache_dir: PathBuf,
     pub config_dir: PathBuf,
     pub state_dir: PathBuf,
+    pub state_home_dir: PathBuf,
     pub cache_meta_dir: PathBuf,
     pub cache_download_dir: PathBuf,
     pub cache_packages_dir: PathBuf,
@@ -42,23 +43,27 @@ impl Config {
         let config_dir = xdg.get_config_home().expect("Failed to get config home");
         let state_dir = xdg.get_state_home().expect("Failed to get state home");
 
-        let meta_dir = xdg.create_cache_directory("meta")
+        let state_home_dir = xdg.create_state_directory("home")
+	    .expect("Failed to create state home directory");
+
+        let cache_meta_dir = xdg.create_cache_directory("meta")
 	    .expect("Failed to create meta directory");
-        let download_dir = xdg.create_cache_directory("downloads")
+        let cache_download_dir = xdg.create_cache_directory("downloads")
 	    .expect("Failed to create downloads directory");
-        let packages_dir = xdg.create_cache_directory("packages")
+        let cache_packages_dir = xdg.create_cache_directory("packages")
 	    .expect("Failed to create packages directory");
-        let pilocals_dir = xdg.create_cache_directory("pilocals")
+        let cache_pilocals_dir = xdg.create_cache_directory("pilocals")
 	    .expect("Failed to create pilocals directory");
 
         Self {
             cache_dir,
             config_dir,
             state_dir,
-            cache_meta_dir: meta_dir,
-            cache_download_dir: download_dir,
-            cache_packages_dir: packages_dir,
-            cache_pilocals_dir: pilocals_dir,
+            state_home_dir,
+            cache_meta_dir,
+            cache_download_dir,
+            cache_packages_dir,
+            cache_pilocals_dir,
             force,
             state: Arc::new(State::default()),
         }
@@ -68,6 +73,7 @@ impl Config {
         let cache_dir = base_dir.join("cache");
         let config_dir = base_dir.join("config");
         let state_dir = base_dir.join("state");
+        let state_home_dir = state_dir.join("home");
         let meta_dir = cache_dir.join("meta");
         let download_dir = cache_dir.join("downloads");
         let packages_dir = cache_dir.join("packages");
@@ -76,6 +82,7 @@ impl Config {
         std::fs::create_dir_all(&cache_dir).unwrap();
         std::fs::create_dir_all(&config_dir).unwrap();
         std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::create_dir_all(&state_home_dir).unwrap();
         std::fs::create_dir_all(&meta_dir).unwrap();
         std::fs::create_dir_all(&download_dir).unwrap();
         std::fs::create_dir_all(&packages_dir).unwrap();
@@ -85,6 +92,7 @@ impl Config {
             cache_dir,
             config_dir,
             state_dir,
+            state_home_dir,
             cache_meta_dir: meta_dir,
             cache_download_dir: download_dir,
             cache_packages_dir: packages_dir,

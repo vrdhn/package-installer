@@ -9,7 +9,7 @@ pub fn run(config: &Config) {
         println!("name: {}{}", cave.name, active_status);
         println!("file: {}", path.display());
         println!("work: {}", cave.workspace.display());
-        println!("home: {}", cave.homedir.display());
+        println!("home: {}", config.state_home_dir.display());
         
         println!("\nsettings:");
         println!("  pkgs: {:?}", cave.settings.packages);
