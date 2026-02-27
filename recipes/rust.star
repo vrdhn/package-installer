@@ -21,14 +21,14 @@ def parse_rust_filename(package_name, target, filename):
     ok_base, v_tmp = extract(r"(.*)\.(?:tar\.gz|tar\.xz|zip|tar\.bz2)", filename)
     if not ok_base:
         v_tmp = filename
-    
+
     top_dir = v_tmp
 
     # Pattern: package_name(-preview)?-(version)(-(target))?
     # We use escaping for package_name if it contains special chars, though rust-src is fine.
     pattern = package_name + "(?:-preview)?-([0-9.]+)(?:-(.*))?"
     ok, version, _ = extract(pattern, v_tmp)
-    
+
     if ok:
         # If it's rust-src, it might not have a target in the filename
         # If it has a target, it's at the end.
@@ -49,7 +49,7 @@ def parse_rust_filename(package_name, target, filename):
 
 def add_rust_component(v, package_name, target, top_dir):
     actual_target = target if target != "*" else ""
-    
+
     component_map = {
         "rust": "rustc",
     }
@@ -58,7 +58,7 @@ def add_rust_component(v, package_name, target, top_dir):
     subfolders = []
     if package_name in component_map:
         subfolders.append(component_map[package_name])
-    
+
     if package_name == "rust-std":
         subfolders.append("rust-std-" + actual_target)
     else:
@@ -77,7 +77,7 @@ def add_rust_component(v, package_name, target, top_dir):
 
     for sub in subfolders:
         component_root = top_dir + "/" + sub
-        
+
         if package_name == "rust-std":
             std_base = component_root + "/lib/rustlib/" + target + "/lib"
             v.export_link(std_base + "/*", "lib/rustlib/" + target + "/lib")
@@ -123,17 +123,17 @@ def discover_rust_component(package_name):
             filename = dl_url.split('/')[-1]
 
         top_dir, version = parse_rust_filename(package_name, target, filename)
-        
+
         v = create_version(package_name)
         v.inspect(version)
         v.set_release_date(date)
         if channel != "stable":
             v.set_release_type("testing" if channel == "beta" else "unstable")
-            
+
         v.fetch(dl_url, checksum = target_data.get("hash"), filename = filename)
         v.extract()
         add_rust_component(v, package_name, target, top_dir)
-        
+
         v.register()
 
 def cargo_discovery(_manager, package):
@@ -141,28 +141,42 @@ def cargo_discovery(_manager, package):
     content = download(url)
     if not content:
         return
-    doc = parse_json(content)
-    data = doc.root
 
-    versions = data.get("versions")
+    doc = parse_json(content)
+    root = doc.root
+
+    crate_node = root.get("crate")
+    if not crate_node:
+        return
+    latest_version = crate_node.get("max_version")
+    if not latest_version:
+         latest_version = crate_node.get("newest_version")
+
+    versions = root.get("versions")
     if not versions:
         return
-    for i in range(len(versions)):
-        v_data = versions[i]
-        if v_data.get("yanked").text() == "true":
+
+    for v_data in versions:
+        if v_data.get("yanked"):
             continue
-        version = v_data["num"]
-        
+
+        version = v_data.get("num")
+        if not version:
+            continue
+
         v = create_version("cargo:" + package)
         v.inspect(version)
-        v.set_release_date(v_data["created_at"])
-        
+        v.set_release_date(v_data.get("created_at") or "")
+
         v.require("rust")
-        
-        v.run("cargo install --root ~/.pilocal " + package + " --version " + version)
-        # Note: cargo install handles exports by putting them in ~/.pilocal/bin
-        # which is already in PATH in our cave setup.
-        
+        v.require("cargo")
+        v.require("rust-std")
+
+        if version == latest_version:
+            v.set_release_type("stable")
+
+        v.run("cargo install " + package + " --version " + version + " --locked --root ~/.pilocal")
+
         v.register()
 
 COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]

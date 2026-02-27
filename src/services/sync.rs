@@ -12,6 +12,10 @@ use walkdir::WalkDir;
 /// Synchronizes a repository by evaluating all `.star` files and saving the package list.
 pub fn sync_repo(config: &Config, repo: &Repository) -> Result<()> {
     info!("[{}] syncing repo", repo.name);
+    
+    // Clear old cache files and in-memory entries for this repo to ensure a clean slate.
+    clear_repo_cache(config, &repo.name)?;
+
     let (packages, managers) = collect_repo_entries(config, repo);
 
     let package_list = PackageList {
@@ -28,6 +32,25 @@ pub fn sync_repo(config: &Config, repo: &Repository) -> Result<()> {
         package_list.packages.len(),
         package_list.managers.len()
     );
+    Ok(())
+}
+
+fn clear_repo_cache(config: &Config, repo_name: &str) -> Result<()> {
+    // 1. Clear in-memory caches
+    config.state.package_lists.remove(repo_name);
+    config.state.version_lists.retain(|k, _| !k.starts_with(&format!("{}:", repo_name)));
+
+    // 2. Clear version cache files from disk
+    let prefix = format!("version-{}-", repo_name);
+    if let Ok(entries) = std::fs::read_dir(&config.cache_meta_dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with(&prefix) && name.ends_with(".json") {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -78,7 +101,10 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) -> R
             options: None,
         },
         &pkg.name,
-    ).with_context(|| format!("Failed to execute function for package {}/{}", repo.name, pkg.name))?;
+    ).with_context(|| format!(
+        "Failed to execute function '{}' in '{}' for package {}/{}", 
+        pkg.function_name, star_path.display(), repo.name, pkg.name
+    ))?;
 
     save_versions(config, &repo.name, &pkg.name, versions)
 }
@@ -104,7 +130,10 @@ pub fn sync_manager_package(
         },
         manager_name,
         package_name,
-    ).with_context(|| format!("Failed to execute manager function for package {}/{}", repo.name, full_name))?;
+    ).with_context(|| format!(
+        "Failed to execute manager function '{}' in '{}' for package {}/{}", 
+        mgr.function_name, star_path.display(), repo.name, full_name
+    ))?;
 
     save_versions(config, &repo.name, &full_name, versions)
 }

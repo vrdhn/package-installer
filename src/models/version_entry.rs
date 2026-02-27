@@ -225,7 +225,8 @@ fn try_load_from_disk(config: &Config, repo: &Repository, name: &str, force_opt:
     if !config.force && !force_opt {
         if let Ok(list) = VersionList::load(config, &repo.name, name) {
             let arc_list = Arc::new(list);
-            return Some(config.state.version_lists.entry(key.to_string()).or_insert(arc_list).clone());
+            config.state.version_lists.insert(key.to_string(), arc_list.clone());
+            return Some(arc_list);
         }
     }
     None
@@ -251,7 +252,8 @@ fn sync_and_load(opts: GetVersionOptions, key: &str) -> Option<Arc<VersionList>>
 
     if let Ok(list) = VersionList::load(opts.config, &opts.repo.name, opts.package_name) {
         let arc_list = Arc::new(list);
-        return Some(opts.config.state.version_lists.entry(key.to_string()).or_insert(arc_list).clone());
+        opts.config.state.version_lists.insert(key.to_string(), arc_list.clone());
+        return Some(arc_list);
     }
     None
 }

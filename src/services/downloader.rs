@@ -56,6 +56,9 @@ impl Downloader {
             .ip_family(IpFamily::Ipv4Only)
             .build();
         Agent::new_with_config(config)
+            .into_builder()
+            .set("User-Agent", "pi-package-manager (https://github.com/google/gemini-cli)")
+            .build()
     }
 
     fn prepare_directory(dest: &Path) -> Result<()> {

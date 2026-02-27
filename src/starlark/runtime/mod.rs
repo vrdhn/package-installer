@@ -32,7 +32,7 @@ pub fn evaluate_file(
 
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     let packages = extract_packages(&module)?;
     let managers = extract_managers(&module)?;
@@ -52,7 +52,7 @@ pub fn execute_manager_function(
 
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     let function = module.get(exec_opts.function_name).context(format!(
         "Function '{}' not found in module '{}'",
@@ -62,7 +62,7 @@ pub fn execute_manager_function(
     let mgr_val = eval.heap().alloc(manager_name);
     let pkg_val = eval.heap().alloc(package_name);
     eval.eval_function(function, &[mgr_val, pkg_val], &[])
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     extract_versions(&module)
 }
@@ -79,7 +79,7 @@ pub fn execute_function(
 
     let mut eval = Evaluator::new(&module);
     eval.eval_module(ast, &globals)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     let function = module.get(exec_opts.function_name).context(format!(
         "Function '{}' not found in module '{}'",
@@ -88,7 +88,7 @@ pub fn execute_function(
 
     let arg_value = eval.heap().alloc(argument);
     eval.eval_function(function, &[arg_value], &[])
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
     extract_versions(&module)
 }

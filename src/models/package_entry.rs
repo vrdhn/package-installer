@@ -51,7 +51,8 @@ impl PackageList {
         // Try to load again after sync
         if let Ok(list) = Self::load(config, &repo.name) {
             let arc_list = Arc::new(list);
-            return Some(config.state.package_lists.entry(repo.name.clone()).or_insert(arc_list).clone());
+            config.state.package_lists.insert(repo.name.clone(), arc_list.clone());
+            return Some(arc_list);
         }
         None
     }
