@@ -112,6 +112,8 @@ fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
             }
         }
 
+        // Acquire or create a per-URL download lock to avoid redundant concurrent requests.
+        // We drop the DashMap entry lock quickly by cloning the Arc<Mutex<()>>.
         let lock = context
             .state
             .download_locks
@@ -119,6 +121,7 @@ fn register_stdlib_internal(builder: &mut GlobalsBuilder) {
             .or_insert_with(|| std::sync::Arc::new(parking_lot::Mutex::new(())))
             .clone();
 
+        // Hold the Mutex during the download process to ensure only one thread performs it.
         let _guard = lock.lock();
 
         if !context.force {

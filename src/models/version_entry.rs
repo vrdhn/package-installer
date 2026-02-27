@@ -163,6 +163,7 @@ impl VersionList {
         let key = format!("{}:{}", opts.repo.name, opts.package_name);
         use dashmap::mapref::entry::Entry;
 
+        // Check cache first using DashMap for thread-safe concurrent access.
         if !opts.config.force && !opts.force {
             if let Entry::Occupied(occupied) = opts.config.state.version_lists.entry(key.clone()) {
                 return Some(occupied.get().clone());

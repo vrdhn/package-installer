@@ -15,6 +15,8 @@ use ego_tree::NodeId;
 
 #[derive(Debug, ProvidesStaticType, Clone)]
 pub struct HtmlDocument {
+    /// Shared reference to the parsed HTML tree.
+    /// Locks are acquired for short durations to select or iterate nodes.
     pub doc: Arc<Mutex<Html>>,
 }
 
@@ -70,6 +72,8 @@ fn html_document_methods(builder: &mut MethodsBuilder) {
 
 #[derive(Debug, ProvidesStaticType, Clone)]
 pub struct HtmlNode {
+    /// Shared reference to the root HTML document.
+    /// Locks are acquired when accessing node properties or selecting children.
     pub doc: Arc<Mutex<Html>>,
     pub node_id: NodeId,
 }

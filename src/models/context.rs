@@ -32,8 +32,12 @@ pub struct Context {
     pub download_dir: PathBuf,
     pub packages_dir: PathBuf,
     pub force: bool,
+    /// Collected package entries during Starlark file evaluation.
+    /// Uses RwLock for safety as evaluations may run in parallel (rayon).
     pub packages: RwLock<Vec<PackageEntry>>,
+    /// Collected manager entries during Starlark file evaluation.
     pub managers: RwLock<Vec<ManagerEntry>>,
+    /// Collected version entries for a package during its discover function.
     pub versions: RwLock<Vec<VersionEntry>>,
     pub options: HashMap<String, String>,
     #[serde(skip)]

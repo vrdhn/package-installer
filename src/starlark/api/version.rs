@@ -35,6 +35,8 @@ pub struct VersionBuilder {
 
 #[derive(Debug, ProvidesStaticType, Clone, Serialize)]
 pub struct StarlarkVersionBuilder {
+    /// Shared state of the version builder being populated.
+    /// Each Starlark method call acquires a read/write lock for the duration of the call.
     #[serde(skip)]
     pub builder: Arc<RwLock<VersionBuilder>>,
 }

@@ -27,6 +27,7 @@ impl PackageList {
     pub fn get_for_repo(config: &Config, repo: &crate::models::repository::Repository, force: bool) -> Option<Arc<Self>> {
         use dashmap::mapref::entry::Entry;
 
+        // Check cache first using DashMap for thread-safe concurrent access.
         if !config.force && !force {
             if let Entry::Occupied(occupied) = config.state.package_lists.entry(repo.name.clone()) {
                 return Some(occupied.get().clone());
