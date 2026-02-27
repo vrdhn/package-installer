@@ -23,12 +23,14 @@ pub struct State {
     pub repositories: OnceLock<Repositories>,
     /// Thread-safe cache of package lists for each repository.
     /// Uses DashMap to allow concurrent read/write access across Starlark evaluations.
+    /// Keyed by repository name.
     pub package_lists: DashMap<String, Arc<PackageList>>,
     /// Thread-safe cache of version lists for each package.
     /// Keyed by "repo_name:package_name".
     pub version_lists: DashMap<String, Arc<VersionList>>,
     /// Per-URL download locks to prevent redundant concurrent downloads of the same resource.
     /// The Mutex is only held during the actual network transfer.
+    /// Keyed by resource URL.
     pub download_locks: DashMap<String, Arc<parking_lot::Mutex<()>>>,
 }
 
