@@ -1,7 +1,7 @@
 def get_platform():
     return get_os(), get_arch()
 
-def install_erlang(package_name):
+def install_erlang(_package_name):
     # Erlang/OTP releases from GitHub
     content = download("https://api.github.com/repos/erlang/otp/releases")
     if not content:
@@ -71,7 +71,7 @@ def install_erlang(package_name):
         
         v.register()
 
-def erlang_discovery(manager, package):
+def erlang_discovery(_manager, package):
     if package != "rebar3":
         return
 

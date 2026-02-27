@@ -16,7 +16,7 @@ def get_platform_string():
 
     return node_os + "-" + node_arch
 
-def install_node(package_name):
+def install_node(_package_name):
     platform = get_platform_string()
     content = download("https://nodejs.org/dist/index.json")
     doc = parse_json(content)
@@ -60,7 +60,7 @@ def install_node(package_name):
 
 add_package("node", install_node)
 
-def npm_discovery(manager, package):
+def npm_discovery(_manager, package):
     url = "https://registry.npmjs.org/" + package
     content = download(url)
     if not content:

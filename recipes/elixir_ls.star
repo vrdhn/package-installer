@@ -1,4 +1,4 @@
-def install_elixir_ls(package_name):
+def install_elixir_ls(_package_name):
     # Fetch from GitHub releases
     content = download("https://api.github.com/repos/elixir-lsp/elixir-ls/releases")
     if not content:

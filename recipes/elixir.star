@@ -1,4 +1,4 @@
-def install_elixir(package_name):
+def install_elixir(_package_name):
     # Fetch from GitHub releases
     content = download("https://api.github.com/repos/elixir-lang/elixir/releases")
     if not content:
@@ -46,7 +46,7 @@ def install_elixir(package_name):
 
 add_package("elixir", install_elixir)
 
-def hex_discovery(manager, package):
+def hex_discovery(_manager, package):
     # Hex is usually just a command to install via mix
     if package == "hex":
         v = create_version(pkgname = "hex:hex", version = "latest")

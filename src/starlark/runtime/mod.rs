@@ -47,7 +47,7 @@ pub fn execute_manager_function(
 ) -> anyhow::Result<Vec<VersionEntry>> {
     let filename = exec_opts.path.to_string_lossy().into_owned();
     let ctx_name = format!("{}:exec:{}", filename, manager_name);
-    
+
     let (ast, globals, module) = prepare_eval_environment(&ctx_name, exec_opts.path, exec_opts.config, exec_opts.options)?;
 
     let mut eval = Evaluator::new(&module);
@@ -141,9 +141,9 @@ fn setup_context(
 ) {
     let mut context = Context::new(
         filename,
-        config.meta_dir.clone(),
-        config.download_dir.clone(),
-        config.packages_dir.clone(),
+        config.cache_meta_dir.clone(),
+        config.cache_download_dir.clone(),
+        config.cache_packages_dir.clone(),
         config.force,
         config.state.clone(),
     );
@@ -191,10 +191,10 @@ mod tests {
             cache_dir: PathBuf::new(),
             config_dir: PathBuf::new(),
             state_dir: PathBuf::new(),
-            meta_dir,
-            download_dir,
-            packages_dir,
-            pilocals_dir: PathBuf::new(),
+            cache_meta_dir: meta_dir,
+            cache_download_dir: download_dir,
+            cache_packages_dir: packages_dir,
+            cache_pilocals_dir: PathBuf::new(),
             force: false,
             state: Arc::new(State::default()),
         }

@@ -20,7 +20,7 @@ def get_platform_string():
 
     return go_os, go_arch
 
-def install_go(package_name):
+def install_go(_package_name):
     go_os, go_arch = get_platform_string()
     content = download("https://go.dev/dl/?mode=json&include=all")
     doc = parse_json(content)
@@ -47,7 +47,7 @@ def install_go(package_name):
 
 add_package("go", install_go)
 
-def go_discovery(manager, package):
+def go_discovery(_manager, package):
     base_url = "https://proxy.golang.org/" + package.lower()
     
     ok_x, x_base = extract(r"(golang\.org/x/[^/]+)", package)

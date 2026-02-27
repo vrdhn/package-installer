@@ -10,10 +10,10 @@ pub struct Config {
     pub cache_dir: PathBuf,
     pub config_dir: PathBuf,
     pub state_dir: PathBuf,
-    pub meta_dir: PathBuf,
-    pub download_dir: PathBuf,
-    pub packages_dir: PathBuf,
-    pub pilocals_dir: PathBuf,
+    pub cache_meta_dir: PathBuf,
+    pub cache_download_dir: PathBuf,
+    pub cache_packages_dir: PathBuf,
+    pub cache_pilocals_dir: PathBuf,
     pub force: bool,
     pub state: Arc<State>,
 }
@@ -55,10 +55,10 @@ impl Config {
             cache_dir,
             config_dir,
             state_dir,
-            meta_dir,
-            download_dir,
-            packages_dir,
-            pilocals_dir,
+            cache_meta_dir: meta_dir,
+            cache_download_dir: download_dir,
+            cache_packages_dir: packages_dir,
+            cache_pilocals_dir: pilocals_dir,
             force,
             state: Arc::new(State::default()),
         }
@@ -85,10 +85,10 @@ impl Config {
             cache_dir,
             config_dir,
             state_dir,
-            meta_dir,
-            download_dir,
-            packages_dir,
-            pilocals_dir,
+            cache_meta_dir: meta_dir,
+            cache_download_dir: download_dir,
+            cache_packages_dir: packages_dir,
+            cache_pilocals_dir: pilocals_dir,
             force: false,
             state: Arc::new(State::default()),
         }
@@ -99,11 +99,11 @@ impl Config {
     }
 
     pub fn package_cache_file(&self, repo_name: &str) -> PathBuf {
-        self.meta_dir.join(format!("packages-{}.json", repo_name))
+        self.cache_meta_dir.join(format!("packages-{}.json", repo_name))
     }
 
     pub fn version_cache_file(&self, repo_name: &str, safe_name: &str) -> PathBuf {
-        self.meta_dir.join(format!("version-{}-{}.json", repo_name, safe_name))
+        self.cache_meta_dir.join(format!("version-{}-{}.json", repo_name, safe_name))
     }
 
     pub fn get_user(&self) -> String {
@@ -123,6 +123,6 @@ impl Config {
     }
 
     pub fn pilocal_path(&self, cave_name: &str, _variant: Option<&str>) -> PathBuf {
-        self.pilocals_dir.join(cave_name)
+        self.cache_pilocals_dir.join(cave_name)
     }
 }

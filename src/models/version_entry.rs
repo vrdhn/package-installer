@@ -187,7 +187,7 @@ impl VersionList {
     }
 
     pub fn save(&self, config: &Config, repo_name: &str, package_name: &str) -> anyhow::Result<()> {
-        fs::create_dir_all(&config.meta_dir).context("Failed to create meta directory")?;
+        fs::create_dir_all(&config.cache_meta_dir).context("Failed to create meta directory")?;
         let safe_name = package_name.replace('/', "#");
         let cache_file = config.version_cache_file(repo_name, &safe_name);
         let content =

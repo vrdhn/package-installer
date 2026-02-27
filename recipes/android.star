@@ -87,7 +87,7 @@ def install_android_studio(package_name):
                 v.register()
                 break
 
-def install_android_studio_official(package_name):
+def install_android_studio_official(_package_name):
     content = download("https://developer.android.com/studio")
     if not content:
         return
@@ -171,10 +171,10 @@ def discover_google_sdk(pkgname, sdk_path, filemap):
                                     v.register()
                                     break
 
-def install_android_sdk(package_name):
+def install_android_sdk(_package_name):
     discover_google_sdk("android-sdk", "cmdline-tools;latest", {"cmdline-tools/bin/*": "bin"})
 
-def install_android_platform_tools(package_name):
+def install_android_platform_tools(_package_name):
     discover_google_sdk("android-platform-tools", "platform-tools", {"platform-tools/*": "bin"})
 
 add_package("android-studio", install_android_studio)

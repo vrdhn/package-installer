@@ -77,7 +77,7 @@ pub fn execute_build(config: &Config, cave: &Cave, variant: Option<&str>) -> Res
 
     let resolved_packages = resolve_dependencies(&ctx, &settings.packages)?;
     let sorted_packages = topological_sort(&resolved_packages)?;
-    
+
     execute_sorted_pipelines(&ctx, sorted_packages, &resolved_packages)
 }
 
@@ -96,7 +96,7 @@ fn resolve_dependencies(
             .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
 
         let dynamic_version = re_evaluate_version(ctx, &repo_name, &version, &selector)?;
-        
+
         for dep in &dynamic_version.build_dependencies {
             if !resolved.contains_key(&dep.name) {
                 to_resolve.push_back(dep.name.clone());
@@ -153,13 +153,13 @@ fn execute_sorted_pipelines(
     for query in sorted_packages {
         let (dyn_version, repo_name) = resolved_packages.get(&query).unwrap();
         let pkg_ctx = format!("{}:{}={}", repo_name, dyn_version.pkgname, dyn_version.version);
-        
+
         let (_, env, exports) = execute_pipeline(ctx, &pkg_ctx, dyn_version, repo_name)?;
         all_env.extend(env);
 
         apply_exports(ctx, exports, &pilocal_dir, &mut all_env)?;
     }
-    
+
     log::info!("[{}] build success", ctx.cave.name);
     Ok(all_env)
 }
@@ -174,7 +174,7 @@ fn apply_exports(
         for export in pkg_exports {
             match export {
                 Export::Link { src, dest } => {
-                    let src = src.replace("@PACKAGES_DIR", ctx.config.packages_dir.to_str().unwrap());
+                    let src = src.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
                     apply_filemap_entry(crate::commands::cave::fs::FileMapOptions {
                         pkg_ctx: &pkg_ctx,
                         pkg_dir: &source_root,
@@ -224,7 +224,7 @@ fn re_evaluate_version_internal(
         .context(format!("Repo '{}' not found", repo_name))?;
     let pkg_list = crate::models::package_entry::PackageList::get_for_repo(ctx.config, repo, force)
         .context(format!("Package list for repo '{}' not found", repo_name))?;
-    
+
     let pkg_entry = pkg_list.packages.get(&version.pkgname);
     let manager_entry = get_manager_entry(pkg_entry.is_none(), selector, &version.pkgname, &pkg_list);
 
@@ -308,7 +308,7 @@ fn execute_pipeline(
     for (i, step) in version.pipeline.iter().enumerate() {
         let mut resolved_step = step.clone();
         if let InstallStep::Run { ref mut command, .. } = resolved_step {
-            *command = command.replace("@PACKAGES_DIR", ctx.config.packages_dir.to_str().unwrap());
+            *command = command.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
         }
 
         let step_hash = hash_to_string(&resolved_step);
@@ -337,9 +337,9 @@ fn execute_pipeline(
 
     let source_root = current_path.unwrap_or_else(|| {
         let pkg_dir_name = format!("{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version.to_string()));
-        ctx.config.packages_dir.join(pkg_dir_name)
+        ctx.config.cache_packages_dir.join(pkg_dir_name)
     });
-    
+
     for export in &version.exports {
         if let Export::Env { key, val } = export { env.insert(key.clone(), val.clone()); }
     }
@@ -362,7 +362,7 @@ fn resolve_build_dependencies(ctx: &BuildContext, version: &VersionEntry, pkg_ct
             let dyn_dep = re_evaluate_version(ctx, &dep_repo, &dep_version, &selector)?;
             for export in &dyn_dep.exports {
                 if let Export::Link { src, .. } = export {
-                    let resolved_src = src.replace("@PACKAGES_DIR", ctx.config.packages_dir.to_str().unwrap());
+                    let resolved_src = src.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
                     let p = Path::new(&resolved_src);
                     if p.is_absolute() {
                         if let Some(parent) = p.parent() {
@@ -400,22 +400,22 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
     match step {
         InstallStep::Fetch { url, checksum, filename, .. } => {
             let fname = filename.clone().unwrap_or_else(|| url.split('/').last().unwrap_or("download").to_string());
-            let dest = ctx.config.download_dir.join(fname);
+            let dest = ctx.config.cache_download_dir.join(fname);
             Downloader::download_to_file(url, &dest, checksum.as_deref())?;
             Ok(dest)
         }
         InstallStep::Extract { .. } => {
             let src = current_path.as_ref().context("Extract requires a Fetch step")?;
             let pkg_dir = format!("{}-{}-extracted", sanitize_name(ctx.pkgname), sanitize_name(ctx.version));
-            let dest = ctx.config.packages_dir.join(pkg_dir);
+            let dest = ctx.config.cache_packages_dir.join(pkg_dir);
             Unarchiver::unarchive(src, &dest)?;
             Ok(dest)
         }
         InstallStep::Run { command, cwd, .. } => {
-            let default_base = ctx.config.packages_dir.join(format!("{}-{}", sanitize_name(ctx.pkgname), sanitize_name(ctx.version)));
+            let default_base = ctx.config.cache_packages_dir.join(format!("{}-{}", sanitize_name(ctx.pkgname), sanitize_name(ctx.version)));
             let base_dir = cwd.as_ref().map(|c| current_path.as_ref().unwrap_or(&default_base).join(c)).unwrap_or_else(|| current_path.clone().unwrap_or(default_base));
             fs::create_dir_all(&base_dir).ok();
-            
+
             let mut b = crate::commands::cave::run::prepare_sandbox(crate::commands::cave::run::SandboxOptions {
                 config: ctx.config,
                 cave: ctx.cave,
@@ -427,7 +427,7 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
             b.set_cwd(&base_dir);
             b.set_command("/bin/bash", &[String::from("-c"), command.clone()]);
             b.spawn().with_context(|| format!("Failed to execute command: {}", command))?;
-            
+
             Ok(base_dir)
         }
     }

@@ -27,7 +27,7 @@ def parse_rust_filename(package_name, target, filename):
     # Pattern: package_name(-preview)?-(version)(-(target))?
     # We use escaping for package_name if it contains special chars, though rust-src is fine.
     pattern = package_name + "(?:-preview)?-([0-9.]+)(?:-(.*))?"
-    ok, version, matched_target = extract(pattern, v_tmp)
+    ok, version, _ = extract(pattern, v_tmp)
     
     if ok:
         # If it's rust-src, it might not have a target in the filename
@@ -136,7 +136,7 @@ def discover_rust_component(package_name):
         
         v.register()
 
-def cargo_discovery(manager, package):
+def cargo_discovery(_manager, package):
     url = "https://crates.io/api/v1/crates/" + package
     content = download(url)
     if not content:
