@@ -6,7 +6,7 @@ use crate::commands::package::resolve;
 use crate::services::downloader::Downloader;
 use crate::services::unarchiver::Unarchiver;
 use crate::services::cache::{BuildCache, StepResult};
-use crate::models::version_entry::{InstallStep, Export, VersionEntry};
+use crate::models::version_entry::{InstallStep, Export, VersionEntry, QualifiedVersion};
 use crate::commands::cave::fs::apply_filemap_entry;
 use crate::utils::fs::sanitize_name;
 use crate::utils::crypto::hash_to_string;
@@ -152,9 +152,9 @@ fn execute_sorted_pipelines(
 
     for query in sorted_packages {
         let (dyn_version, repo_name) = resolved_packages.get(&query).unwrap();
-        let pkg_ctx = format!("{}:{}={}", repo_name, dyn_version.pkgname, dyn_version.version);
+        let qv = QualifiedVersion::new(repo_name, dyn_version);
 
-        let (_, env, exports) = execute_pipeline(ctx, &pkg_ctx, dyn_version, repo_name)?;
+        let (_, env, exports) = execute_pipeline(ctx, &qv.pkg_ctx(), dyn_version, repo_name)?;
         all_env.extend(env);
 
         apply_exports(ctx, exports, &pilocal_dir, &mut all_env)?;
@@ -174,7 +174,7 @@ fn apply_exports(
         for export in pkg_exports {
             match export {
                 Export::Link { src, dest } => {
-                    let src = src.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
+                    let src = ctx.config.resolve_packages_dir(&src);
                     apply_filemap_entry(crate::commands::cave::fs::FileMapOptions {
                         pkg_ctx: &pkg_ctx,
                         pkg_dir: &source_root,
@@ -308,7 +308,7 @@ fn execute_pipeline(
     for (i, step) in version.pipeline.iter().enumerate() {
         let mut resolved_step = step.clone();
         if let InstallStep::Run { ref mut command, .. } = resolved_step {
-            *command = command.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
+            *command = ctx.config.resolve_packages_dir(command);
         }
 
         let step_hash = hash_to_string(&resolved_step);
@@ -336,8 +336,7 @@ fn execute_pipeline(
     }
 
     let source_root = current_path.unwrap_or_else(|| {
-        let pkg_dir_name = format!("{}-{}", sanitize_name(&version.pkgname), sanitize_name(&version.version.to_string()));
-        ctx.config.cache_packages_dir.join(pkg_dir_name)
+        ctx.config.cache_packages_dir.join(version.pkg_dir_name())
     });
 
     for export in &version.exports {
@@ -362,7 +361,7 @@ fn resolve_build_dependencies(ctx: &BuildContext, version: &VersionEntry, pkg_ct
             let dyn_dep = re_evaluate_version(ctx, &dep_repo, &dep_version, &selector)?;
             for export in &dyn_dep.exports {
                 if let Export::Link { src, .. } = export {
-                    let resolved_src = src.replace("@PACKAGES_DIR", ctx.config.cache_packages_dir.to_str().unwrap());
+                    let resolved_src = ctx.config.resolve_packages_dir(src);
                     let p = Path::new(&resolved_src);
                     if p.is_absolute() {
                         if let Some(parent) = p.parent() {
@@ -406,13 +405,13 @@ fn execute_step(ctx: &StepContext, step: &InstallStep, current_path: &Option<Pat
         }
         InstallStep::Extract { .. } => {
             let src = current_path.as_ref().context("Extract requires a Fetch step")?;
-            let pkg_dir = format!("{}-{}-extracted", sanitize_name(ctx.pkgname), sanitize_name(ctx.version));
+            let pkg_dir = format!("{}-extracted", sanitize_name(&format!("{}-{}", ctx.pkgname, ctx.version)));
             let dest = ctx.config.cache_packages_dir.join(pkg_dir);
             Unarchiver::unarchive(src, &dest)?;
             Ok(dest)
         }
         InstallStep::Run { command, cwd, .. } => {
-            let default_base = ctx.config.cache_packages_dir.join(format!("{}-{}", sanitize_name(ctx.pkgname), sanitize_name(ctx.version)));
+            let default_base = ctx.config.cache_packages_dir.join(sanitize_name(&format!("{}-{}", ctx.pkgname, ctx.version)));
             let base_dir = cwd.as_ref().map(|c| current_path.as_ref().unwrap_or(&default_base).join(c)).unwrap_or_else(|| current_path.clone().unwrap_or(default_base));
             fs::create_dir_all(&base_dir).ok();
 

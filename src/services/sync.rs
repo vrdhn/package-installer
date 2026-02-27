@@ -67,7 +67,7 @@ fn collect_repo_entries(config: &Config, repo: &Repository) -> (HashMap<String, 
 
 /// Synchronizes a single package by executing its Starlark function and caching the versions.
 pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) -> Result<()> {
-    info!("[{}/{}] syncing pkg", repo.name, pkg.name);
+    info!("{}/{} syncing pkg", repo.name, pkg.name);
 
     let star_path = Path::new(&repo.path).join(&pkg.filename);
     let versions = execute_function(
@@ -78,7 +78,7 @@ pub fn sync_package(config: &Config, repo: &Repository, pkg: &PackageEntry) -> R
             options: None,
         },
         &pkg.name,
-    ).with_context(|| format!("Failed to execute function for package {}", pkg.name))?;
+    ).with_context(|| format!("Failed to execute function for package {}/{}", repo.name, pkg.name))?;
 
     save_versions(config, &repo.name, &pkg.name, versions)
 }
@@ -92,7 +92,7 @@ pub fn sync_manager_package(
     package_name: &str,
 ) -> Result<()> {
     let full_name = format!("{}:{}", manager_name, package_name);
-    info!("[{}/{}] syncing mgr pkg", repo.name, full_name);
+    info!("{}/{} syncing mgr pkg", repo.name, full_name);
 
     let star_path = Path::new(&repo.path).join(&mgr.filename);
     let versions = execute_manager_function(
@@ -104,7 +104,7 @@ pub fn sync_manager_package(
         },
         manager_name,
         package_name,
-    ).with_context(|| format!("Failed to execute manager function for package {}", full_name))?;
+    ).with_context(|| format!("Failed to execute manager function for package {}/{}", repo.name, full_name))?;
 
     save_versions(config, &repo.name, &full_name, versions)
 }
@@ -112,17 +112,17 @@ pub fn sync_manager_package(
 /// Internal helper to save a list of versions to the cache.
 fn save_versions(config: &Config, repo_name: &str, name: &str, versions: Vec<VersionEntry>) -> Result<()> {
     if versions.is_empty() {
-        info!("[{}/{}] no versions found, not caching", repo_name, name);
+        info!("{}/{} no versions found, not caching", repo_name, name);
         return Ok(());
     }
 
     let version_list = VersionList { versions };
     version_list
         .save(config, repo_name, name)
-        .with_context(|| format!("Failed to save version list for package {}", name))?;
+        .with_context(|| format!("Failed to save version list for package {}/{}", repo_name, name))?;
 
     info!(
-        "[{}/{}] synced {} versions",
+        "{}/{} synced {} versions",
         repo_name,
         name,
         version_list.versions.len()

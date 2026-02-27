@@ -125,4 +125,8 @@ impl Config {
     pub fn pilocal_path(&self, cave_name: &str, _variant: Option<&str>) -> PathBuf {
         self.cache_pilocals_dir.join(cave_name)
     }
+
+    pub fn resolve_packages_dir(&self, s: &str) -> String {
+        s.replace("@PACKAGES_DIR", self.cache_packages_dir.to_str().unwrap_or(""))
+    }
 }

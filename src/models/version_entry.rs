@@ -141,6 +141,29 @@ pub struct VersionEntry {
     pub build_dependencies: Vec<Dependency>,
 }
 
+impl VersionEntry {
+    pub fn pkg_dir_name(&self) -> String {
+        format!("{}-{}", crate::utils::fs::sanitize_name(&self.pkgname), crate::utils::fs::sanitize_name(&self.version.to_string()))
+    }
+}
+
+/// A version entry qualified by the repository it belongs to.
+#[derive(Debug, Clone)]
+pub struct QualifiedVersion<'a> {
+    pub repo_name: &'a str,
+    pub entry: &'a VersionEntry,
+}
+
+impl<'a> QualifiedVersion<'a> {
+    pub fn new(repo_name: &'a str, entry: &'a VersionEntry) -> Self {
+        Self { repo_name, entry }
+    }
+
+    pub fn pkg_ctx(&self) -> String {
+        format!("{}/{}={}", self.repo_name, self.entry.pkgname, self.entry.version)
+    }
+}
+
 /// A collection of version entries.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct VersionList {
