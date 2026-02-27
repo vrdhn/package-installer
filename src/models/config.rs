@@ -23,8 +23,7 @@ pub struct Config {
 #[derive(Debug, Default)]
 pub struct State {
     pub repositories: OnceLock<Repositories>,
-    /// Thread-safe cache of package lists for each repository.
-    /// Uses DashMap to allow concurrent read/write access across Starlark evaluations.
+    /// Thread-safe cache of package lists for each repository.    /// Uses DashMap to allow concurrent read/write access across Starlark evaluations.
     /// Keyed by repository name.
     pub package_lists: DashMap<String, Arc<PackageList>>,
     /// Thread-safe cache of version lists for each package.

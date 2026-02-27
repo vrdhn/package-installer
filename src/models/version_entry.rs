@@ -189,7 +189,8 @@ impl VersionList {
         // Check cache first using DashMap for thread-safe concurrent access.
         if !opts.config.force && !opts.force {
             if let Entry::Occupied(occupied) = opts.config.state.version_lists.entry(key.clone()) {
-                return Some(occupied.get().clone());
+                let arc_list: Arc<VersionList> = occupied.get().clone();
+                return Some(arc_list);
             }
         }
 

@@ -34,9 +34,19 @@ impl Downloader {
         let content_length = Self::get_content_length(&response);
         let filename = url.split('/').last().unwrap_or("unknown");
 
-        Self::stream_to_file(response.into_body().into_reader(), dest, content_length, filename)?;
+        // Download to a temporary file in the same directory to ensure atomic rename
+        let parent = dest.parent().context("Destination has no parent directory")?;
+        let mut tmp_file = tempfile::NamedTempFile::new_in(parent)
+            .context("Failed to create temporary download file")?;
 
-        Self::verify_checksum(url, dest, expected_checksum, filename)?;
+        Self::stream_to_file(response.into_body().into_reader(), tmp_file.as_file_mut(), content_length, filename)?;
+
+        Self::verify_checksum(url, tmp_file.path(), expected_checksum, filename)?;
+
+        // Persist the temporary file to the final destination
+        tmp_file.persist(dest).map_err(|e| {
+            anyhow::anyhow!("Failed to persist download to {}: {}", dest.display(), e.error)
+        })?;
 
         Ok(())
     }
@@ -68,14 +78,13 @@ impl Downloader {
     }
 
     fn get_content_length<T>(response: &ureq::http::Response<T>) -> Option<u64> {
-        response.headers()
-            .get("content-length")
+        let headers = response.headers();
+        headers.get("content-length")
             .and_then(|h| h.to_str().ok())
             .and_then(|s: &str| s.parse::<u64>().ok())
     }
 
-    fn stream_to_file(mut reader: impl Read, dest: &Path, total_size: Option<u64>, filename: &str) -> Result<()> {
-        let mut file = File::create(dest).context("Failed to create destination file")?;
+    fn stream_to_file(mut reader: impl Read, file: &mut File, total_size: Option<u64>, filename: &str) -> Result<()> {
         let mut buffer = [0; 8192];
         let mut downloaded: u64 = 0;
         let mut last_report = Instant::now();

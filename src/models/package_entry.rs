@@ -30,7 +30,8 @@ impl PackageList {
         // Check cache first using DashMap for thread-safe concurrent access.
         if !config.force && !force {
             if let Entry::Occupied(occupied) = config.state.package_lists.entry(repo.name.clone()) {
-                return Some(occupied.get().clone());
+                let arc_list: Arc<PackageList> = occupied.get().clone();
+                return Some(arc_list);
             }
 
             // Try to load from disk if not forcing
