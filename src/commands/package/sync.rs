@@ -28,7 +28,7 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
             }
         }
 
-        if let Some(pkg_list) = PackageList::get_for_repo(config, repo) {
+        if let Some(pkg_list) = PackageList::get_for_repo(config, repo, false) {
             pkg_list.packages.par_iter().for_each(|pkg| {
                 // Match package name exactly
                 if let Some(ref s) = selector {

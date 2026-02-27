@@ -32,10 +32,10 @@ pub struct PackageList {
 }
 
 impl PackageList {
-    pub fn get_for_repo(config: &Config, repo: &crate::models::repository::Repository) -> Option<Arc<Self>> {
+    pub fn get_for_repo(config: &Config, repo: &crate::models::repository::Repository, force: bool) -> Option<Arc<Self>> {
         use dashmap::mapref::entry::Entry;
 
-        if !config.force {
+        if !config.force && !force {
             if let Entry::Occupied(occupied) = config.state.package_lists.entry(repo.name.clone()) {
                 return Some(occupied.get().clone());
             }
@@ -49,7 +49,7 @@ impl PackageList {
         }
 
         // If force is true, or if not found on disk, sync
-        log::info!("[{}] {}syncing", repo.name, if config.force { "force " } else { "" });
+        log::info!("[{}] {}syncing", repo.name, if config.force || force { "force " } else { "" });
         crate::services::sync::sync_repo(config, repo);
 
         // Try to load again after sync

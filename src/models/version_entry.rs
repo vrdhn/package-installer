@@ -140,18 +140,19 @@ impl VersionList {
         package_name: &str,
         package_entry: Option<&crate::models::package_entry::PackageEntry>,
         manager_entry: Option<(&crate::models::package_entry::ManagerEntry, &str)>,
+        force: bool,
     ) -> Option<Arc<Self>> {
         let key = format!("{}:{}", repo.name, package_name);
         use dashmap::mapref::entry::Entry;
 
-        if !config.force {
+        if !config.force && !force {
             if let Entry::Occupied(occupied) = config.state.version_lists.entry(key.clone()) {
                 return Some(occupied.get().clone());
             }
         }
 
         // Try to load from disk first if not forcing
-        if !config.force {
+        if !config.force && !force {
             if let Ok(list) = Self::load(config, &repo.name, package_name) {
                 let arc_list = Arc::new(list);
                 return Some(config.state.version_lists.entry(key).or_insert(arc_list).clone());

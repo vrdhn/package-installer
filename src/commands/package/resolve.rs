@@ -50,6 +50,25 @@ pub fn resolve_query(
     repo_config: &Repositories,
     selector: &PackageSelector,
 ) -> Option<(String, VersionEntry, String)> {
+    if let Some(res) = resolve_query_internal(config, repo_config, selector, false) {
+        return Some(res);
+    }
+
+    // If not found in cache, try one more time with forced sync
+    if !config.force {
+        log::debug!("[{}] not found in cache, attempting sync", selector.package);
+        return resolve_query_internal(config, repo_config, selector, true);
+    }
+
+    None
+}
+
+fn resolve_query_internal(
+    config: &Config,
+    repo_config: &Repositories,
+    selector: &PackageSelector,
+    force: bool,
+) -> Option<(String, VersionEntry, String)> {
     let target_version = selector.version.as_deref().unwrap_or("stable");
 
     for repo in &repo_config.repositories {
@@ -59,7 +78,7 @@ pub fn resolve_query(
             }
         }
 
-        let pkg_list = match PackageList::get_for_repo(config, repo) {
+        let pkg_list = match PackageList::get_for_repo(config, repo, force) {
             Some(l) => l,
             None => continue,
         };
@@ -68,7 +87,7 @@ pub fn resolve_query(
         if selector.prefix.is_none() {
             if let Some(pkg) = pkg_list.package_map.get(&selector.package) {
                 if let Some(v_list) =
-                    VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
+                    VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None, force)
                 {
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
                         let full_qualified = format!("{}/{}={}", repo.name, pkg.name, v.version);
@@ -88,6 +107,7 @@ pub fn resolve_query(
                     &full_name,
                     None,
                     Some((mgr, &selector.package)),
+                    force,
                 ) {
                     if let Some(v) = find_best_version((*v_list).clone(), target_version) {
                         let full_qualified =

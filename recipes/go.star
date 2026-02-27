@@ -67,10 +67,12 @@ def go_discovery(manager, package):
         if not version:
             continue
             
-        v = create_version(package)
+        v = create_version("go:" + package)
         v.inspect(version)
         if "-" in version:
             v.set_release_type("testing")
+        
+        v.require("go")
         
         # We don't necessarily need to fetch/extract if we just run 'go install'
         # but the manager logic might expect a pipeline.

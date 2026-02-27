@@ -20,7 +20,7 @@ pub fn run(config: &Config, selector_str: &str) {
     match resolved {
         Some((full_name, version, repo_name)) => {
             // Re-evaluate to get pipeline/deps (skipped in cache)
-            let dynamic_version = re_evaluate_version(config, repo_config, &repo_name, &version);
+            let dynamic_version = re_evaluate_version(config, repo_config, &repo_name, &version, &selector);
             print_package_info(&full_name, &dynamic_version.unwrap_or(version), &repo_name);
         }
         None => {
@@ -34,16 +34,33 @@ fn re_evaluate_version(
     repo_config: &Repositories,
     repo_name: &str,
     version: &crate::models::version_entry::VersionEntry,
+    selector: &PackageSelector,
 ) -> Option<crate::models::version_entry::VersionEntry> {
     let repo = repo_config.repositories.iter().find(|r| r.name == repo_name)?;
-    let pkg_list = crate::models::package_entry::PackageList::get_for_repo(config, repo)?;
+    let pkg_list = crate::models::package_entry::PackageList::get_for_repo(config, repo, false)?;
     
     // Find the package or manager entry
-    let (star_file, function_name, argument) = if let Some(pkg) = pkg_list.packages.iter().find(|p| p.name == version.pkgname) {
+    let (star_file, function_name, argument) = if let Some(pkg) = pkg_list.package_map.get(&version.pkgname) {
         (pkg.filename.clone(), pkg.function_name.clone(), pkg.name.clone())
-    } else if let Some(mgr) = pkg_list.managers.iter().find(|m| version.pkgname.starts_with(&format!("{}:", m.name))) {
-        let pkg_inner = version.pkgname.split(':').nth(1)?;
-        (mgr.filename.clone(), mgr.function_name.clone(), pkg_inner.to_string())
+    } else if let Some(prefix) = selector.prefix.as_ref() {
+        if let Some(mgr) = pkg_list.manager_map.get(prefix) {
+            let pkg_inner = if version.pkgname.contains(':') {
+                version.pkgname.split(':').nth(1).unwrap().to_string()
+            } else {
+                version.pkgname.clone()
+            };
+            (mgr.filename.clone(), mgr.function_name.clone(), pkg_inner)
+        } else {
+            return None;
+        }
+    } else if version.pkgname.contains(':') {
+        let mgr_name = version.pkgname.split(':').next()?;
+        if let Some(mgr) = pkg_list.manager_map.get(mgr_name) {
+            let pkg_inner = version.pkgname.split(':').nth(1)?;
+            (mgr.filename.clone(), mgr.function_name.clone(), pkg_inner.to_string())
+        } else {
+            return None;
+        }
     } else {
         return None;
     };

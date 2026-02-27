@@ -33,20 +33,16 @@ pub struct State {
 
 impl Config {
     pub fn new(force: bool) -> Self {
-        let cache_dir = dirs_next::cache_dir()
-            .expect("Failed to get cache directory")
-            .join("pi");
-        let config_dir = dirs_next::config_dir()
-            .expect("Failed to get config directory")
-            .join("pi");
-        let state_dir = dirs_next::data_local_dir()
-            .expect("Failed to get local data directory")
-            .join("pi");
+        let xdg = xdg::BaseDirectories::with_prefix("pi");
+        
+        let cache_dir = xdg.get_cache_home().expect("Failed to get cache home");
+        let config_dir = xdg.get_config_home().expect("Failed to get config home");
+        let state_dir = xdg.get_state_home().expect("Failed to get state home");
 
-        let meta_dir = cache_dir.join("meta");
-        let download_dir = cache_dir.join("downloads");
-        let packages_dir = cache_dir.join("packages");
-        let pilocals_dir = cache_dir.join("pilocals");
+        let meta_dir = xdg.create_cache_directory("meta").expect("Failed to create meta directory");
+        let download_dir = xdg.create_cache_directory("downloads").expect("Failed to create downloads directory");
+        let packages_dir = xdg.create_cache_directory("packages").expect("Failed to create packages directory");
+        let pilocals_dir = xdg.create_cache_directory("pilocals").expect("Failed to create pilocals directory");
 
         Self {
             cache_dir,
@@ -96,13 +92,7 @@ impl Config {
         std::env::var("PI_CAVE").is_ok()
     }
 
-    pub fn pilocal_path(&self, cave_name: &str, variant: Option<&str>) -> PathBuf {
-        let name = if let Some(v) = variant {
-            let v = v.strip_prefix(':').unwrap_or(v);
-            format!("{}-{}", cave_name, v)
-        } else {
-            cave_name.to_string()
-        };
-        self.pilocals_dir.join(name)
+    pub fn pilocal_path(&self, cave_name: &str, _variant: Option<&str>) -> PathBuf {
+        self.pilocals_dir.join(cave_name)
     }
 }

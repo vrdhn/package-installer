@@ -14,7 +14,8 @@ pub fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, sr
     let search_path = resolve_src_path(pkg_dir, base_pattern);
     
     if !search_path.exists() {
-        return Err(anyhow::anyhow!("[{}] source pattern missing: {}", pkg_ctx, search_path.display()));
+        log::debug!("[{}] optional source pattern missing: {}", pkg_ctx, search_path.display());
+        return Ok(());
     }
 
     if is_glob {
@@ -29,7 +30,8 @@ pub fn apply_filemap_entry(pkg_ctx: &str, pkg_dir: &Path, pilocal_dir: &Path, sr
             }
         }
         if !matched {
-            return Err(anyhow::anyhow!("[{}] pattern '{}' no match in {}", pkg_ctx, src_pattern, pkg_dir.display()));
+            log::debug!("[{}] optional pattern '{}' no match in {}", pkg_ctx, src_pattern, search_path.display());
+            return Ok(());
         }
     } else {
         let dest_path = pilocal_dir.join(dest_rel);
@@ -81,4 +83,44 @@ fn create_symlink(src: &Path, dest: &Path) -> Result<()> {
         res.with_context(|| format!("Failed to create windows symlink {} -> {}", dest.display(), src.display()))?;
     }
     Ok(())
+}
+
+fn list_dir_contents(path: &Path) -> String {
+    if !path.exists() {
+        return "Directory does not exist".to_string();
+    }
+    if !path.is_dir() {
+        return "Path is not a directory".to_string();
+    }
+
+    match fs::read_dir(path) {
+        Ok(entries) => {
+            let mut lines = Vec::new();
+            let mut entries_vec: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+            entries_vec.sort_by_key(|e| e.file_name());
+
+            for entry in entries_vec {
+                let file_name = entry.file_name();
+                let meta = entry.metadata();
+                let type_str = if let Ok(m) = meta {
+                    if m.is_dir() {
+                        "DIR "
+                    } else if m.is_symlink() {
+                        "LINK"
+                    } else {
+                        "FILE"
+                    }
+                } else {
+                    "????"
+                };
+                lines.push(format!("  [{}] {}", type_str, file_name.to_string_lossy()));
+            }
+            if lines.is_empty() {
+                "  (empty)".to_string()
+            } else {
+                lines.join("\n")
+            }
+        }
+        Err(e) => format!("  Error reading directory: {}", e),
+    }
 }

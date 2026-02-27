@@ -54,31 +54,41 @@ def add_rust_component(v, package_name, target, top_dir):
         "rust": "rustc",
     }
 
-    subfolder = component_map.get(package_name)
-    if subfolder == None:
-        if package_name == "rust-std":
-            subfolder = "rust-std-" + actual_target
-        else:
-            subfolder = package_name
-
-    component_root = top_dir
-    if subfolder:
-        component_root = top_dir + "/" + subfolder
+    # Common subfolder patterns in Rust components
+    subfolders = []
+    if package_name in component_map:
+        subfolders.append(component_map[package_name])
+    
+    if package_name == "rust-std":
+        subfolders.append("rust-std-" + actual_target)
+    else:
+        # Try both the package name and package-target
+        subfolders.append(package_name)
+        if actual_target != "":
+             subfolders.append(package_name + "-" + actual_target)
 
     if package_name == "rust-src":
+        # rust-src is special and doesn't use the 'bin' export
+        component_root = top_dir + "/" + package_name
         src_base = component_root + "/lib/rustlib/src/rust"
         v.export_link(src_base + "/*", "lib/rustlib/src/rust")
         v.export_env("RUST_SRC_PATH", "$/lib/rustlib/src/rust/library")
-    elif package_name == "rust-std":
-        std_base = component_root + "/lib/rustlib/" + target + "/lib"
-        v.export_link(std_base + "/*", "lib/rustlib/" + target + "/lib")
-    elif package_name == "rust":
-        v.export_link(component_root + "/bin/*", "bin")
-        v.export_link(component_root + "/lib/*", "lib")
-        v.export_env("RUSTC_SYSROOT", "$")
-        v.export_env("RUSTFLAGS", "--sysroot=$")
-    else:
-        v.export_link(component_root + "/bin/*", "bin")
+        return
+
+    for sub in subfolders:
+        component_root = top_dir + "/" + sub
+        
+        if package_name == "rust-std":
+            std_base = component_root + "/lib/rustlib/" + target + "/lib"
+            v.export_link(std_base + "/*", "lib/rustlib/" + target + "/lib")
+        elif package_name == "rust":
+            v.export_link(component_root + "/bin/*", "bin")
+            v.export_link(component_root + "/lib/*", "lib")
+            v.export_env("RUSTC_SYSROOT", "$")
+            v.export_env("RUSTFLAGS", "--sysroot=$")
+        else:
+            # For most components (rust-analyzer, clippy, etc), we just need the bin folder
+            v.export_link(component_root + "/bin/*", "bin")
 
 def discover_rust_component(package_name):
     target = get_rust_target()
@@ -143,9 +153,11 @@ def cargo_discovery(manager, package):
             continue
         version = v_data["num"]
         
-        v = create_version(package)
+        v = create_version("cargo:" + package)
         v.inspect(version)
         v.set_release_date(v_data["created_at"])
+        
+        v.require("rust")
         
         v.run("cargo install --root ~/.pilocal " + package + " --version " + version)
         # Note: cargo install handles exports by putting them in ~/.pilocal/bin

@@ -49,7 +49,7 @@ add_package("elixir", install_elixir)
 def hex_discovery(manager, package):
     # Hex is usually just a command to install via mix
     if package == "hex":
-        v = create_version(pkgname = "hex", version = "latest")
+        v = create_version(pkgname = "hex:hex", version = "latest")
         v.run("mix local.hex --force && mix local.rebar --force")
         v.register()
 

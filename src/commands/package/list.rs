@@ -39,7 +39,7 @@ pub fn run(config: &Config, selector_str: Option<&str>, all: bool) {
             }
         }
 
-        if let Some(pkg_list) = PackageList::get_for_repo(config, repo) {
+        if let Some(pkg_list) = PackageList::get_for_repo(config, repo, false) {
             // If no selector, try to show the versions from cache for each package
             if selector.is_none() {
                 for pkg in &pkg_list.packages {
@@ -77,7 +77,7 @@ pub fn run(config: &Config, selector_str: Option<&str>, all: bool) {
                     }
 
                     if let Some(v_list) =
-                        VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None)
+                        VersionList::get_for_package(config, repo, &pkg.name, Some(pkg), None, false)
                     {
                         add_versions_to_table(
                             &mut table,
@@ -111,6 +111,7 @@ pub fn run(config: &Config, selector_str: Option<&str>, all: bool) {
                             &full_name,
                             None,
                             Some((mgr, &s.package)),
+                            false,
                         ) {
                             add_versions_to_table(
                                 &mut table,
