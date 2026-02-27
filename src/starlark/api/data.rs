@@ -51,11 +51,6 @@ fn data_document_methods(builder: &mut MethodsBuilder) {
         let this = this.downcast_ref::<DataDocument>().context("not a DataDocument")?;
         Ok(heap.alloc(DataNode { value: this.value.clone() }))
     }
-
-    fn dump(this: Value<'v>) -> anyhow::Result<String> {
-        let this = this.downcast_ref::<DataDocument>().context("not a DataDocument")?;
-        Ok(serde_json::to_string_pretty(&this.value)?)
-    }
 }
 
 #[derive(Debug, ProvidesStaticType, Clone, Serialize)]
@@ -203,11 +198,6 @@ fn data_node_methods(builder: &mut MethodsBuilder) {
             serde_json::Value::Bool(b) => Ok(b.to_string()),
             _ => Ok(this.value.to_string()),
         }
-    }
-
-    fn dump(this: Value<'v>) -> anyhow::Result<String> {
-        let this = this.downcast_ref::<DataNode>().context("not a DataNode")?;
-        Ok(serde_json::to_string_pretty(&this.value)?)
     }
 }
 
