@@ -4,6 +4,7 @@ use crate::models::package_entry::{ManagerEntry, PackageEntry};
 use crate::models::version_entry::VersionEntry;
 use crate::starlark::api::register_api;
 use anyhow::Context as _;
+use starlark::analysis::AstModuleLint;
 use starlark::environment::{GlobalsBuilder, LibraryExtension, Module};
 use starlark::eval::Evaluator;
 use starlark::syntax::{AstModule, Dialect};
@@ -21,6 +22,8 @@ pub fn evaluate_file(
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
     let ast = parse_ast(&filename, content)?;
+    lint_ast(&filename, &ast);
+
     let globals = create_globals();
     let module = Module::new();
 
@@ -56,6 +59,8 @@ pub fn execute_manager_function(
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
     let ast = parse_ast(&filename, content)?;
+    lint_ast(&filename, &ast);
+
     let globals = create_globals();
     let module = Module::new();
 
@@ -98,6 +103,8 @@ pub fn execute_function(
         .with_context(|| format!("Failed to read file: {}", path.display()))?;
 
     let ast = parse_ast(&filename, content)?;
+    lint_ast(&filename, &ast);
+
     let globals = create_globals();
     let module = Module::new();
 
@@ -129,6 +136,14 @@ pub fn execute_function(
 
 fn parse_ast(filename: &str, content: String) -> anyhow::Result<AstModule> {
     AstModule::parse(filename, content, &Dialect::Extended).map_err(|e| anyhow::anyhow!("{}", e))
+}
+
+fn lint_ast(filename: &str, ast: &AstModule) {
+    let globals = create_globals();
+    let names: std::collections::HashSet<String> = globals.names().map(|s| s.as_str().to_string()).collect();
+    for lint in ast.lint(Some(&names)) {
+        log::warn!("[{}] lint: {} ({})", filename, lint.problem, lint.location);
+    }
 }
 
 fn create_globals() -> starlark::environment::Globals {
@@ -243,6 +258,61 @@ mod tests {
         writeln!(file, "        fail('Should not match')").unwrap();
         writeln!(file, "    if g1 != '':").unwrap();
         writeln!(file, "        fail('Group should be empty')").unwrap();
+        writeln!(file, "add_package('test', test)").unwrap();
+
+        let (packages, _) = evaluate_file(file.path(), state.clone()).unwrap();
+        execute_function(file.path(), &packages[0].function_name, "", state, None).unwrap();
+    }
+
+    #[test]
+    fn test_datanode_get_default() {
+        let meta_dir = PathBuf::from("/tmp/pi-test-meta-get-default");
+        let download_dir = PathBuf::from("/tmp/pi-test-downloads-get-default");
+        let packages_dir = PathBuf::from("/tmp/pi-test-packages-get-default");
+        let state = Arc::new(State {
+            meta_dir,
+            download_dir,
+            packages_dir,
+            ..Default::default()
+        });
+
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "def test(arg):").unwrap();
+        writeln!(file, r#"    doc = parse_json('{{ "a": 1 }}')"#).unwrap();
+        writeln!(file, "    data = doc.root").unwrap();
+        writeln!(file, r#"    val = data.get("b", "default_val")"#).unwrap();
+        writeln!(file, r#"    if val != "default_val": fail("Expected default_val, got " + str(val))"#).unwrap();
+        writeln!(file, r#"    val_existing = data.get("a", "default_val")"#).unwrap();
+        writeln!(file, r#"    if val_existing != 1: fail("Expected 1, got " + str(val_existing))"#).unwrap();
+        writeln!(file, "add_package('test', test)").unwrap();
+
+        let (packages, _) = evaluate_file(file.path(), state.clone()).unwrap();
+        execute_function(file.path(), &packages[0].function_name, "", state, None).unwrap();
+    }
+
+    #[test]
+    fn test_datanode_iteration() {
+        let meta_dir = PathBuf::from("/tmp/pi-test-meta-datanode");
+        let download_dir = PathBuf::from("/tmp/pi-test-downloads-datanode");
+        let packages_dir = PathBuf::from("/tmp/pi-test-packages-datanode");
+        let state = Arc::new(State {
+            meta_dir,
+            download_dir,
+            packages_dir,
+            ..Default::default()
+        });
+
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "def test(arg):").unwrap();
+        writeln!(file, r#"    doc = parse_json('[{{ "v": "1.0" }}, {{ "v": "2.0" }}]')"#).unwrap();
+        writeln!(file, "    data = doc.root").unwrap();
+        writeln!(file, "    count = 0").unwrap();
+        writeln!(file, "    for item in data:").unwrap();
+        writeln!(file, "        count += 1").unwrap();
+        writeln!(file, "        v = item.get(\"v\")").unwrap();
+        writeln!(file, "        if count == 1 and v != \"1.0\": fail(\"Expected 1.0\")").unwrap();
+        writeln!(file, "        if count == 2 and v != \"2.0\": fail(\"Expected 2.0\")").unwrap();
+        writeln!(file, "    if count != 2: fail(\"Expected 2 items, got \" + str(count))").unwrap();
         writeln!(file, "add_package('test', test)").unwrap();
 
         let (packages, _) = evaluate_file(file.path(), state.clone()).unwrap();

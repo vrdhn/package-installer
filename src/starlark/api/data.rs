@@ -107,6 +107,18 @@ impl<'v> StarlarkValue<'v> for DataNode {
             _ => Ok(0),
         }
     }
+
+    fn iterate_collect(&self, heap: &'v Heap) -> starlark::Result<Vec<Value<'v>>> {
+        match &self.value {
+            serde_json::Value::Array(arr) => {
+                Ok(arr.iter().map(|v| serde_to_starlark(v.clone(), heap)).collect())
+            }
+            serde_json::Value::Object(obj) => {
+                Ok(obj.keys().map(|k| heap.alloc(k.clone())).collect())
+            }
+            _ => Err(starlark::Error::new_other(anyhow::anyhow!("object is not iterable"))),
+        }
+    }
 }
 
 impl<'v> AllocValue<'v> for DataNode {
@@ -117,17 +129,23 @@ impl<'v> AllocValue<'v> for DataNode {
 
 #[starlark::starlark_module]
 fn data_node_methods(builder: &mut MethodsBuilder) {
-    fn get<'v>(this: Value<'v>, key: String, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn get<'v>(
+        this: Value<'v>,
+        key: String,
+        default: Option<Value<'v>>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>> {
         let this = this.downcast_ref::<DataNode>().context("not a DataNode")?;
+        let default_val = default.unwrap_or_else(Value::new_none);
         match &this.value {
             serde_json::Value::Object(obj) => {
                 if let Some(val) = obj.get(&key) {
                     Ok(serde_to_starlark(val.clone(), heap))
                 } else {
-                    Ok(Value::new_none())
+                    Ok(default_val)
                 }
             }
-            _ => Ok(Value::new_none()),
+            _ => Ok(default_val),
         }
     }
 
