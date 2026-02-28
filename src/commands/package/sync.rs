@@ -41,7 +41,7 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
                 }
 
                 if let Err(e) = crate::services::sync::sync_package(config, repo, pkg) {
-                    log::error!("[{}/{}] sync failed: {}", repo.name, pkg.name, e);
+                    log::error!("[{}/{}] sync failed: {:#}", repo.name, pkg.name, e);
                 }
             });
 
@@ -56,7 +56,7 @@ pub fn sync_all(config: &Config, selector: Option<PackageSelector>) {
                                 prefix,
                                 &s.package,
                             ) {
-                                log::error!("[{}/{}:{}] sync failed: {}", repo.name, prefix, s.package, e);
+                                log::error!("[{}/{}:{}] sync failed: {:#}", repo.name, prefix, s.package, e);
                             }
                         }
                     }

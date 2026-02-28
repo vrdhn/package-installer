@@ -202,6 +202,13 @@ fn version_builder_methods(builder: &mut MethodsBuilder) {
         Ok(NoneType)
     }
 
+    fn require_version(this: Value, name: String, version: String) -> anyhow::Result<NoneType> {
+        let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
+        let full_name = format!("{}={}", name, version);
+        this.builder.write().build_dependencies.push(Dependency { name: full_name, optional: false });
+        Ok(NoneType)
+    }
+
     fn optional(this: Value, name: String) -> anyhow::Result<NoneType> {
         let this = this.downcast_ref::<StarlarkVersionBuilder>().context("not a VersionBuilder")?;
         this.builder.write().build_dependencies.push(Dependency { name, optional: true });

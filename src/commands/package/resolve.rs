@@ -72,13 +72,19 @@ fn resolve_query_internal(
     force: bool,
 ) -> Option<(String, VersionEntry, String)> {
     let target_version = selector.version.as_deref().unwrap_or("stable");
+    log::debug!("Resolving: {} (version: {})", selector.package, target_version);
 
     for repo in &repo_config.repositories {
-        if should_skip_repo(repo, selector) { continue; }
+        if should_skip_repo(repo, selector) { 
+            log::debug!("[{}] skipping repo (doesn't match selector)", repo.name);
+            continue; 
+        }
 
+        log::debug!("[{}] checking repo", repo.name);
         let pkg_list = PackageList::get_for_repo(config, repo, force)?;
         
         if let Some(res) = try_resolve_in_repo(config, repo, &pkg_list, selector, target_version, force) {
+            log::debug!("[{}] resolved to {}={}", repo.name, res.1.pkgname, res.1.version);
             return Some(res);
         }
     }

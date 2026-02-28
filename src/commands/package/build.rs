@@ -68,7 +68,13 @@ fn resolve_dependencies(
 
         let selector = PackageSelector::parse(&query).ok_or_else(|| anyhow::anyhow!("Invalid selector: {}", query))?;
         let (_, version, repo_name) = resolve::resolve_query(ctx.config, ctx.repo_config, &selector)
-            .ok_or_else(|| anyhow::anyhow!("Package not found: {}", query))?;
+            .ok_or_else(|| {
+                let mut msg = format!("Package not found: {}", query);
+                if query.contains('@') {
+                    msg.push_str(" (Note: use '=' for versions, e.g. pkg=1.2.3)");
+                }
+                anyhow::anyhow!(msg)
+            })?;
 
         let dynamic_version = re_evaluate_version(ctx, &repo_name, &version, &selector)?;
 

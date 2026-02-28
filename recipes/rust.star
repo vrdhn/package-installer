@@ -16,7 +16,7 @@ def get_rust_target():
 
     return triple_arch + "-" + triple_os
 
-def parse_rust_filename(package_name, target, filename):
+def parse_rust_filename(manifest_name, target, filename):
     # Remove extensions like .tar.gz, .zip etc.
     ok_base, v_tmp = extract(r"(.*)\.(?:tar\.gz|tar\.xz|zip|tar\.bz2)", filename)
     if not ok_base:
@@ -24,9 +24,9 @@ def parse_rust_filename(package_name, target, filename):
 
     top_dir = v_tmp
 
-    # Pattern: package_name(-preview)?-(version)(-(target))?
-    # We use escaping for package_name if it contains special chars, though rust-src is fine.
-    pattern = package_name + "(?:-preview)?-([0-9.]+)(?:-(.*))?"
+    # Pattern: manifest_name(-preview)?-(version)(-(target))?
+    # We use escaping for manifest_name if it contains special chars, though rust-src is fine.
+    pattern = manifest_name + "(?:-preview)?-([0-9.]+)(?:-(.*))?"
     ok, version, _ = extract(pattern, v_tmp)
 
     if ok:
@@ -40,7 +40,7 @@ def parse_rust_filename(package_name, target, filename):
         v_parse = v_parse[:-(len(target) + 1)]
 
     version = v_parse
-    for prefix in [package_name + "-preview", package_name]:
+    for prefix in [manifest_name + "-preview", manifest_name]:
         if v_parse.startswith(prefix + "-"):
             version = v_parse[len(prefix) + 1:]
             break
@@ -86,11 +86,21 @@ def add_rust_component(v, package_name, target, top_dir):
             v.export_link(component_root + "/lib/*", "lib")
             v.export_env("RUSTC_SYSROOT", "$")
             v.export_env("RUSTFLAGS", "--sysroot=$")
+        elif package_name == "llvm-tools":
+            # llvm-tools puts its binaries in lib/rustlib/<target>/bin/
+            llvm_bin_rel = "lib/rustlib/" + target + "/bin"
+            llvm_bin_abs = component_root + "/" + llvm_bin_rel
+            v.export_link(llvm_bin_abs + "/*", "bin")
+            
+            # Set environment variables for cargo-llvm-cov and others
+            # $/ resolves to the root of the .pilocal mount in the sandbox
+            v.export_env("LLVM_COV", "$/bin/llvm-cov")
+            v.export_env("LLVM_PROFDATA", "$/bin/llvm-profdata")
         else:
             # For most components (rust-analyzer, clippy, etc), we just need the bin folder
             v.export_link(component_root + "/bin/*", "bin")
 
-def discover_rust_component(package_name):
+def discover_rust_component(package_name, manifest_name):
     target = get_rust_target()
 
     for channel in ["stable", "beta", "nightly"]:
@@ -104,7 +114,7 @@ def discover_rust_component(package_name):
         date = data.attribute("date") or ""
         pkgs = data.get("pkg")
 
-        pkg = pkgs.get(package_name) or pkgs.get(package_name + "-preview")
+        pkg = pkgs.get(manifest_name) or pkgs.get(manifest_name + "-preview")
         if not pkg:
             continue
 
@@ -122,7 +132,7 @@ def discover_rust_component(package_name):
         if not ok_file:
             filename = dl_url.split('/')[-1]
 
-        top_dir, version = parse_rust_filename(package_name, target, filename)
+        top_dir, version = parse_rust_filename(manifest_name, target, filename)
 
         v = create_version(package_name)
         v.inspect(version)
@@ -179,8 +189,66 @@ def cargo_discovery(_manager, package):
 
         v.register()
 
-COMPONENTS = ["rust", "cargo", "rust-analyzer", "rust-src", "rustfmt", "clippy", "rustc", "rust-std"]
-for c in COMPONENTS:
-    add_package(c, discover_rust_component)
+def discover_rust_all(_package_name):
+    target = get_rust_target()
+    for channel in ["stable", "beta", "nightly"]:
+        url = "https://static.rust-lang.org/dist/channel-rust-" + channel + ".toml"
+        content = download(url)
+        if not content:
+            continue
 
+        doc = parse_toml(content)
+        data = doc.root
+        date = data.attribute("date") or ""
+        pkgs = data.get("pkg")
+
+        # We use 'rust' version as the base version for 'rust-all'
+        rust_pkg = pkgs.get("rust")
+        if not rust_pkg:
+            continue
+
+        target_data = rust_pkg.get("target").get(target) or rust_pkg.get("target").get("*")
+        if not target_data or not target_data.get("available"):
+            continue
+
+        ok_file, filename = extract(r".*/([^/]+)$", target_data.get("url"))
+        _, version = parse_rust_filename("rust", target, filename)
+
+        v = create_version("rust-all")
+        v.inspect(version)
+        v.set_release_date(date)
+        if channel != "stable":
+            v.set_release_type("testing" if channel == "beta" else "unstable")
+
+        for (c, _) in COMPONENTS:
+            v.require_version(c, version)
+
+        v.register()
+
+def discover_rust(p): return discover_rust_component("rust", "rust")
+def discover_cargo(p): return discover_rust_component("cargo", "cargo")
+def discover_rust_analyzer(p): return discover_rust_component("rust-analyzer", "rust-analyzer")
+def discover_rust_src(p): return discover_rust_component("rust-src", "rust-src")
+def discover_rustfmt(p): return discover_rust_component("rustfmt", "rustfmt")
+def discover_clippy(p): return discover_rust_component("clippy", "clippy")
+def discover_rustc(p): return discover_rust_component("rustc", "rustc")
+def discover_rust_std(p): return discover_rust_component("rust-std", "rust-std")
+def discover_llvm_tools(p): return discover_rust_component("llvm-tools", "llvm-tools")
+
+COMPONENTS = [
+    ("rust", discover_rust),
+    ("cargo", discover_cargo),
+    ("rust-analyzer", discover_rust_analyzer),
+    ("rust-src", discover_rust_src),
+    ("rustfmt", discover_rustfmt),
+    ("clippy", discover_clippy),
+    ("rustc", discover_rustc),
+    ("rust-std", discover_rust_std),
+    ("llvm-tools", discover_llvm_tools)
+]
+
+for (pkg, func) in COMPONENTS:
+    add_package(pkg, func)
+
+add_package("rust-all", discover_rust_all)
 add_manager("cargo", cargo_discovery)
