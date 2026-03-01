@@ -57,7 +57,7 @@ pub fn resolve_query(
     }
 
     // Attempt sync if allowed
-    if !config.force {
+    if !config.force && !config.no_sync {
         log::debug!("[{}] not found in cache, attempting sync", selector.package);
         return resolve_query_internal(config, repo_config, selector, true);
     }

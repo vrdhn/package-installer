@@ -25,6 +25,10 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub rebuild: bool,
 
+    /// Disable automatic synchronization of repositories and packages
+    #[arg(long, global = true)]
+    pub no_sync: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

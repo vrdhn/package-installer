@@ -183,7 +183,7 @@ fn re_evaluate_version(
     if let Some(res) = re_evaluate_version_internal(ctx, repo_name, version, selector, false)? {
         return Ok(res);
     }
-    if !ctx.config.force {
+    if !ctx.config.force && !ctx.config.no_sync {
         log::debug!("[{}] not found in cache, attempting sync", version.pkgname);
         if let Some(res) = re_evaluate_version_internal(ctx, repo_name, version, selector, true)? {
             return Ok(res);
