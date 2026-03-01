@@ -91,7 +91,7 @@ def add_rust_component(v, package_name, target, top_dir):
             llvm_bin_rel = "lib/rustlib/" + target + "/bin"
             llvm_bin_abs = component_root + "/" + llvm_bin_rel
             v.export_link(llvm_bin_abs + "/*", "bin")
-            
+
             # Set environment variables for cargo-llvm-cov and others
             # $/ resolves to the root of the .pilocal mount in the sandbox
             v.export_env("LLVM_COV", "$/bin/llvm-cov")
@@ -211,7 +211,7 @@ def discover_rust_all(_package_name):
         if not target_data or not target_data.get("available"):
             continue
 
-        ok_file, filename = extract(r".*/([^/]+)$", target_data.get("url"))
+        _ok_file, filename = extract(r".*/([^/]+)$", target_data.get("url"))
         _, version = parse_rust_filename("rust", target, filename)
 
         v = create_version("rust-all")
@@ -225,15 +225,15 @@ def discover_rust_all(_package_name):
 
         v.register()
 
-def discover_rust(p): return discover_rust_component("rust", "rust")
-def discover_cargo(p): return discover_rust_component("cargo", "cargo")
-def discover_rust_analyzer(p): return discover_rust_component("rust-analyzer", "rust-analyzer")
-def discover_rust_src(p): return discover_rust_component("rust-src", "rust-src")
-def discover_rustfmt(p): return discover_rust_component("rustfmt", "rustfmt")
-def discover_clippy(p): return discover_rust_component("clippy", "clippy")
-def discover_rustc(p): return discover_rust_component("rustc", "rustc")
-def discover_rust_std(p): return discover_rust_component("rust-std", "rust-std")
-def discover_llvm_tools(p): return discover_rust_component("llvm-tools", "llvm-tools")
+def discover_rust(_p): return discover_rust_component("rust", "rust")
+def discover_cargo(_p): return discover_rust_component("cargo", "cargo")
+def discover_rust_analyzer(_p): return discover_rust_component("rust-analyzer", "rust-analyzer")
+def discover_rust_src(_p): return discover_rust_component("rust-src", "rust-src")
+def discover_rustfmt(_p): return discover_rust_component("rustfmt", "rustfmt")
+def discover_clippy(_p): return discover_rust_component("clippy", "clippy")
+def discover_rustc(_p): return discover_rust_component("rustc", "rustc")
+def discover_rust_std(_p): return discover_rust_component("rust-std", "rust-std")
+def discover_llvm_tools(_p): return discover_rust_component("llvm-tools", "llvm-tools")
 
 COMPONENTS = [
     ("rust", discover_rust),

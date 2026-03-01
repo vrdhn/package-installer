@@ -7,7 +7,6 @@ use anyhow::Context;
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CaveSettings {
     #[serde(default)]
-
     pub packages: Vec<String>,
     #[serde(default)]
     pub set: HashMap<String, String>,
@@ -15,6 +14,8 @@ pub struct CaveSettings {
     pub unset: Vec<String>,
     #[serde(default)]
     pub options: HashMap<String, HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub binds: Vec<String>,
 }
 
 impl CaveSettings {
@@ -35,6 +36,8 @@ impl CaveSettings {
                 target_opts.insert(k.clone(), v.clone());
             }
         }
+        self.binds.extend(other.binds.clone());
+        self.binds.dedup();
     }
 }
 

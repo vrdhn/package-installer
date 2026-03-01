@@ -42,6 +42,8 @@ pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
     
     bind_dependencies(&mut b, &opts.dependency_dirs);
 
+    apply_custom_binds(&mut b, &settings.binds);
+
     setup_environment(&mut b, opts.config, opts.cave, &host_home, &internal_pilocal);
     
     apply_custom_envs(&mut b, opts.package_envs, &settings.set, &host_home, &internal_pilocal);
@@ -60,6 +62,12 @@ fn bind_dependencies(b: &mut Bubblewrap, dependency_dirs: &[PathBuf]) {
                 b.add_env_first("PATH", bin_dir.to_str().unwrap());
             }
         }
+    }
+}
+
+fn apply_custom_binds(b: &mut Bubblewrap, binds: &[String]) {
+    for bind_str in binds {
+        b.add_bind(BindType::BindTry, bind_str);
     }
 }
 
