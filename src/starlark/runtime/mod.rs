@@ -198,6 +198,7 @@ mod tests {
             cache_pilocals_dir: PathBuf::new(),
             force: false,
             rebuild: false,
+            no_sync: false,
             state: Arc::new(State::default()),
         }
     }

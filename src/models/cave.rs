@@ -16,6 +16,8 @@ pub struct CaveSettings {
     pub options: HashMap<String, HashMap<String, serde_json::Value>>,
     #[serde(default)]
     pub binds: Vec<String>,
+    #[serde(default)]
+    pub command: Option<Vec<String>>,
 }
 
 impl CaveSettings {
@@ -38,6 +40,9 @@ impl CaveSettings {
         }
         self.binds.extend(other.binds.clone());
         self.binds.dedup();
+        if other.command.is_some() {
+            self.command = other.command.clone();
+        }
     }
 }
 
@@ -112,5 +117,51 @@ impl Cave {
             settings.merge(v_settings);
         }
         Ok(settings)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cave_settings_merge_command() {
+        let mut base = CaveSettings {
+            command: Some(vec!["base_cmd".to_string()]),
+            ..Default::default()
+        };
+        let variant = CaveSettings {
+            command: Some(vec!["variant_cmd".to_string(), "arg1".to_string()]),
+            ..Default::default()
+        };
+        base.merge(&variant);
+        assert_eq!(base.command, Some(vec!["variant_cmd".to_string(), "arg1".to_string()]));
+    }
+
+    #[test]
+    fn test_cave_settings_merge_command_no_override() {
+        let mut base = CaveSettings {
+            command: Some(vec!["base_cmd".to_string()]),
+            ..Default::default()
+        };
+        let variant = CaveSettings {
+            command: None,
+            ..Default::default()
+        };
+        base.merge(&variant);
+        assert_eq!(base.command, Some(vec!["base_cmd".to_string()]));
+    }
+
+    #[test]
+    fn test_cave_load_with_command() {
+        let json = r#"{
+            "workspace": "/tmp",
+            "homedir": "/tmp/home",
+            "settings": {
+                "command": ["tmux", "new-session"]
+            }
+        }"#;
+        let cave: Cave = serde_json::from_str(json).unwrap();
+        assert_eq!(cave.settings.command, Some(vec!["tmux".to_string(), "new-session".to_string()]));
     }
 }

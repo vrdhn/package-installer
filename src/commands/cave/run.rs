@@ -219,6 +219,8 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
 
     let package_envs = crate::commands::cave::build::execute_build(config, &cave, variant.as_deref())?;
 
+    let settings = cave.get_effective_settings(variant.as_deref())?;
+
     let mut b = prepare_sandbox(SandboxOptions {
         config,
         cave: &cave,
@@ -236,8 +238,16 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
 
     if !final_command.is_empty() {
         b.set_command(&final_command[0], &final_command[1..]);
+    } else if let Some(cmd) = &settings.command {
+        if !cmd.is_empty() {
+            b.set_command(&cmd[0], &cmd[1..]);
+        } else {
+            let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+            b.set_command(&shell, &[]);
+        }
     } else {
-        b.set_command("/bin/bash", &[]);
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        b.set_command(&shell, &[]);
     }
 
     b.exec()
