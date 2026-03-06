@@ -1,1 +1,1 @@
-sudo cp -v target/debug/pi /usr/bin/pi
+sudo install -v $(find target -name pi -type f ) /usr/bin/pi

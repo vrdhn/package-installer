@@ -29,7 +29,7 @@ pub struct SandboxOptions<'a> {
 /// Example internal_pilocal: "/home/user/.pilocal"
 pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
     let settings = opts.cave.get_effective_settings(opts.variant).context("failed to get cave settings")?;
-    
+
     let mut b = Bubblewrap::new();
     let host_home = opts.config.get_host_home();
     let internal_pilocal = host_home.join(".pilocal");
@@ -39,13 +39,13 @@ pub fn prepare_sandbox(opts: SandboxOptions) -> Result<Bubblewrap> {
     bind_workspace_and_home(&mut b, opts.config, opts.cave, &host_home, opts.readonly_home)?;
     bind_pilocal_and_caches(&mut b, opts.config, opts.cave, opts.variant, opts.writable_pilocal, &internal_pilocal)?;
     setup_xdg_runtime(&mut b);
-    
+
     bind_dependencies(&mut b, &opts.dependency_dirs);
 
     apply_custom_binds(&mut b, &settings.binds);
 
     setup_environment(&mut b, opts.config, opts.cave, &host_home, &internal_pilocal);
-    
+
     apply_custom_envs(&mut b, opts.package_envs, &settings.set, &host_home, &internal_pilocal);
 
     set_sandbox_hostname(&mut b, opts.config, opts.cave, opts.variant);
@@ -111,7 +111,7 @@ fn bind_virtual_fs(b: &mut Bubblewrap) {
 
 fn bind_workspace_and_home(b: &mut Bubblewrap, _config: &Config, cave: &Cave, host_home: &Path, readonly_home: bool) -> Result<()> {
     b.add_bind(BindType::Bind, &cave.workspace);
-    
+
     if !cave.homedir.exists() {
         std::fs::create_dir_all(&cave.homedir).context("Failed to create cave home directory")?;
     }
@@ -121,10 +121,10 @@ fn bind_workspace_and_home(b: &mut Bubblewrap, _config: &Config, cave: &Cave, ho
         std::fs::create_dir_all(cave.homedir.join(".pilocal")).ok();
         std::fs::create_dir_all(cave.homedir.join(".cache")).ok();
         std::fs::create_dir_all(cave.homedir.join(".config")).ok();
-        
+
         let cache_pi = cave.homedir.join(".cache").join("pi");
         std::fs::create_dir_all(cache_pi).ok();
-        
+
         let config_pi = cave.homedir.join(".config").join("pi");
         std::fs::create_dir_all(config_pi).ok();
 
@@ -138,10 +138,10 @@ fn bind_workspace_and_home(b: &mut Bubblewrap, _config: &Config, cave: &Cave, ho
 }
 
 fn bind_pilocal_and_caches(
-    b: &mut Bubblewrap, 
-    config: &Config, 
-    cave: &Cave, 
-    variant: Option<&str>, 
+    b: &mut Bubblewrap,
+    config: &Config,
+    cave: &Cave,
+    variant: Option<&str>,
     writable: bool,
     internal_pilocal: &Path
 ) -> Result<()> {
@@ -173,18 +173,22 @@ fn setup_environment(b: &mut Bubblewrap, config: &Config, cave: &Cave, host_home
     b.set_env("USER", &config.get_user());
     b.set_env("PI_WORKSPACE", cave.workspace.to_str().unwrap());
     b.set_env("PI_CAVE", &cave.name);
-    
+
     let pilocal_bin = internal_pilocal.join("bin");
     b.add_env_first("PATH", "/usr/bin:/bin");
     b.add_env_first("PATH", host_home.join(".local").join("bin").to_str().unwrap());
     b.add_env_first("PATH", host_home.join(".cargo").join("bin").to_str().unwrap());
     b.add_env_first("PATH", host_home.join(".mix").join("escripts").to_str().unwrap());
     b.add_env_first("PATH", pilocal_bin.to_str().unwrap());
+
+    let pilocal_bin = internal_pilocal.join("lib");
+    b.add_env_first("LD_LIBRARY_PATH", pilocal_bin.to_str().unwrap());
+
 }
 
 fn apply_custom_envs(
-    b: &mut Bubblewrap, 
-    pkg_envs: HashMap<String, String>, 
+    b: &mut Bubblewrap,
+    pkg_envs: HashMap<String, String>,
     cave_envs: &HashMap<String, String>,
     host_home: &Path,
     internal_pilocal: &Path
@@ -230,7 +234,7 @@ fn execute_run(config: &Config, variant_opt: Option<String>, command: Vec<String
         readonly_home: false,
         dependency_dirs: Vec::new(),
     })?;
-    
+
     log::info!("entering cave");
     if log::log_enabled!(log::Level::Info) {
         crate::commands::cave::info::run(config);
