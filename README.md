@@ -1,3 +1,6 @@
+> [!NOTE]
+> Moved to https://codeberg.org/vrdhn/package-installer
+ 
 # Pi: Gemini Package Installer
 
 Pi is a modern, sandbox-first package manager and workspace orchestrator. It allows you to define hermetic environments (Caves) where packages are installed and run in isolation using Linux namespaces (Bubblewrap).
